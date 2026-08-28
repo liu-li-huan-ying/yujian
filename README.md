@@ -7,14 +7,14 @@
 
 ## 技术栈
 
-| 项 | 选型 | 说明 |
-|---|---|---|
-| 运行时 | Electron 44 | 不依赖任何 C++ 工具链，官方提供预编译二进制 |
-| 构建 | electron-vite 5 + vite 7 | vite 版本不可升到 8（electron-vite 的 peer 限制） |
-| 前端 | Vue 3 + TypeScript | |
-| 编辑内核 | Milkdown Crepe 7 | 基于 ProseMirror + remark，Markdown 是一等公民 |
-| 源码模式 | CodeMirror 6 | 与 WYSIWYG 共享同一份 Markdown 文本 |
-| 搜索 | MiniSearch | 纯 JS 倒排索引，零原生编译 |
+| 项    | 选型                       | 说明                                     |
+| ---- | ------------------------ | -------------------------------------- |
+| 运行时  | Electron 44              | 不依赖任何 C++ 工具链，官方提供预编译二进制               |
+| 构建   | electron-vite 5 + vite 7 | vite 版本不可升到 8（electron-vite 的 peer 限制） |
+| 前端   | Vue 3 + TypeScript       | <br />                                 |
+| 编辑内核 | Milkdown Crepe 7         | 基于 ProseMirror + remark，Markdown 是一等公民 |
+| 源码模式 | CodeMirror 6             | 与 WYSIWYG 共享同一份 Markdown 文本            |
+| 搜索   | MiniSearch               | 纯 JS 倒排索引，零原生编译                        |
 
 ## 快速开始
 
@@ -32,9 +32,9 @@ npm run dist     # 打包 Windows 安装包
 部分 IDE（如 WorkBuddy、VS Code）本身是 Electron 应用，会向派生的 shell 注入
 `ELECTRON_RUN_AS_NODE=1`。该变量会让 `electron.exe` 退化成纯 Node 运行：
 
-- `process.type` 变成 `undefined`（正常应为 `browser`）
-- `require('electron')` 返回**二进制路径字符串**，而非 API 对象
-- 应用不报错，但永远不创建窗口
+* `process.type` 变成 `undefined`（正常应为 `browser`）
+* `require('electron')` 返回**二进制路径字符串**，而非 API 对象
+* 应用不报错，但永远不创建窗口
 
 `scripts/dev.mjs` 已在启动前清除该变量，`npm run dev` 可直接使用。
 命令行手动运行时：
@@ -61,20 +61,21 @@ ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" node node_modules/elec
 
 ## 设计文档
 
-- `docs/ARCHITECTURE.md` — 架构设计、模块划分、9 阶段路线图
-- `docs/UI-DESIGN.md` — 设计令牌、组件规范、材质系统、皮肤架构
-- `docs/preview/theme-yujian.html` — 玉质主题效果预览（浏览器直接打开）
+* `docs/ARCHITECTURE.md` — 架构设计、模块划分、9 阶段路线图
+* `docs/UI-DESIGN.md` — 设计令牌、组件规范、材质系统、皮肤架构
+* `docs/preview/theme-yujian.html` — 玉质主题效果预览（浏览器直接打开）
 
 ## 路线图
 
-| 阶段 | 目标 |
-|---|---|
-| 0 | 工程骨架、窗口、IPC 打通 ✅ |
-| 1 | 接入 Milkdown Crepe，双模式切换，打开/保存 md |
-| 2 | 笔记库文件树、自动保存、崩溃恢复 |
-| 3 | Mermaid、公式、表格、代码块 |
-| 4 | 图片粘贴与图床 |
-| 5 | 全文搜索 |
-| 6 | 导出 HTML / PDF / Markdown |
-| 7 | 主题打磨、AI 能力 |
-| 8 | 打包分发 |
+| 阶段 | 目标                               |
+| -- | -------------------------------- |
+| 0  | 工程骨架、窗口、IPC 打通 ✅                 |
+| 1  | 接入 Milkdown Crepe，双模式切换，打开/保存 md |
+| 2  | 笔记库文件树、自动保存、崩溃恢复                 |
+| 3  | Mermaid、公式、表格、代码块                |
+| 4  | 图片粘贴与图床                          |
+| 5  | 全文搜索                             |
+| 6  | 导出 HTML / PDF / Markdown         |
+| 7  | 主题打磨、AI 能力                       |
+| 8  | 打包分发                             |
+
