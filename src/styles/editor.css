@@ -172,11 +172,12 @@
 .cm-editor .cm-scroller {
   font-family: var(--font-mono);
   padding: 20px 0 45vh;
+  /* 行号与正文作为一个整体居中：否则正文居中、行号贴左会空出一大片 */
+  max-width: var(--w-column);
+  margin: 0 auto;
 }
 
 .cm-editor .cm-content {
-  max-width: var(--w-column);
-  margin: 0 auto;
   caret-color: var(--hue-accent);
 }
 
@@ -188,13 +189,12 @@
   background: transparent;
   border-right: 1px solid var(--hue-border-subtle);
   color: var(--hue-text-3);
-  min-width: 2.4em;
-  padding-inline-end: 0;
+  min-width: 2.6em !important;
 }
 
 .cm-editor .cm-lineNumbers .cm-gutterElement {
-  min-width: 1.8em;
-  padding-inline-start: 0.3em;
+  padding: 0 12px 0 8px !important;
+  min-width: 1.8em !important;
   text-align: right;
 }
 

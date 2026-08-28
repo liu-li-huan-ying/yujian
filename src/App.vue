@@ -242,11 +242,11 @@ async function doExport(kind: 'html' | 'pdf'): Promise<void> {
 
 const localeLabel = computed(() => (getLocale() === 'zh-CN' ? '中' : 'EN'))
 
-function toggleLocale(): void {
+async function toggleLocale(): Promise<void> {
   const next: LocaleKey = getLocale() === 'zh-CN' ? 'en-US' : 'zh-CN'
   setLocale(next)
-  // Crepe 标签在构造时固化，重建实例使中文/英文双向切换生效
-  void host.value?.reload()
+  // Crepe 标签在构造时固化，重建实例使中文/英文双向切换生效（await 保证顺序）
+  await host.value?.reload()
 }
 
 /* ── 会话持久化（崩溃恢复）── */

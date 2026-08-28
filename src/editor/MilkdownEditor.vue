@@ -31,6 +31,11 @@ const host = ref<HTMLDivElement | null>(null)
 let crepe: Crepe | null = null
 let mounted = false
 let imgObserver: MutationObserver | null = null
+/** 重入锁：防止快速连点语言切换时 create/destroy 交叠把实例搞坏 */
+let reloading = false
+let reloadPending = false
+/** 跨重建保留只读状态（源码模式下所见即所得实例是 readonly） */
+let readonlyState = false
 
 /* ── 图片粘贴落盘 ─────────────────────────────── */
 
@@ -194,7 +199,7 @@ async function init(defaultValue?: string): Promise<void> {
   })
 
   await crepe.create()
-  crepe.setReadonly(props.readonly)
+  crepe.setReadonly(readonlyState)
   setupImageResolver()
   emit('ready')
 }
@@ -233,6 +238,7 @@ function getHTML(): string {
 }
 
 function setReadonly(value: boolean): void {
+  readonlyState = value
   crepe?.setReadonly(value)
 }
 
@@ -240,24 +246,43 @@ function setReadonly(value: boolean): void {
  * 语言切换后调用：销毁并重建 Crepe 实例，使构造期固化的标签
  * （BlockEdit / Placeholder / ImageBlock / CodeMirror）按新语言生效。
  * 内容从当前实例读取后原样回填，不触发保存。
+ *
+ * 重入保护：快速连点时只跑最后一次（合并待处理），保证最终语言与
+ * 当前 i18n 一致；任一次失败都复位状态，允许后续重试，不会卡死。
  */
 async function reload(): Promise<void> {
-  const current = crepe?.getMarkdown() ?? props.modelValue
-  if (imgObserver) {
-    imgObserver.disconnect()
-    imgObserver = null
+  if (reloading) {
+    reloadPending = true
+    return
   }
-  if (crepe) {
-    try {
-      await crepe.destroy()
-    } catch {
-      // 销毁异常忽略，继续重建
-    }
+  reloading = true
+  try {
+    do {
+      reloadPending = false
+      const current = crepe?.getMarkdown() ?? props.modelValue
+      if (imgObserver) {
+        imgObserver.disconnect()
+        imgObserver = null
+      }
+      if (crepe) {
+        try {
+          await crepe.destroy()
+        } catch {
+          // 销毁异常忽略，继续重建
+        }
+        crepe = null
+      }
+      if (host.value) host.value.innerHTML = ''
+      mounted = false
+      await init(current)
+    } while (reloadPending)
+  } catch (e) {
+    console.error('[MilkdownEditor] 语言切换重建失败', e)
+    mounted = false
     crepe = null
+  } finally {
+    reloading = false
   }
-  if (host.value) host.value.innerHTML = ''
-  mounted = false
-  await init(current)
 }
 
 defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, reload })
