@@ -3,77 +3,77 @@
 > 版本：v1.0 ｜ 日期：2026-08-28 ｜ 状态：待确认
 > 本文所有依赖版本均经过 `npm view` 实测可获取，环境结论来自本机实际探测。
 
----
+***
 
 ## 0. 结论摘要
 
-| 决策项 | 结论 | 一句话理由 |
-|---|---|---|
-| 应用形态 | 跨平台桌面应用 | 你选的 |
-| 框架 | **Electron 44 + Vue 3 + TypeScript** | 本机无 MSVC，Tauri 实测编译不了 |
-| 构建工具 | **electron-vite 5 + vite 7**（不可升 8） | electron-vite 的 peer 不支持 vite 8 |
-| 编辑器内核 | **@milkdown/crepe 7.22.1** | ProseMirror + remark 双引擎，Markdown 往返一致性最好 |
-| 编辑模式 | WYSIWYG 为默认，可切源码模式 | 你选的 |
-| 存储 | 文件夹即笔记库，纯 `.md` + 相对路径资源 | 数据永远可读、可 Git、可迁移 |
-| 搜索 | MiniSearch（纯 JS 倒排索引） | 零原生编译，与"无 MSVC"约束一致 |
-| v1 主攻 | 技术写作场景 | 你选的 |
+| 决策项   | 结论                                   | 一句话理由                                     |
+| ----- | ------------------------------------ | ----------------------------------------- |
+| 应用形态  | 跨平台桌面应用                              | 你选的                                       |
+| 框架    | **Electron 44 + Vue 3 + TypeScript** | 本机无 MSVC，Tauri 实测编译不了                     |
+| 构建工具  | **electron-vite 5 + vite 7**（不可升 8）  | electron-vite 的 peer 不支持 vite 8           |
+| 编辑器内核 | **@milkdown/crepe 7.22.1**           | ProseMirror + remark 双引擎，Markdown 往返一致性最好 |
+| 编辑模式  | WYSIWYG 为默认，可切源码模式                   | 你选的                                       |
+| 存储    | 文件夹即笔记库，纯 `.md` + 相对路径资源             | 数据永远可读、可 Git、可迁移                          |
+| 搜索    | MiniSearch（纯 JS 倒排索引）                | 零原生编译，与"无 MSVC"约束一致                       |
+| v1 主攻 | 技术写作场景                               | 你选的                                       |
 
 ### 0.1 本机环境实测结果
 
-| 检测项 | 实测值 | 结论 |
-|---|---|---|
-| Node | v22.22.2 | ✅ |
-| npm | 10.9.7 | ✅ |
-| npm registry | `https://registry.npmmirror.com/` | ✅ 已加速 |
-| `cl.exe`（MSVC 编译器） | **未找到** | ❌ Tauri 不可行 |
-| VS2022 目录 | 存在但为空壳（未装任何工作负载） | ❌ 无 C++ 工具链 |
-| WebView2 Runtime | **未安装** | ❌ Tauri 运行时也不满足 |
-| Rust | 1.93.0 | ⚠️ 有工具链，但链接 Windows 目标必须走 MSVC，无用武之地 |
-| `electron_mirror` | `undefined` | ⚠️ 需配置，否则下载 Electron 二进制走 GitHub 会很慢 |
+| 检测项                | 实测值                               | 结论                                   |
+| ------------------ | --------------------------------- | ------------------------------------ |
+| Node               | v22.22.2                          | ✅                                    |
+| npm                | 10.9.7                            | ✅                                    |
+| npm registry       | `https://registry.npmmirror.com/` | ✅ 已加速                                |
+| `cl.exe`（MSVC 编译器） | **未找到**                           | ❌ Tauri 不可行                          |
+| VS2022 目录          | 存在但为空壳（未装任何工作负载）                  | ❌ 无 C++ 工具链                          |
+| WebView2 Runtime   | **未安装**                           | ❌ Tauri 运行时也不满足                      |
+| Rust               | 1.93.0                            | ⚠️ 有工具链，但链接 Windows 目标必须走 MSVC，无用武之地 |
+| `electron_mirror`  | `undefined`                       | ⚠️ 需配置，否则下载 Electron 二进制走 GitHub 会很慢 |
 
-> **关于 Tauri 的最终判断**：不是"麻烦"，是**不可行**。Tauri 在 Windows 上链接需要 `link.exe`（MSVC），且运行依赖 WebView2 Runtime，你本机两个都缺。即使愿意装，代价是 5~8GB 的 Visual Studio C++  workloads，而你已明确表示不想装。Electron 不需要任何 C++ 工具链（官方提供预编译二进制），是当前唯一顺畅的路径。
+> **关于 Tauri 的最终判断**：不是"麻烦"，是**不可行**。Tauri 在 Windows 上链接需要 `link.exe`（MSVC），且运行依赖 WebView2 Runtime，你本机两个都缺。即使愿意装，代价是 5\~8GB 的 Visual Studio C++  workloads，而你已明确表示不想装。Electron 不需要任何 C++ 工具链（官方提供预编译二进制），是当前唯一顺畅的路径。
 
----
+***
 
 ## 1. 需求边界与优先级
 
 ### 1.1 已确认需求
 
-- 跨平台桌面应用，双击即用
-- **默认所见即所得**编辑，**必须能切换到源码模式**
-- 场景全覆盖，但 v1 主攻**技术写作**
-- 四项必备能力：文件树 + 全文搜索 / 图表与公式 / 图片粘贴 + 图床 / 导出与发布
-- 存储以"文件夹即笔记库"为主体，**同时支持单个 `.md` 文件导出**
+* 跨平台桌面应用，双击即用
+* **默认所见即所得**编辑，**必须能切换到源码模式**
+* 场景全覆盖，但 v1 主攻**技术写作**
+* 四项必备能力：文件树 + 全文搜索 / 图表与公式 / 图片粘贴 + 图床 / 导出与发布
+* 存储以"文件夹即笔记库"为主体，**同时支持单个 `.md` 文件导出**
 
 ### 1.2 优先级矩阵
 
-| 优先级 | 能力 | 说明 |
-|---|---|---|
-| **P0** | 打开/新建/编辑/保存 `.md` | 没有这个其他都是空谈 |
-| **P0** | WYSIWYG ⇄ 源码 双模式切换 | 你的核心诉求 |
-| **P0** | 自动保存与崩溃恢复 | 编辑器类应用的信任底线 |
-| **P1** | 文件树侧边栏 + 笔记库切换 | |
-| **P1** | 代码块高亮（多语言） | 技术写作刚需 |
-| **P1** | 数学公式（KaTeX） | Crepe 内置 |
-| **P1** | Mermaid 流程图 | 需自研节点，见 §5.3 |
-| **P1** | 增强表格编辑 | Crepe 内置 |
-| **P1** | 图片粘贴落盘 | |
-| **P1** | 导出 HTML / PDF / 单文件 Markdown | |
-| **P2** | 全文搜索 | MiniSearch |
-| **P2** | 大纲面板 | 长文与书稿场景 |
-| **P2** | 图床上传 | 需配置化 |
-| **P2** | 导出 Word | |
-| **P3** | 双链、标签、关系图谱 | 知识库场景 |
-| **P3** | 一键发布公众号/知乎 | 需各平台适配 |
-| **P3** | 团队协作、云同步 | 需后端，另立项目 |
+| 优先级    | 能力                           | 说明           |
+| ------ | ---------------------------- | ------------ |
+| **P0** | 打开/新建/编辑/保存 `.md`            | 没有这个其他都是空谈   |
+| **P0** | WYSIWYG ⇄ 源码 双模式切换           | 你的核心诉求       |
+| **P0** | 自动保存与崩溃恢复                    | 编辑器类应用的信任底线  |
+| **P1** | 文件树侧边栏 + 笔记库切换               | <br />       |
+| **P1** | 代码块高亮（多语言）                   | 技术写作刚需       |
+| **P1** | 数学公式（KaTeX）                  | Crepe 内置     |
+| **P1** | Mermaid 流程图                  | 需自研节点，见 §5.3 |
+| **P1** | 增强表格编辑                       | Crepe 内置     |
+| **P1** | 图片粘贴落盘                       | <br />       |
+| **P1** | 导出 HTML / PDF / 单文件 Markdown | <br />       |
+| **P2** | 全文搜索                         | MiniSearch   |
+| **P2** | 大纲面板                         | 长文与书稿场景      |
+| **P2** | 图床上传                         | 需配置化         |
+| **P2** | 导出 Word                      | <br />       |
+| **P3** | 双链、标签、关系图谱                   | 知识库场景        |
+| **P3** | 一键发布公众号/知乎                   | 需各平台适配       |
+| **P3** | 团队协作、云同步                     | 需后端，另立项目     |
 
 ### 1.3 本期明确不做
 
-- 实时多人协作（需要 CRDT + 服务端，是另一个量级的工程）
-- 移动端版本
-- 插件市场机制（预留接口，但不实现生态）
+* 实时多人协作（需要 CRDT + 服务端，是另一个量级的工程）
+* 移动端版本
+* 插件市场机制（预留接口，但不实现生态）
 
----
+***
 
 ## 2. 技术选型与理由
 
@@ -144,7 +144,7 @@
 `@milkdown/plugin-diagram`（官方 Mermaid 插件）停在 **7.7.0**，而 `@milkdown/kit` 已是 **7.22.1**。混装会导致 npm 装出两份 `@milkdown/core`，运行时出现"多实例上下文"错误——这是 Milkdown 最典型的踩坑点。
 → **不使用 plugin-diagram，改为自研 Mermaid 节点**（见 §5.3）。
 
----
+***
 
 ## 3. 整体架构
 
@@ -178,10 +178,11 @@
 ```
 
 **安全基线（不可妥协）**：
-- `contextIsolation: true`
-- `nodeIntegration: false`
-- `sandbox: true`
-- IPC channel 集中在 `shared/ipc-channels.ts` 常量表，preload 只挂载白名单内的方法
+
+* `contextIsolation: true`
+* `nodeIntegration: false`
+* `sandbox: true`
+* IPC channel 集中在 `shared/ipc-channels.ts` 常量表，preload 只挂载白名单内的方法
 
 > 图床密钥绝不能放在渲染进程——打包后的 JS 可被轻易反编译。必须走 main 进程 + `safeStorage` 加密存储。
 
@@ -221,7 +222,7 @@ ProseMirror 事务 (WYSIWYG 模式)
 **关键设计：切换模式时不销毁 Crepe 实例。**
 切换是技术写作者的高频操作，销毁重建约 100ms 且会丢失光标/滚动位置/撤销栈。改为"常驻实例 + readonly + CSS 隐藏"，切回时用 `replaceAll` 灌入源码文本。
 
----
+***
 
 ## 4. 目录结构
 
@@ -285,7 +286,7 @@ markdown-editor/
 └─ tsconfig.json
 ```
 
----
+***
 
 ## 5. 核心模块设计
 
@@ -308,9 +309,10 @@ markdown-editor/
 ```
 
 **设计原则：**
-- 文档一律是标准 `.md`，YAML frontmatter 存元数据（title/tags/created/updated）
-- 资源引用使用**相对路径**（`./.assets/xxx.png`），保证整库可迁移、可 Git、可用其他工具打开
-- `.mdeditor/` 只是缓存，删掉不影响任何笔记内容
+
+* 文档一律是标准 `.md`，YAML frontmatter 存元数据（title/tags/created/updated）
+* 资源引用使用**相对路径**（`./.assets/xxx.png`），保证整库可迁移、可 Git、可用其他工具打开
+* `.mdeditor/` 只是缓存，删掉不影响任何笔记内容
 
 **切换笔记库（不重启应用）**：标题栏「切换工作文件夹」与侧栏「打开笔记库」共用同一入口
 （`dialog:openDir` 选目录）。切换时主进程 `vault.ts` 的 `watchVault` 是单例（内部先
@@ -324,13 +326,13 @@ markdown-editor/
 
 **问题**：Milkdown 通过 remark 序列化，会把用户手写的 Markdown 规范化。典型表现：
 
-| 你写的 | 保存后变成 |
-|---|---|
-| `*斜体*` | `_斜体_` |
-| `- 列表项` | `* 列表项` |
+| 你写的              | 保存后变成         |
+| ---------------- | ------------- |
+| `*斜体*`           | `_斜体_`        |
+| `- 列表项`          | `* 列表项`       |
 | Setext 标题（`===`） | ATX 标题（`###`） |
-| 手排对齐的表格 | 按内容宽度重新对齐 |
-| 内联 HTML | 可能被转义 |
+| 手排对齐的表格          | 按内容宽度重新对齐     |
+| 内联 HTML          | 可能被转义         |
 
 对会把 md 推到 GitHub / Hugo / VitePress 的技术写作者来说，**这是不可接受的**——每次打开再保存都会产生一大片无意义的 Git diff。
 
@@ -350,10 +352,10 @@ markdown-editor/
                                         状态栏提示"本次保存已规范化排版"
 ```
 
-- 状态机维护三个字段：`rawText`（磁盘原文）、`docText`（Crepe 序列化结果）、`isDirty`
-- 只在 WYSIWYG 模式下产生编辑事务时才置 `isDirty`
-- 源码模式编辑后保存，**永远走原文路径**，不经过序列化
-- 提供设置项："保存时总是规范化排版"（默认关）
+* 状态机维护三个字段：`rawText`（磁盘原文）、`docText`（Crepe 序列化结果）、`isDirty`
+* 只在 WYSIWYG 模式下产生编辑事务时才置 `isDirty`
+* 源码模式编辑后保存，**永远走原文路径**，不经过序列化
+* 提供设置项："保存时总是规范化排版"（默认关）
 
 ### 5.3 Mermaid 图表方案（代码块预览钩子）
 
@@ -365,8 +367,8 @@ markdown-editor/
 
 1. 文档里就是一个普通的 mermaid 代码块，schema 与序列化完全不动
 2. 通过 `featureConfigs[Crepe.Feature.CodeMirror].renderPreview` 接管：
-   - `language !== 'mermaid'` → 返回 `null`，保持无预览
-   - 命中 mermaid → 返回 `undefined` 进入异步模式，渲染完成后 `applyPreview(svg)`
+   * `language !== 'mermaid'` → 返回 `null`，保持无预览
+   * 命中 mermaid → 返回 `undefined` 进入异步模式，渲染完成后 `applyPreview(svg)`
 3. 稳定性：400ms 防抖、自增令牌丢弃过期结果、语法错误渲染成人话提示而非抛异常
 4. mermaid 用动态 `import()` 懒加载（含 cynefin / cytoscape 依赖约 3.3MB），
    不进主包，只有真正遇到图表才拉取
@@ -384,6 +386,7 @@ markdown-editor/
 ### 5.4 图片与图床
 
 **粘贴流程：**
+
 ```
 Ctrl+V / 拖拽图片
    │
@@ -398,29 +401,30 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 ```
 
 **图床设计：**
-- 统一 `Uploader` 接口：`{ name, upload(buffer, filename): Promise<string> }`
-- 内置实现：SM.MS、七牛云、自定义 HTTP API（预留阿里云 OSS / GitHub）
-- 上传动作在 **main 进程**执行，规避浏览器 CORS 与密钥泄露
-- 维护 `srcMap: 本地相对路径 → 远程 URL`，导出时可一键批量替换为图床链接（公众号等平台必须）
+
+* 统一 `Uploader` 接口：`{ name, upload(buffer, filename): Promise<string> }`
+* 内置实现：SM.MS、七牛云、自定义 HTTP API（预留阿里云 OSS / GitHub）
+* 上传动作在 **main 进程**执行，规避浏览器 CORS 与密钥泄露
+* 维护 `srcMap: 本地相对路径 → 远程 URL`，导出时可一键批量替换为图床链接（公众号等平台必须）
 
 ### 5.5 搜索（MiniSearch）
 
-- 索引字段：`title`（权重 3）、`content`（权重 1）、`path`、`tags`
-- 持久化：`vault/.mdeditor/search-index.json`，用 `MiniSearch.toJSON()` 序列化
-- 增量更新：chokidar 捕获文件变更 → 只重建该条
-- 冷启动全量构建：1000 个文件约 1-2 秒，放 main 进程避免卡 UI
-- 支持中文分词（MiniSearch 对 CJK 需配置 `tokenize` 为按字切分）
+* 索引字段：`title`（权重 3）、`content`（权重 1）、`path`、`tags`
+* 持久化：`vault/.mdeditor/search-index.json`，用 `MiniSearch.toJSON()` 序列化
+* 增量更新：chokidar 捕获文件变更 → 只重建该条
+* 冷启动全量构建：1000 个文件约 1-2 秒，放 main 进程避免卡 UI
+* 支持中文分词（MiniSearch 对 CJK 需配置 `tokenize` 为按字切分）
 
 > **为什么不用 SQLite**：`better-sqlite3` 需要 node-gyp 编译 → 需要 MSVC → 与你本机的约束直接冲突。MiniSearch 是纯 JS，零编译依赖。
 
 ### 5.6 导出
 
-| 格式 | 方案 | 说明 |
-|---|---|---|
-| **HTML** | 克隆 ProseMirror DOM + 独立 CSS 模板 | **所见即所得导出**——你在编辑器里看到什么，导出的就是什么 |
-| **PDF** | `webContents.printToPDF()` | Electron 原生能力，无需额外依赖，支持页眉页脚与分页控制 |
-| **Markdown** | 单文件导出 | 支持"内联图片为 base64"或"附带 .assets 文件夹"两种模式 |
-| **Word** | HTML → docx（阶段 6，可选） | |
+| 格式           | 方案                             | 说明                                    |
+| ------------ | ------------------------------ | ------------------------------------- |
+| **HTML**     | 克隆 ProseMirror DOM + 独立 CSS 模板 | **所见即所得导出**——你在编辑器里看到什么，导出的就是什么       |
+| **PDF**      | `webContents.printToPDF()`     | Electron 原生能力，无需额外依赖，支持页眉页脚与分页控制      |
+| **Markdown** | 单文件导出                          | 支持"内联图片为 base64"或"附带 .assets 文件夹"两种模式 |
+| **Word**     | HTML → docx（阶段 6，可选）           | <br />                                |
 
 **HTML 导出的优雅之处**：WYSIWYG 模式下，ProseMirror 的 DOM 已经是渲染后的结果——Mermaid 已变成 SVG、KaTeX 已变成 MathML、代码块已带高亮 span。直接 `cloneNode(true)` 套上模板 CSS 即可，**不需要再跑一遍 Markdown 渲染管线**，从根源上杜绝"编辑器里好看，导出后变形"的问题。
 
@@ -428,19 +432,19 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ### 5.7 主题系统
 
-- 基于 CSS Variables，一套变量表驱动全应用
-- Crepe 官方自带 6 套主题（frame / crepe / nord × light / dark），可直接复用
-- 编辑器内容区样式与导出模板共用同一套 CSS，保证一致性
-- 跟随系统深色模式
+* 基于 CSS Variables，一套变量表驱动全应用
+* Crepe 官方自带 6 套主题（frame / crepe / nord × light / dark），可直接复用
+* 编辑器内容区样式与导出模板共用同一套 CSS，保证一致性
+* 跟随系统深色模式
 
 ### 5.8 启动偏好（Startup preference）
 
 用户可决定每次打开应用时看到什么，配置项位于标题栏「偏好设置」：
 
-| 选项 | 值 | 行为 |
-|---|---|---|
-| 恢复上次会话（默认） | `restore` | 启动即重新打开上次使用的笔记库与文档，回到上次退出时的状态 |
-| 每次启动显示全新页面 | `fresh` | 启动不恢复任何笔记库/文档，打开即是空白，从「选择一个文件夹」开始 |
+| 选项         | 值         | 行为                                |
+| ---------- | --------- | --------------------------------- |
+| 恢复上次会话（默认） | `restore` | 启动即重新打开上次使用的笔记库与文档，回到上次退出时的状态     |
+| 每次启动显示全新页面 | `fresh`   | 启动不恢复任何笔记库/文档，打开即是空白，从「选择一个文件夹」开始 |
 
 **持久化**：`startupMode` 与 `vaultPath` / `activePath` / `mode` / `sidebarWidth` 一起存放在
 主进程 `userData/session.json`（复用既有的 `session.ts` 原子写与 `patchSession` 通道，
@@ -449,22 +453,22 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 历史文件缺失/损坏）时按原有逻辑恢复整个会话。无论哪种模式，切换/打开笔记库时仍会把
 `vaultPath` 写回 session，便于之后切回 `restore` 能恢复到最近使用的库。
 
----
+***
 
 ## 6. 技术写作场景专项设计
 
-| 能力 | 实现 | 阶段 |
-|---|---|---|
-| 代码块多语言高亮 | Crepe 内置 CodeMirror，语言按需引入裁剪体积 | P1 |
-| 数学公式 | Crepe 内置 KaTeX，行内 + 块级 | P1 |
-| Mermaid 流程图 | 代码块 renderPreview 钩子（§5.3） | P1 |
-| 表格增强 | Crepe 内置，行列拖拽 + 对齐设置 | P1 |
-| 大纲面板 | 从 ProseMirror doc 提取 heading 层级，滚动联动 | P2 |
-| 字数/阅读时间统计 | 状态栏实时显示，中英文分别计数 | P2 |
-| 专注模式 | 当前段落高亮，其余淡出 | P3 |
-| 复制为富文本 | 复制到公众号/知乎时保留样式 | P3 |
+| 能力          | 实现                                   | 阶段 |
+| ----------- | ------------------------------------ | -- |
+| 代码块多语言高亮    | Crepe 内置 CodeMirror，语言按需引入裁剪体积       | P1 |
+| 数学公式        | Crepe 内置 KaTeX，行内 + 块级               | P1 |
+| Mermaid 流程图 | 代码块 renderPreview 钩子（§5.3）           | P1 |
+| 表格增强        | Crepe 内置，行列拖拽 + 对齐设置                 | P1 |
+| 大纲面板        | 从 ProseMirror doc 提取 heading 层级，滚动联动 | P2 |
+| 字数/阅读时间统计   | 状态栏实时显示，中英文分别计数                      | P2 |
+| 专注模式        | 当前段落高亮，其余淡出                          | P3 |
+| 复制为富文本      | 复制到公众号/知乎时保留样式                       | P3 |
 
----
+***
 
 ## 7. 关键接口定义
 
@@ -512,39 +516,39 @@ export interface SessionState {
 }
 ```
 
----
+***
 
 ## 8. 开发路线图
 
-| 阶段 | 目标 | 产出验收标准 |
-|---|---|---|
-| **0. 地基** | 脚手架 + 窗口 + IPC 打通 | `npm run dev` 能弹出一个空白 Electron 窗口 |
-| **1. 编辑器核心** | Crepe 接入 + 双模式切换 + 打开/保存 md | 能打开一个 md 编辑并保存，Ctrl+/ 切换源码无内容丢失 |
-| **2. 笔记库** | 文件树 + 自动保存 + 崩溃恢复 | 能打开整个文件夹，断电重启后内容不丢 |
-| **3. 写作套件** | Mermaid + 公式核验 + 表格 + 代码块 | 一篇含图表的文章能正常编辑渲染 |
-| **4. 图片** | 粘贴落盘 + 图床配置 | 截图粘贴即可插入，图床可配 |
-| **5. 搜索** | MiniSearch 索引 + 搜索面板 | 千篇笔记下搜索响应 < 100ms |
-| **6. 导出** | HTML / PDF / 单 md | 导出结果与编辑器内观感一致 |
-| **7. 打磨** | 主题、体积裁剪、快捷键、设置面板 | 安装包体积优化，可用 |
-| **8. 分发** | electron-builder 打包 | 产出 Windows 安装包，可安装运行 |
+| 阶段           | 目标                          | 产出验收标准                            |
+| ------------ | --------------------------- | --------------------------------- |
+| **0. 地基**    | 脚手架 + 窗口 + IPC 打通           | `npm run dev` 能弹出一个空白 Electron 窗口 |
+| **1. 编辑器核心** | Crepe 接入 + 双模式切换 + 打开/保存 md | 能打开一个 md 编辑并保存，Ctrl+/ 切换源码无内容丢失   |
+| **2. 笔记库**   | 文件树 + 自动保存 + 崩溃恢复           | 能打开整个文件夹，断电重启后内容不丢                |
+| **3. 写作套件**  | Mermaid + 公式核验 + 表格 + 代码块   | 一篇含图表的文章能正常编辑渲染                   |
+| **4. 图片**    | 粘贴落盘 + 图床配置                 | 截图粘贴即可插入，图床可配                     |
+| **5. 搜索**    | MiniSearch 索引 + 搜索面板        | 千篇笔记下搜索响应 < 100ms                 |
+| **6. 导出**    | HTML / PDF / 单 md           | 导出结果与编辑器内观感一致                     |
+| **7. 打磨**    | 主题、体积裁剪、快捷键、设置面板            | 安装包体积优化，可用                        |
+| **8. 分发**    | electron-builder 打包         | 产出 Windows 安装包，可安装运行              |
 
-> 建议：**先只做阶段 0~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
+> 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
 
----
+***
 
 ## 9. 已知风险与应对
 
-| # | 风险 | 影响 | 应对 |
-|---|---|---|---|
-| 1 | **Markdown 往返失真** | 高 | 原始文本保真模式（§5.2），未编辑则一字不改写回 |
-| 2 | **Milkdown 多实例上下文错误** | 高 | 全项目只用 `@milkdown/crepe` 单包，不混装低版本插件 |
-| 3 | **Electron 二进制下载慢/失败** | 中 | 配置 `electron_mirror` + `electron-builder-binaries` 指向 npmmirror |
-| 4 | **Crepe 体积偏大** | 中 | 阶段 7 裁剪 `@codemirror/language-data`，按需引入语言包 |
-| 5 | **KaTeX 字体导出丢失** | 中 | 导出 HTML 时内联字体或使用本地字体文件 |
-| 6 | **electron-builder 打包需下载 NSIS** | 低 | 同风险 3，配镜像解决 |
-| 7 | pinia 4 与 Vue 3.5 的 peer 兼容性 | 低 | 安装时若报冲突，降级到 `pinia@^2` |
+| # | 风险                              | 影响 | 应对                                                              |
+| - | ------------------------------- | -- | --------------------------------------------------------------- |
+| 1 | **Markdown 往返失真**               | 高  | 原始文本保真模式（§5.2），未编辑则一字不改写回                                       |
+| 2 | **Milkdown 多实例上下文错误**           | 高  | 全项目只用 `@milkdown/crepe` 单包，不混装低版本插件                             |
+| 3 | **Electron 二进制下载慢/失败**          | 中  | 配置 `electron_mirror` + `electron-builder-binaries` 指向 npmmirror |
+| 4 | **Crepe 体积偏大**                  | 中  | 阶段 7 裁剪 `@codemirror/language-data`，按需引入语言包                     |
+| 5 | **KaTeX 字体导出丢失**                | 中  | 导出 HTML 时内联字体或使用本地字体文件                                          |
+| 6 | **electron-builder 打包需下载 NSIS** | 低  | 同风险 3，配镜像解决                                                     |
+| 7 | pinia 4 与 Vue 3.5 的 peer 兼容性    | 低  | 安装时若报冲突，降级到 `pinia@^2`                                          |
 
----
+***
 
 ## 10. 需要你拍板的遗留问题
 
@@ -557,7 +561,7 @@ export interface SessionState {
 5. **图床优先级**：v1 先只做本地存储、预留图床接口，还是直接接一个图床（比如 SM.MS）？
 6. **AI 辅助写作**：Crepe 已内置 AI Feature 接口（需自备 API Key），要不要纳入路线图？放在哪个阶段？
 
----
+***
 
 ## 附录 A：开工前必做的环境配置
 
@@ -570,3 +574,4 @@ npm config set electron-builder-binaries_mirror https://npmmirror.com/mirrors/el
 npm view vite version        # 应为 7.3.x，不是 8.x
 npm view @milkdown/crepe version   # 应为 7.22.1
 ```
+
