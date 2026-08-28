@@ -40,8 +40,8 @@ function selectMode(key: ModeKey): void {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="panel glass">
+    <div class="overlay" :data-mode="previewMode" @click.self="emit('close')">
+      <div class="panel glass" :data-mode="previewMode">
       <header class="panel__head">
         <h2 class="panel__title">{{ L.appearance }}</h2>
         <button class="panel__close" @click="emit('close')">{{ L.appearanceClose }}</button>
@@ -60,6 +60,7 @@ function selectMode(key: ModeKey): void {
             :title="L[s.labelKey]"
             @click="selectSkin(s.key)"
           >
+            <span class="swatch__accent"></span>
             <span class="swatch__name">{{ L[s.labelKey] }}</span>
           </button>
         </div>
@@ -173,7 +174,7 @@ function selectMode(key: ModeKey): void {
   cursor: pointer;
   overflow: hidden;
   padding: 0;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--hue-border-subtle);
   transition: transform var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease);
 }
@@ -191,12 +192,12 @@ function selectMode(key: ModeKey): void {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 6px;
+  bottom: 7px;
   text-align: center;
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  color: var(--hue-text-1);
+  text-shadow: none;
   letter-spacing: 0.04em;
   pointer-events: none;
 }
@@ -206,7 +207,7 @@ function selectMode(key: ModeKey): void {
   display: flex;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--hue-border-subtle);
   border-radius: 8px;
   background: var(--hue-highlight);
 }
@@ -227,5 +228,30 @@ function selectMode(key: ModeKey): void {
   background: var(--hue-accent);
   color: var(--hue-editor);
   font-weight: 500;
+}
+
+/* 色卡强调色条：让五套皮肤在浅/深模式下都一眼可辨 */
+.swatch__accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 46%;
+  background: var(--hue-accent);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* 浅色模式：面板改用柔和浅色玻璃，消除"深玻璃+亮色卡"的刺眼对比 */
+.overlay[data-mode='light'] {
+  background: rgba(30, 36, 38, 0.18);
+}
+
+.panel[data-mode='light'] {
+  background: rgba(245, 248, 246, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  backdrop-filter: blur(30px) saturate(115%);
+  -webkit-backdrop-filter: blur(30px) saturate(115%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 16px 46px rgba(31, 41, 39, 0.16);
 }
 </style>
