@@ -6,6 +6,12 @@ release/
 # 智能体工作数据（本地记忆、环境探测记录），不进版本库
 .workbuddy/
 
+# Vite 打包配置时生成的带时间戳临时文件
+electron.vite.config.*.mjs
+vite.config.*.mjs
+vite.config.*.js
+.diag/
+
 *.log
 npm-debug.log*
 yarn-error.log*
