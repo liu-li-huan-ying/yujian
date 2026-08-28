@@ -114,6 +114,8 @@ const zhCN = {
     switchVault: '切换工作文件夹',
     preferences: '偏好设置',
     prefsClose: '×',
+    outline: '大纲',
+    outlineEmpty: '暂无标题',
     startupTitle: '启动时',
     startupRestore: '恢复上次会话',
     startupRestoreDesc: '重新打开上次使用的笔记库与文档',

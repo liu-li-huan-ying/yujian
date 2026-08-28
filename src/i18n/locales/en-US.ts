@@ -115,6 +115,8 @@ const enUS = {
     switchVault: 'Switch Folder',
     preferences: 'Preferences',
     prefsClose: '×',
+    outline: 'Outline',
+    outlineEmpty: 'No headings',
     startupTitle: 'On Startup',
     startupRestore: 'Restore last session',
     startupRestoreDesc: 'Reopen the last vault and document',

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import MilkdownEditor from './MilkdownEditor.vue'
 import SourceEditor from './SourceEditor.vue'
 import LoadingBar from '../components/LoadingBar.vue'
 import ReadingProgress from '../components/ReadingProgress.vue'
 import { useFidelity } from './useFidelity'
+import { parseOutline, type OutlineItem } from './outline'
 
 export type EditorMode = 'wysiwyg' | 'source'
 
@@ -78,6 +79,74 @@ let timer: ReturnType<typeof setTimeout> | null = null
 const dirty = computed(() => fidelity.isDirty.value)
 const willNormalize = computed(() => fidelity.willNormalize.value)
 
+/* ── 文档大纲 ─────────────────────────────── */
+
+const outline = computed<OutlineItem[]>(() => parseOutline(fidelity.currentText.value))
+
+/** 当前阅读位置对应的章节序号（-1 表示文档顶部/无标题） */
+const activeHeadingIndex = ref(-1)
+let activeRaf = 0
+let lastActiveAt = 0
+
+/**
+ * 依据当前视口顶部的章节高亮大纲。
+ * 所见即所得：取 `.milkdown` 内真实 h1~h6 的 DOM 位置；
+ * 源码：用 CodeMirror 首行可见行比对标题行号。
+ * 节流 100ms（设计稿要求）。
+ */
+function computeActiveHeading(force = false): void {
+  const now = Date.now()
+  if (!force && now - lastActiveAt < 100) return
+  lastActiveAt = now
+
+  const items = outline.value
+  if (items.length === 0) {
+    activeHeadingIndex.value = -1
+    return
+  }
+
+  if (mode.value === 'wysiwyg') {
+    const el = wysiwygEl()
+    if (!el) return
+    const heads = el.querySelectorAll('h1,h2,h3,h4,h5,h6')
+    const top = el.getBoundingClientRect().top + 12
+    let idx = -1
+    heads.forEach((h, i) => {
+      if (h.getBoundingClientRect().top <= top) idx = i
+    })
+    activeHeadingIndex.value = idx
+  } else {
+    const line = source.value?.getFirstVisibleLine() ?? 1
+    let idx = -1
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].line <= line) idx = i
+    }
+    activeHeadingIndex.value = idx
+  }
+}
+
+function onPaneScroll(): void {
+  if (activeRaf) return
+  activeRaf = requestAnimationFrame(() => {
+    activeRaf = 0
+    computeActiveHeading()
+  })
+}
+
+/** 点击大纲项跳转：源码模式定位到行，所见即所得模式平滑滚动到对应标题 */
+function gotoOutline(index: number): void {
+  const item = outline.value[index]
+  if (!item) return
+  if (mode.value === 'source') {
+    source.value?.revealLine(item.line)
+    return
+  }
+  const el = wysiwygEl()
+  const heads = el?.querySelectorAll('h1,h2,h3,h4,h5,h6')
+  const target = heads?.[index] as HTMLElement | undefined
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 /* ── 加载状态 ─────────────────────────────── */
 
 function errMsg(e: unknown): string {
@@ -143,26 +212,32 @@ function switchTo(next: EditorMode): void {
     captureScroll()
     milkdown.value?.setReadonly(true)
     mode.value = 'source'
-    requestAnimationFrame(() => source.value?.scrollToRatio(wysiwygRatio()))
+    requestAnimationFrame(() => {
+      source.value?.scrollToRatio(wysiwygRatio())
+      // 对齐后按首可见行重算大纲高亮
+      computeActiveHeading(true)
+    })
   } else {
-    // 切回所见即所得：内容在隐藏期保留滚动，重渲染(setMarkdown)会回顶，
-    // 因此先保存、重渲染后再恢复原位
-    captureScroll()
-    startLoading()
-    try {
-      milkdown.value?.setMarkdown(fidelity.currentText.value)
-      milkdown.value?.setReadonly(false)
-      mode.value = 'wysiwyg'
-      // 让进度条至少绘制一帧，并恢复滚动位置
-      requestAnimationFrame(() => {
-        restoreScroll()
-        if (loadStatus.value === 'loading') stopLoading()
-      })
-    } catch (e) {
-      failLoading(`渲染失败：${errMsg(e)}`)
-      return
+      // 切回所见即所得：内容在隐藏期保留滚动，重渲染(setMarkdown)会回顶，
+      // 因此先保存、重渲染后再恢复原位
+      captureScroll()
+      startLoading()
+      try {
+        milkdown.value?.setMarkdown(fidelity.currentText.value)
+        milkdown.value?.setReadonly(false)
+        mode.value = 'wysiwyg'
+        // 让进度条至少绘制一帧，并恢复滚动位置
+        requestAnimationFrame(() => {
+          restoreScroll()
+          if (loadStatus.value === 'loading') stopLoading()
+          // 渲染恢复后重算大纲高亮
+          computeActiveHeading(true)
+        })
+      } catch (e) {
+        failLoading(`渲染失败：${errMsg(e)}`)
+        return
+      }
     }
-  }
   emit('mode-change', mode.value)
 }
 
@@ -220,6 +295,8 @@ function onReady(): void {
   if (mode.value === 'source') {
     milkdown.value?.setReadonly(true)
   }
+  // 渲染完成后重新计算大纲高亮（标题 DOM 此时才就绪）
+  requestAnimationFrame(() => computeActiveHeading(true))
 }
 
 /**
@@ -285,6 +362,12 @@ async function publishImages(): Promise<{
   return { ok: true, uploaded: res.uploaded, failed: res.failed }
 }
 
+onMounted(() => {
+  // 两个面板始终挂载，仅切换可见性；scroll 不冒泡，用捕获阶段捕获内部滚动容器
+  wysiwygPane.value?.addEventListener('scroll', onPaneScroll, true)
+  sourcePane.value?.addEventListener('scroll', onPaneScroll, true)
+})
+
 defineExpose({
   save,
   load,
@@ -294,6 +377,9 @@ defineExpose({
   revealLine,
   getHTML,
   publishImages,
+  gotoOutline,
+  outline,
+  activeHeadingIndex,
   dirty,
   willNormalize,
   mode,

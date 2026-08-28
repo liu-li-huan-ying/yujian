@@ -6,6 +6,7 @@ import EditorHost from './editor/EditorHost.vue'
 import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
 import PreferencesSettings from './components/PreferencesSettings.vue'
+import Outline from './components/Outline.vue'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange, StartupMode } from '../electron/shared/ipc-channels'
@@ -219,6 +220,20 @@ function onStartupMode(next: StartupMode): void {
   void window.api.patchSession({ startupMode: next })
 }
 
+/* ── 大纲面板 ── */
+
+/** 窗口窄于 900px 自动收起右侧大纲面板（设计稿 §5 响应式规则） */
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
+const outlineVisible = computed(() => windowWidth.value >= 900)
+
+function onResize(): void {
+  windowWidth.value = window.innerWidth
+}
+
+function onOutlineSelect(index: number): void {
+  host.value?.gotoOutline(index)
+}
+
 /** 图床弹窗里的「上传当前文档图片」：交给编辑器执行发布+重渲染+保存 */
 async function onPublishImages(): Promise<void> {
   showImgHost.value = false
@@ -305,6 +320,7 @@ onMounted(async () => {
 
   window.api.onVaultChange(onVaultChange)
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('resize', onResize)
 
   const session = await window.api.getSession()
   sidebarWidth.value = session.sidebarWidth
@@ -320,6 +336,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', onResize)
   if (treeTimer) clearTimeout(treeTimer)
   if (widthTimer) clearTimeout(widthTimer)
   if (toastTimer) clearTimeout(toastTimer)
@@ -372,6 +389,13 @@ onBeforeUnmount(() => {
           @saved="lastSavedAt = Date.now()"
         />
       </main>
+
+      <Outline
+        v-show="outlineVisible"
+        :items="host?.outline ?? []"
+        :active-index="host?.activeHeadingIndex ?? -1"
+        @select="onOutlineSelect"
+      />
     </div>
 
       <footer class="statusbar jade">

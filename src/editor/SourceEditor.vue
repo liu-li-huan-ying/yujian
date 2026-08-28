@@ -176,7 +176,14 @@ function scrollToRatio(ratio: number): void {
   scroller.scrollTop = Math.max(0, Math.min(1, ratio)) * max
 }
 
-defineExpose({ revealLine, scrollToRatio })
+/** 当前视口顶部所在的行号（1-based），供大纲在源码模式下计算「当前章节」 */
+function getFirstVisibleLine(): number {
+  if (!view) return 1
+  const block = view.lineBlockAtHeight(view.scrollDOM.scrollTop)
+  return view.state.doc.lineAt(block.from).number
+}
+
+defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine })
 </script>
 
 <template>
