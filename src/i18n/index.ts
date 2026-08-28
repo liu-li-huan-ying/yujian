@@ -13,8 +13,12 @@ const locales: Record<LocaleKey, Locale> = {
 /** 当前激活的语言 key（响应式，供 computed / 模板双向响应） */
 const localeKey = ref<LocaleKey>('zh-CN')
 
-/** 响应式语言包：切换时所有引用自动更新 */
-const t = reactive<Locale>({ ...zhCN })
+/**
+ * 响应式语言包：切换时所有引用自动更新。
+ * 必须用深拷贝：否则 t 与 zhCN 共享嵌套对象引用，setLocale 的
+ * Object.assign 会污染原始中文源对象，导致切回中文时读到的是已变英文的值。
+ */
+const t = reactive<Locale>(structuredClone(zhCN))
 
 /**
  * 获取当前语言 key（读取响应式 ref，在 computed 内调用可建立依赖）
