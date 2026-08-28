@@ -1,8 +1,8 @@
 {
-  "name": "md-editor",
+  "name": "yujian",
   "version": "0.1.0",
   "private": true,
-  "description": "玉质 Markdown 编辑器 — 所见即所得，可切源码",
+  "description": "玉笺 Markdown 编辑器 — 所见即所得，可切源码",
   "main": "./out/main/index.js",
   "author": "",
   "license": "MIT",
