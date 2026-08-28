@@ -95,6 +95,7 @@
         "dmg"
       ],
       "category": "public.app-category.developer-tools",
+      "identity": null,
       "forceCodeSigning": false,
       "notarize": false
     },
