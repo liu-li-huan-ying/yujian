@@ -99,7 +99,19 @@ const enUS = {
     imgHostFillEndpoint: 'Enter upload endpoint',
     imgHostTesting: 'Testing…',
     imgHostNeedDoc: 'Save document before uploading',
-    imgHostRewriteMissing: 'Missing rewrite result'
+    imgHostRewriteMissing: 'Missing rewrite result',
+    appearance: 'Appearance',
+    skin: 'Skin',
+    theme: 'Theme',
+    modeDark: 'Dark',
+    modeLight: 'Light',
+    modeSystem: 'System',
+    skinCeladon: 'Celadon',
+    skinSky: 'Sky',
+    skinMoon: 'Moon',
+    skinDai: 'Dai',
+    skinAmber: 'Amber',
+    appearanceClose: '×'
   }
 }
 

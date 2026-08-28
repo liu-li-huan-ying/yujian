@@ -91,6 +91,178 @@
 }
 
 /* ============================================================
+   色相层 · 天青 Sky（汝窑雨过天青）
+   ============================================================ */
+
+[data-skin='sky'][data-mode='dark'] {
+  --hue-base: #212a2f;
+  --hue-bar: #1d242a;
+  --hue-tint-1: 140, 190, 214;
+  --hue-tint-2: 94, 157, 190;
+  --hue-accent: #5e9dbe;
+  --hue-editor: #1b2125;
+  --hue-code: rgba(255, 255, 255, 0.035);
+  --hue-text-1: #e8eef2;
+  --hue-text-2: #9fafb8;
+  --hue-text-3: #86969f;
+  --hue-success: #4ec9a0;
+  --hue-danger: #f2685f;
+  --hue-active: rgba(94, 157, 190, 0.16);
+  --hue-highlight: rgba(255, 255, 255, 0.055);
+  --hue-border-subtle: rgba(255, 255, 255, 0.055);
+}
+
+[data-skin='sky'][data-mode='light'] {
+  --hue-base: #eef2f4;
+  --hue-bar: #f2f5f7;
+  --hue-tint-1: 168, 205, 222;
+  --hue-tint-2: 190, 216, 228;
+  --hue-accent: #2b7ba8;
+  --hue-editor: #fcfdfd;
+  --hue-code: #f1f4f6;
+  --hue-text-1: #1a2024;
+  --hue-text-2: #4f5a61;
+  --hue-text-3: #6a747b;
+  --hue-success: #2e8b6b;
+  --hue-danger: #c93f36;
+  --hue-active: rgba(43, 123, 168, 0.11);
+  --hue-highlight: rgba(255, 255, 255, 0.85);
+  --hue-border-subtle: rgba(0, 0, 0, 0.065);
+  --material-tint-1-alpha: 0.42;
+  --material-tint-2-alpha: 0.34;
+  --material-highlight-top: rgba(255, 255, 255, 0.85);
+}
+
+/* ============================================================
+   色相层 · 月白 Moon（月白釉，极淡蓝白）
+   ============================================================ */
+
+[data-skin='moon'][data-mode='dark'] {
+  --hue-base: #23282c;
+  --hue-bar: #1f2428;
+  --hue-tint-1: 180, 196, 206;
+  --hue-tint-2: 147, 167, 180;
+  --hue-accent: #93a7b4;
+  --hue-editor: #1c2024;
+  --hue-code: rgba(255, 255, 255, 0.035);
+  --hue-text-1: #e9edf0;
+  --hue-text-2: #a0aab2;
+  --hue-text-3: #878f96;
+  --hue-success: #4ec9a0;
+  --hue-danger: #f2685f;
+  --hue-active: rgba(147, 167, 180, 0.16);
+  --hue-highlight: rgba(255, 255, 255, 0.055);
+  --hue-border-subtle: rgba(255, 255, 255, 0.055);
+}
+
+[data-skin='moon'][data-mode='light'] {
+  --hue-base: #f0f2f4;
+  --hue-bar: #f4f6f7;
+  --hue-tint-1: 200, 212, 220;
+  --hue-tint-2: 208, 219, 226;
+  --hue-accent: #5a7180;
+  --hue-editor: #fdfdfe;
+  --hue-code: #eef1f3;
+  --hue-text-1: #20262b;
+  --hue-text-2: #565f66;
+  --hue-text-3: #6e757c;
+  --hue-success: #2e8b6b;
+  --hue-danger: #c93f36;
+  --hue-active: rgba(90, 113, 128, 0.11);
+  --hue-highlight: rgba(255, 255, 255, 0.85);
+  --hue-border-subtle: rgba(0, 0, 0, 0.065);
+  --material-tint-1-alpha: 0.42;
+  --material-tint-2-alpha: 0.34;
+  --material-highlight-top: rgba(255, 255, 255, 0.85);
+}
+
+/* ============================================================
+   色相层 · 黛 Dai（黛紫，墨青紫）
+   ============================================================ */
+
+[data-skin='dai'][data-mode='dark'] {
+  --hue-base: #262430;
+  --hue-bar: #21202b;
+  --hue-tint-1: 178, 168, 212;
+  --hue-tint-2: 139, 124, 184;
+  --hue-accent: #8b7cb8;
+  --hue-editor: #1f1e28;
+  --hue-code: rgba(255, 255, 255, 0.035);
+  --hue-text-1: #eceaf1;
+  --hue-text-2: #a8a3b8;
+  --hue-text-3: #8e89a0;
+  --hue-success: #5bc49a;
+  --hue-danger: #f2685f;
+  --hue-active: rgba(139, 124, 184, 0.16);
+  --hue-highlight: rgba(255, 255, 255, 0.055);
+  --hue-border-subtle: rgba(255, 255, 255, 0.055);
+}
+
+[data-skin='dai'][data-mode='light'] {
+  --hue-base: #f0eef4;
+  --hue-bar: #f4f2f7;
+  --hue-tint-1: 206, 198, 224;
+  --hue-tint-2: 216, 209, 230;
+  --hue-accent: #6a5a9e;
+  --hue-editor: #fdfcfe;
+  --hue-code: #f1eef5;
+  --hue-text-1: #231f2a;
+  --hue-text-2: #56505f;
+  --hue-text-3: #6e6878;
+  --hue-success: #2e8b6b;
+  --hue-danger: #c93f36;
+  --hue-active: rgba(106, 90, 158, 0.11);
+  --hue-highlight: rgba(255, 255, 255, 0.85);
+  --hue-border-subtle: rgba(0, 0, 0, 0.065);
+  --material-tint-1-alpha: 0.42;
+  --material-tint-2-alpha: 0.34;
+  --material-highlight-top: rgba(255, 255, 255, 0.85);
+}
+
+/* ============================================================
+   色相层 · 琥珀 Amber（老蜜蜡，暖调）
+   ============================================================ */
+
+[data-skin='amber'][data-mode='dark'] {
+  --hue-base: #2a2620;
+  --hue-bar: #251f19;
+  --hue-tint-1: 221, 186, 120;
+  --hue-tint-2: 199, 154, 78;
+  --hue-accent: #c79a4e;
+  --hue-editor: #221e18;
+  --hue-code: rgba(255, 255, 255, 0.035);
+  --hue-text-1: #f1ece1;
+  --hue-text-2: #b6a98f;
+  --hue-text-3: #988c74;
+  --hue-success: #5bbf8e;
+  --hue-danger: #ef7a5f;
+  --hue-active: rgba(199, 154, 78, 0.16);
+  --hue-highlight: rgba(255, 255, 255, 0.05);
+  --hue-border-subtle: rgba(255, 255, 255, 0.05);
+}
+
+[data-skin='amber'][data-mode='light'] {
+  --hue-base: #f4f1ea;
+  --hue-bar: #f7f4ed;
+  --hue-tint-1: 224, 202, 158;
+  --hue-tint-2: 230, 210, 172;
+  --hue-accent: #9a6f24;
+  --hue-editor: #fefdfb;
+  --hue-code: #f3efe7;
+  --hue-text-1: #2a251d;
+  --hue-text-2: #5e5443;
+  --hue-text-3: #766a56;
+  --hue-success: #2e8b6b;
+  --hue-danger: #c95a36;
+  --hue-active: rgba(154, 111, 36, 0.11);
+  --hue-highlight: rgba(255, 255, 255, 0.85);
+  --hue-border-subtle: rgba(0, 0, 0, 0.07);
+  --material-tint-1-alpha: 0.4;
+  --material-tint-2-alpha: 0.32;
+  --material-highlight-top: rgba(255, 255, 255, 0.85);
+}
+
+/* ============================================================
    材质类 · 玉质（静态渲染，零运行时开销）
    ============================================================ */
 

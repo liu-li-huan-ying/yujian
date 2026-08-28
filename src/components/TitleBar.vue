@@ -18,6 +18,7 @@ const emit = defineEmits<{
   (e: 'export-html'): void
   (e: 'export-pdf'): void
   (e: 'img-host'): void
+  (e: 'appearance'): void
 }>()
 
 const L = i18n.ui
@@ -76,6 +77,10 @@ onBeforeUnmount(() => {
 
       <button class="act" @click="emit('img-host')">
         {{ L.imgHost }}
+      </button>
+
+      <button class="act" @click="emit('appearance')" :title="L.appearance">
+        {{ L.appearance }}
       </button>
 
       <div class="seg">

@@ -4,6 +4,8 @@ import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import EditorHost from './editor/EditorHost.vue'
 import ImgHostSettings from './components/ImgHostSettings.vue'
+import AppearanceSettings from './components/AppearanceSettings.vue'
+import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
@@ -186,6 +188,14 @@ function onImgHost(): void {
   showImgHost.value = true
 }
 
+/* ── 外观（皮肤 / 明暗）── */
+
+const showAppearance = ref(false)
+
+function onAppearance(): void {
+  showAppearance.value = true
+}
+
 /** 图床弹窗里的「上传当前文档图片」：交给编辑器执行发布+重渲染+保存 */
 async function onPublishImages(): Promise<void> {
   showImgHost.value = false
@@ -265,6 +275,9 @@ watch(sidebarWidth, (width) => {
 })
 
 onMounted(async () => {
+  // 应用持久化的皮肤 / 明暗（index.html 已有青瓷+深默认值兜底）
+  initAppearance()
+
   window.api.onVaultChange(onVaultChange)
   window.addEventListener('keydown', onKeydown)
 
@@ -298,6 +311,7 @@ onBeforeUnmount(() => {
       @export-html="doExport('html')"
       @export-pdf="doExport('pdf')"
       @img-host="onImgHost"
+      @appearance="onAppearance"
     />
 
     <div class="body">
@@ -363,6 +377,9 @@ onBeforeUnmount(() => {
       @close="showImgHost = false"
       @publish="onPublishImages"
     />
+
+    <!-- 外观设置（皮肤 / 明暗）-->
+    <AppearanceSettings v-if="showAppearance" @close="showAppearance = false" />
 </template>
 
 <style scoped>

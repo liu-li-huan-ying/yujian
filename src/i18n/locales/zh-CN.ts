@@ -98,7 +98,19 @@ const zhCN = {
     imgHostFillEndpoint: '请填写上传端点',
     imgHostTesting: '检测中…',
     imgHostNeedDoc: '请先保存文档后再上传图片',
-    imgHostRewriteMissing: '改写结果缺失'
+    imgHostRewriteMissing: '改写结果缺失',
+    appearance: '外观',
+    skin: '皮肤',
+    theme: '主题',
+    modeDark: '深色',
+    modeLight: '浅色',
+    modeSystem: '跟随系统',
+    skinCeladon: '青瓷',
+    skinSky: '天青',
+    skinMoon: '月白',
+    skinDai: '黛',
+    skinAmber: '琥珀',
+    appearanceClose: '×'
   }
 }
 

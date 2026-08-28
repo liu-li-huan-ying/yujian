@@ -45,5 +45,33 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "build": {
+    "appId": "com.yujian.app",
+    "productName": "玉笺",
+    "icon": "build/icon.png",
+    "files": [
+      "out/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }

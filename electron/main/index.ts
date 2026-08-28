@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -41,6 +42,9 @@ if (process.env.MD_EDITOR_COMPAT_MODE === '1') {
 }
 
 function createWindow(): void {
+  // 应用图标：开发期指向项目 build/icon.png；打包后 exe 图标由 electron-builder 注入，
+  // build/icon.png 不再随包发布，此时 existsSync 为 false → 回退到平台默认。
+  const iconFile = join(app.getAppPath(), 'build', 'icon.png')
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -49,6 +53,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#16171B',
+    icon: existsSync(iconFile) ? iconFile : undefined,
     // 隐藏原生标题栏，改用自绘标题栏。
     // 注意：不能用 frame:false —— 那会让 Windows 窗口失去拖拽边框与阴影。
     // titleBarStyle:'hidden' 只移除标题栏区域，缩放与阴影都保留。
