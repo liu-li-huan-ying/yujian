@@ -6,6 +6,7 @@ import {
   type FileNode,
   type SearchFileResult
 } from '../../electron/shared/ipc-channels'
+import { useI18n } from '../i18n'
 import FileTree from './FileTree.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -21,6 +22,9 @@ const props = defineProps<{
   /** 在编辑器打开指定文档 */
   openDoc: (path: string) => Promise<void>
 }>()
+
+const { t } = useI18n()
+const L = t.ui
 
 const emit = defineEmits<{
   (e: 'select', node: FileNode): void
@@ -405,17 +409,49 @@ function startDrag(e: PointerEvent): void {
 
       <!-- 普通文件树态 -->
       <template v-else>
-        <p v-if="!vaultPath" class="empty">
-          还没有笔记库。<br />
-          <button class="link" type="button" @click="emit('open-vault')">
-            选择一个文件夹
+        <!-- 未打开笔记库：居中优雅空状态 -->
+        <div v-if="!vaultPath" class="empty-state">
+          <div class="empty-state__icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M3 7a2 2 0 0 1 2-2h3.6l1.8 2.2h7.6a2 2 0 0 1 2 2v8.6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <p class="empty-state__title">{{ L.noVaultTitle }}</p>
+          <p class="empty-state__hint">{{ L.noVaultHint }}</p>
+          <button class="empty-state__btn" type="button" @click="emit('open-vault')">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M1.6 4a1 1 0 0 1 1-1h2.5l1.2 1.5h5.1a1 1 0 0 1 1 1v5.9a1 1 0 0 1-1 1H2.6a1 1 0 0 1-1-1z"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linejoin="round"
+              />
+            </svg>
+            {{ L.chooseFolder }}
           </button>
-          即可开始写作。
-        </p>
+        </div>
 
-        <p v-else-if="nodes.length === 0" class="empty">
-          这个文件夹里还没有 Markdown 文档。
-        </p>
+        <!-- 已开库但无文档 -->
+        <div v-else-if="nodes.length === 0" class="empty-state">
+          <div class="empty-state__icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M6 3h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+              />
+              <path d="M13 3v5h5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <p class="empty-state__title">{{ L.emptyFolderTitle }}</p>
+          <p class="empty-state__hint">{{ L.emptyFolderHint }}</p>
+        </div>
 
         <FileTree
           v-else
@@ -539,22 +575,82 @@ function startDrag(e: PointerEvent): void {
   overflow-y: auto;
 }
 
-.empty {
+/* 优雅空状态：居中、图标徽章 + 标题 + 提示 + 强调色按钮 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.empty-state__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-lg);
+  background: var(--hue-active);
+  color: var(--hue-accent);
+  box-shadow: inset 0 1px 0 var(--hue-highlight);
+}
+
+.empty-state__title {
   margin: 0;
-  padding: 14px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--hue-text-2);
+}
+
+.empty-state__hint {
+  margin: 0;
+  max-width: 168px;
   font-size: 12px;
-  line-height: 1.8;
+  line-height: 1.7;
   color: var(--hue-text-3);
 }
 
-.link {
-  padding: 0;
-  border: 0;
-  background: none;
+.empty-state__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
   font: inherit;
-  color: var(--hue-accent);
-  text-decoration: underline;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
+  box-shadow: var(--hue-shadow-1);
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    filter var(--dur-fast) var(--ease);
+}
+
+.empty-state__btn:hover {
+  filter: brightness(1.06);
+  box-shadow: var(--hue-shadow-2);
+  transform: translateY(-1px);
+}
+
+.empty-state__btn:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+.empty-state__btn:focus-visible {
+  outline: 2px solid var(--hue-accent);
+  outline-offset: 2px;
 }
 
 .sidebar__resizer {

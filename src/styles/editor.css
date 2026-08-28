@@ -1,6 +1,6 @@
 /* ============================================================
    编辑器内容区样式
-   覆盖 Milkdown 默认主题，套用玉质设计令牌
+   覆盖 Milkdown / Crepe 默认主题，套用玉质设计令牌
    ============================================================ */
 
 .milkdown {
@@ -10,6 +10,31 @@
   overflow-x: hidden;
   background: var(--hue-editor);
   color: var(--hue-text-1);
+
+  /* ── 关键：把 Crepe 的主题变量整体重映射为玉质令牌 ──
+     这样代码块面板、表格发丝边、浮层菜单（slash / 块菜单 / 语言选择 /
+     图片编辑）、任务列表、行内代码等全部统一成我们的配色，且自动
+     随皮肤与明暗切换。原 frame-dark 用的是 #121212 近黑底 + #757575
+     灰边，正是「组件原生、和软件风格不搭」的来源。 */
+  --crepe-color-background: var(--hue-editor);
+  --crepe-color-on-background: var(--hue-text-1);
+  --crepe-color-surface: var(--hue-surface);
+  --crepe-color-surface-low: var(--hue-surface-2);
+  --crepe-color-on-surface: var(--hue-text-2);
+  --crepe-color-on-surface-variant: var(--hue-text-3);
+  --crepe-color-outline: var(--hue-border-subtle);
+  --crepe-color-primary: var(--hue-accent);
+  --crepe-color-secondary: var(--hue-code);
+  --crepe-color-on-secondary: var(--hue-text-1);
+  --crepe-color-inverse: var(--hue-text-1);
+  --crepe-color-on-inverse: var(--hue-base);
+  --crepe-color-inline-code: var(--hue-code-fg);
+  --crepe-color-error: var(--hue-danger);
+  --crepe-color-hover: var(--bg-hover);
+  --crepe-color-selected: var(--hue-active);
+  --crepe-color-inline-area: var(--hue-code);
+  --crepe-shadow-1: var(--hue-shadow-1);
+  --crepe-shadow-2: var(--hue-shadow-2);
 }
 
 /* ── 编辑区画布：纯净实色，内容列宽 720 居中 ── */
@@ -59,6 +84,15 @@
 .milkdown .ProseMirror h1:first-child {
   margin-top: 0;
 }
+/* 跳转锚点时不被任何固定层遮挡 */
+.milkdown .ProseMirror h1,
+.milkdown .ProseMirror h2,
+.milkdown .ProseMirror h3,
+.milkdown .ProseMirror h4,
+.milkdown .ProseMirror h5,
+.milkdown .ProseMirror h6 {
+  scroll-margin-top: 20px;
+}
 
 /* ── 正文与段落 ───────────────────────────── */
 .milkdown .ProseMirror p {
@@ -75,45 +109,82 @@
   color: var(--hue-accent);
   text-decoration: none;
   border-bottom: 1px solid rgba(var(--hue-tint-2), 0.4);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.milkdown .ProseMirror a:hover {
+  border-bottom-color: var(--hue-accent);
 }
 
 .milkdown .ProseMirror blockquote {
   margin: 18px 0;
-  padding: 2px 0 2px 14px;
-  border-left: 2px solid var(--hue-accent);
-  color: var(--hue-text-3);
+  padding: 10px 0 10px 16px;
+  border-left: 3px solid var(--hue-accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: linear-gradient(
+    90deg,
+    var(--hue-active) 0%,
+    transparent 70%
+  );
+  color: var(--hue-text-2);
+}
+.milkdown .ProseMirror blockquote p {
+  margin: 0;
 }
 
 .milkdown .ProseMirror hr {
-  margin: 28px 0;
+  position: relative;
+  margin: 30px auto;
   border: none;
-  border-top: 1px solid var(--border-subtle);
+  height: 1px;
+  max-width: var(--w-column);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--hue-border-subtle) 18%,
+    var(--hue-border-subtle) 82%,
+    transparent
+  );
 }
 
-/* ── 代码 ─────────────────────────────────── */
+/* ── 行内代码 ─────────────────────────────── */
 .milkdown .ProseMirror code {
   font-family: var(--font-mono);
-  font-size: 15px;
-  padding: 2px 5px;
+  font-size: 14px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
   background: var(--hue-code);
-  color: var(--hue-text-1);
+  border: 1px solid var(--hue-border-subtle);
+  color: var(--hue-code-fg);
 }
 
-.milkdown .ProseMirror pre {
-  background: var(--hue-code);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 12px 14px;
+/* ── 代码块（所见即所得：Crepe 包在 .milkdown-code-block 内，
+   内部是 CodeMirror 实例；这段代码块不再是原生 pre）─────────── */
+.milkdown .milkdown-code-block {
   margin: 16px 0;
-  overflow-x: auto;
+  padding: 10px 14px 14px;
+  background: var(--hue-surface);
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-lg);
+  /* 内陷高光，像玉上的一道凹槽，而非平板黑块 */
+  box-shadow: inset 0 1px 0 var(--hue-highlight);
+  transition: border-color var(--dur-fast) var(--ease);
 }
-
-.milkdown .ProseMirror pre code {
-  font-size: 14px;
-  line-height: 1.6;
-  padding: 0;
+.milkdown .milkdown-code-block.selected {
+  border-color: var(--hue-accent);
+}
+.milkdown .milkdown-code-block .cm-editor {
   background: transparent;
+  border-radius: var(--radius-sm);
+}
+.milkdown .milkdown-code-block .cm-gutters {
+  background: transparent;
+  border-right: none;
+}
+/* 源码预览标签（Mermaid 等）弱化，不再抢眼 */
+.milkdown .milkdown-code-block .preview-panel .preview-label {
+  color: var(--hue-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 /* ── 列表 ─────────────────────────────────── */
@@ -128,21 +199,80 @@
 .milkdown .ProseMirror li p {
   margin: 0;
 }
+/* 标记点用强调色，呼应品牌 */
+.milkdown .ProseMirror li::marker {
+  color: var(--hue-accent);
+}
 
-/* ── 表格 ─────────────────────────────────── */
-.milkdown .ProseMirror table {
-  border-collapse: collapse;
+/* ── 任务列表：复选框统一为青瓷 ────────────── */
+.milkdown .milkdown-list-item-block li .label-wrapper svg {
+  fill: var(--hue-text-3);
+}
+.milkdown .milkdown-list-item-block li .label-wrapper .checked svg {
+  fill: var(--hue-accent);
+}
+
+/* ── 表格（Crepe 包在 .milkdown-table-block 内，选择器更具体，
+   必须用同等特异性覆盖）────────────────────────────────── */
+.milkdown .milkdown-table-block {
   margin: 18px 0;
+}
+.milkdown .milkdown-table-block table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
   font-size: 15px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
-.milkdown .ProseMirror th,
-.milkdown .ProseMirror td {
-  border: 1px solid var(--border-default);
-  padding: 7px 12px;
+.milkdown .milkdown-table-block th,
+.milkdown .milkdown-table-block td {
+  border: 1px solid var(--hue-border-subtle);
+  padding: 8px 13px;
 }
-.milkdown .ProseMirror th {
-  background: var(--hue-code);
+/* 去掉相邻单元格的重复发丝边，只保留单向网格线 */
+.milkdown .milkdown-table-block th + th,
+.milkdown .milkdown-table-block td + td {
+  border-left: none;
+}
+.milkdown .milkdown-table-block tr + tr th,
+.milkdown .milkdown-table-block tr + tr td {
+  border-top: none;
+}
+.milkdown .milkdown-table-block th {
+  background: var(--hue-active);
+  color: var(--hue-accent);
   font-weight: 500;
+  text-align: left;
+}
+.milkdown .milkdown-table-block tbody tr:nth-child(even) td {
+  background: var(--hue-code);
+}
+/* 圆角只落在四角 */
+.milkdown .milkdown-table-block th:first-child {
+  border-top-left-radius: var(--radius-md);
+}
+.milkdown .milkdown-table-block th:last-child {
+  border-top-right-radius: var(--radius-md);
+}
+.milkdown .milkdown-table-block tr:last-child td:first-child {
+  border-bottom-left-radius: var(--radius-md);
+}
+.milkdown .milkdown-table-block tr:last-child td:last-child {
+  border-bottom-right-radius: var(--radius-md);
+}
+
+/* ── 图片：圆角 + 发丝边，说明文字弱化为玉质 ── */
+.milkdown .milkdown-image-block > .image-wrapper img {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--hue-border-subtle);
+}
+.milkdown .milkdown-image-block > .caption-input {
+  color: var(--hue-text-3);
+  font-size: 13px;
+}
+.milkdown .milkdown-image-block.selected > .image-wrapper::before {
+  border-radius: var(--radius-md);
 }
 
 /* ── 占位符 ───────────────────────────────── */
@@ -157,6 +287,11 @@
 /* ── 选区 ─────────────────────────────────── */
 .milkdown .ProseMirror ::selection {
   background: var(--hue-active);
+}
+
+/* ── 浮层菜单（slash / 块菜单）补一道描边，避免悬浮发虚 ── */
+.milkdown .milkdown-slash-menu {
+  border: 1px solid var(--hue-border-subtle);
 }
 
 /* ── 源码模式：CodeMirror 套用同一套令牌 ─────── */
@@ -210,8 +345,7 @@
   background: var(--hue-active) !important;
 }
 
-/* ── 代码块预览区（Mermaid 图表）───────────── */
-/* 这几个类名来自 Crepe 的代码块组件内部，不是我们定义的 */
+/* ── Mermaid 图表预览区 ───────────────────── */
 .milkdown .preview-panel {
   border-top: 1px solid var(--hue-border-subtle);
 }

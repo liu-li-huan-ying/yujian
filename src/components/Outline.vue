@@ -47,7 +47,19 @@ watch(
           <span class="outline__txt">{{ item.text }}</span>
         </li>
       </ul>
-      <p v-else class="outline__empty">{{ L.outlineEmpty }}</p>
+      <div v-else class="empty-state">
+        <div class="empty-state__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M5 5h9M5 5v14h14M9 9h8M9 13h8M9 17h5"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+        </div>
+        <p class="empty-state__hint">{{ L.outlineEmpty }}</p>
+      </div>
     </nav>
   </aside>
 </template>
@@ -138,11 +150,35 @@ watch(
   pointer-events: none;
 }
 
-.outline__empty {
+/* 优雅空状态：图标徽章 + 提示，居中 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.empty-state__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-lg);
+  background: var(--hue-active);
+  color: var(--hue-accent);
+  box-shadow: inset 0 1px 0 var(--hue-highlight);
+}
+
+.empty-state__hint {
   margin: 0;
-  padding: 14px 12px;
+  max-width: 150px;
   font-size: 12px;
-  line-height: 1.8;
+  line-height: 1.7;
   color: var(--hue-text-3);
 }
 
