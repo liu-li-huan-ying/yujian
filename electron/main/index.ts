@@ -1,9 +1,24 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
+
+/**
+ * 兼容模式：受限环境（CI、无 GPU 的容器、沙箱）下 GPU 进程会反复崩溃，
+ * 最终触发 "GPU process isn't usable" 导致应用直接退出。
+ *
+ * 常规桌面使用不要开启 —— 其中的 no-sandbox 会降低 Chromium 沙箱强度。
+ * 需要时：MD_EDITOR_COMPAT_MODE=1 npm run dev
+ */
+if (process.env.MD_EDITOR_COMPAT_MODE === '1') {
+  app.commandLine.appendSwitch('no-sandbox')
+  app.commandLine.appendSwitch('disable-gpu')
+  app.commandLine.appendSwitch('disable-gpu-sandbox')
+  app.commandLine.appendSwitch('in-process-gpu')
+  app.commandLine.appendSwitch('disable-software-rasterizer')
+}
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -36,6 +51,8 @@ function createWindow(): void {
   })
 }
 
+const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+
 function registerIpc(): void {
   ipcMain.handle(IPC.APP_VERSION, () => app.getVersion())
 
@@ -44,7 +61,29 @@ function registerIpc(): void {
   )
 
   ipcMain.handle(IPC.FILE_WRITE, async (_event, filePath: string, content: string) => {
-    await writeFile(filePath, content, 'utf-8')
+    // 先写临时文件再改名：写入中断也不会损坏原文
+    const dir = dirname(filePath)
+    const tmp = join(dir, `.${Date.now()}.tmp`)
+    await mkdir(dir, { recursive: true })
+    await writeFile(tmp, content, 'utf-8')
+    const { rename } = await import('node:fs/promises')
+    await rename(tmp, filePath)
+  })
+
+  ipcMain.handle(IPC.DIALOG_OPEN_FILE, async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: MD_FILTERS
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle(IPC.DIALOG_SAVE_FILE, async (_event, defaultPath?: string) => {
+    const result = await dialog.showSaveDialog({
+      defaultPath,
+      filters: MD_FILTERS
+    })
+    return result.canceled ? null : result.filePath
   })
 }
 

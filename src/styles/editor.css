@@ -1,0 +1,202 @@
+/* ============================================================
+   编辑器内容区样式
+   覆盖 Milkdown 默认主题，套用玉质设计令牌
+   ============================================================ */
+
+.milkdown {
+  height: 100%;
+  background: var(--hue-editor);
+  color: var(--hue-text-1);
+}
+
+/* ── 编辑区画布：纯净实色，内容列宽 720 居中 ── */
+.milkdown .ProseMirror {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--hue-text-1);
+  padding: 24px 30px 45vh;
+  min-height: 100%;
+  outline: none;
+  caret-color: var(--hue-accent);
+}
+
+.milkdown .ProseMirror > * {
+  max-width: var(--w-column);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── 标题层级 ─────────────────────────────── */
+.milkdown .ProseMirror h1 {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.35;
+  margin: 32px 0 12px;
+}
+.milkdown .ProseMirror h2 {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin: 28px 0 8px;
+}
+.milkdown .ProseMirror h3 {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 24px 0 8px;
+}
+.milkdown .ProseMirror h4,
+.milkdown .ProseMirror h5,
+.milkdown .ProseMirror h6 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 20px 0 6px;
+}
+.milkdown .ProseMirror h1:first-child {
+  margin-top: 0;
+}
+
+/* ── 正文与段落 ───────────────────────────── */
+.milkdown .ProseMirror p {
+  margin: 0 0 14px;
+  color: var(--hue-text-1);
+}
+
+.milkdown .ProseMirror strong {
+  font-weight: 500;
+  color: var(--hue-text-1);
+}
+
+.milkdown .ProseMirror a {
+  color: var(--hue-accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(var(--hue-tint-2), 0.4);
+}
+
+.milkdown .ProseMirror blockquote {
+  margin: 18px 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--hue-accent);
+  color: var(--hue-text-3);
+}
+
+.milkdown .ProseMirror hr {
+  margin: 28px 0;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ── 代码 ─────────────────────────────────── */
+.milkdown .ProseMirror code {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--hue-code);
+  color: var(--hue-text-1);
+}
+
+.milkdown .ProseMirror pre {
+  background: var(--hue-code);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.milkdown .ProseMirror pre code {
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 0;
+  background: transparent;
+}
+
+/* ── 列表 ─────────────────────────────────── */
+.milkdown .ProseMirror ul,
+.milkdown .ProseMirror ol {
+  padding-left: 26px;
+  margin: 0 0 14px;
+}
+.milkdown .ProseMirror li {
+  margin-bottom: 6px;
+}
+.milkdown .ProseMirror li p {
+  margin: 0;
+}
+
+/* ── 表格 ─────────────────────────────────── */
+.milkdown .ProseMirror table {
+  border-collapse: collapse;
+  margin: 18px 0;
+  font-size: 15px;
+}
+.milkdown .ProseMirror th,
+.milkdown .ProseMirror td {
+  border: 1px solid var(--border-default);
+  padding: 7px 12px;
+}
+.milkdown .ProseMirror th {
+  background: var(--hue-code);
+  font-weight: 500;
+}
+
+/* ── 占位符 ───────────────────────────────── */
+.milkdown .ProseMirror p.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--hue-text-3);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ── 选区 ─────────────────────────────────── */
+.milkdown .ProseMirror ::selection {
+  background: var(--hue-active);
+}
+
+/* ── 源码模式：CodeMirror 套用同一套令牌 ─────── */
+.cm-editor {
+  height: 100%;
+  background: var(--hue-editor);
+  color: var(--hue-text-1);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.cm-editor .cm-scroller {
+  font-family: var(--font-mono);
+  padding: 20px 0 45vh;
+}
+
+.cm-editor .cm-content {
+  max-width: var(--w-column);
+  margin: 0 auto;
+  caret-color: var(--hue-accent);
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-editor .cm-gutters {
+  background: transparent;
+  border-right: 1px solid var(--hue-border-subtle);
+  color: var(--hue-text-3);
+}
+
+.cm-editor .cm-activeLine {
+  background: var(--hue-active);
+}
+
+.cm-editor .cm-activeLineGutter {
+  background: transparent;
+  color: var(--hue-text-2);
+}
+
+.cm-editor .cm-selectionBackground,
+.cm-editor .cm-content ::selection {
+  background: var(--hue-active) !important;
+}

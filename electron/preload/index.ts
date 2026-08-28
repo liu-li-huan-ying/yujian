@@ -11,7 +11,13 @@ const api = {
     ipcRenderer.invoke(IPC.FILE_READ, filePath),
 
   writeFile: (filePath: string, content: string): Promise<void> =>
-    ipcRenderer.invoke(IPC.FILE_WRITE, filePath, content)
+    ipcRenderer.invoke(IPC.FILE_WRITE, filePath, content),
+
+  openFileDialog: (): Promise<string | null> =>
+    ipcRenderer.invoke(IPC.DIALOG_OPEN_FILE),
+
+  saveFileDialog: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC.DIALOG_SAVE_FILE, defaultPath)
 }
 
 export type ElectronAPI = typeof api
