@@ -7,7 +7,7 @@ import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
-import type { FileNode, VaultChange } from '../electron/shared/ipc-channels'
+import type { FileNode, VaultChange, StartupMode } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
@@ -50,7 +50,14 @@ async function useVault(root: string): Promise<void> {
 
 async function openVault(): Promise<void> {
   const picked = await window.api.openDirDialog()
-  if (picked) await useVault(picked)
+  if (!picked) return
+  // 切换前保存当前文档的未保存改动，绝不丢失
+  if (host.value?.dirty) await host.value.save()
+  // 清理当前活动文档与编辑器状态：切到新库即回到空白，避免残留上一个库的文档
+  filePath.value = null
+  pendingPath.value = null
+  host.value?.clear()
+  await useVault(picked)
 }
 
 /** 打开指定文档。切换前先把脏数据落盘，绝不丢编辑 */
@@ -196,6 +203,21 @@ function onAppearance(): void {
   showAppearance.value = true
 }
 
+/* ── 偏好设置（启动行为）── */
+
+const showPreferences = ref(false)
+const startupMode = ref<StartupMode>('restore')
+
+function onPreferences(): void {
+  showPreferences.value = true
+}
+
+/** 切换启动偏好并持久化（下次启动生效） */
+function onStartupMode(next: StartupMode): void {
+  startupMode.value = next
+  void window.api.patchSession({ startupMode: next })
+}
+
 /** 图床弹窗里的「上传当前文档图片」：交给编辑器执行发布+重渲染+保存 */
 async function onPublishImages(): Promise<void> {
   showImgHost.value = false
@@ -286,9 +308,13 @@ onMounted(async () => {
   const session = await window.api.getSession()
   sidebarWidth.value = session.sidebarWidth
   requestedMode.value = session.mode
+  startupMode.value = session.startupMode
 
-  if (session.vaultPath) await useVault(session.vaultPath)
-  if (session.activePath) await openPath(session.activePath)
+  // 启动偏好为「全新页面」时不恢复上次笔记库/文档，打开即空白
+  if (session.startupMode !== 'fresh') {
+    if (session.vaultPath) await useVault(session.vaultPath)
+    if (session.activePath) await openPath(session.activePath)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -314,6 +340,8 @@ onBeforeUnmount(() => {
       @export-pdf="doExport('pdf')"
       @img-host="onImgHost"
       @appearance="onAppearance"
+      @switch-vault="openVault"
+      @preferences="onPreferences"
     />
 
     <div class="body">
@@ -382,6 +410,14 @@ onBeforeUnmount(() => {
 
     <!-- 外观设置（皮肤 / 明暗）-->
     <AppearanceSettings v-if="showAppearance" @close="showAppearance = false" />
+
+    <!-- 偏好设置（启动行为）-->
+    <PreferencesSettings
+      v-if="showPreferences"
+      :value="startupMode"
+      @close="showPreferences = false"
+      @change="onStartupMode"
+    />
 </template>
 
 <style scoped>

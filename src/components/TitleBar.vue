@@ -19,6 +19,8 @@ const emit = defineEmits<{
   (e: 'export-pdf'): void
   (e: 'img-host'): void
   (e: 'appearance'): void
+  (e: 'switch-vault'): void
+  (e: 'preferences'): void
 }>()
 
 const L = i18n.ui
@@ -55,6 +57,7 @@ onBeforeUnmount(() => {
     <div class="bar__actions">
       <button class="act" @click="emit('open')">{{ L.open }}</button>
       <button class="act" @click="emit('save')">{{ L.save }}</button>
+      <button class="act" @click="emit('switch-vault')">{{ L.switchVault }}</button>
 
       <span class="divider" />
 
@@ -81,6 +84,10 @@ onBeforeUnmount(() => {
 
       <button class="act" @click="emit('appearance')" :title="L.appearance">
         {{ L.appearance }}
+      </button>
+
+      <button class="act" @click="emit('preferences')" :title="L.preferences">
+        {{ L.preferences }}
       </button>
 
       <div class="seg">

@@ -63,6 +63,9 @@ export interface DocMeta {
 
 export type EditorMode = 'wysiwyg' | 'source'
 
+/** 启动偏好：恢复上次会话（默认）/ 每次启动显示全新页面 */
+export type StartupMode = 'restore' | 'fresh'
+
 /* ── 笔记库文件树 ───────────────────────────── */
 
 export interface FileNode {
@@ -110,13 +113,16 @@ export interface SessionState {
   mode: EditorMode
   /** 侧边栏宽度（px） */
   sidebarWidth: number
+  /** 启动偏好：恢复上次会话 / 每次启动显示全新页面 */
+  startupMode: StartupMode
 }
 
 export const DEFAULT_SESSION: SessionState = {
   vaultPath: null,
   activePath: null,
   mode: 'wysiwyg',
-  sidebarWidth: 224
+  sidebarWidth: 224,
+  startupMode: 'restore'
 }
 
 /* ── 导出（HTML / PDF）────────────────────────── */

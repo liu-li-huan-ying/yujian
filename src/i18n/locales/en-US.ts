@@ -111,7 +111,15 @@ const enUS = {
     skinMoon: 'Moon',
     skinDai: 'Dai',
     skinAmber: 'Amber',
-    appearanceClose: '×'
+    appearanceClose: '×',
+    switchVault: 'Switch Folder',
+    preferences: 'Preferences',
+    prefsClose: '×',
+    startupTitle: 'On Startup',
+    startupRestore: 'Restore last session',
+    startupRestoreDesc: 'Reopen the last vault and document',
+    startupFresh: 'Show a fresh page',
+    startupFreshDesc: 'Start with an empty vault, no last state restored'
   }
 }
 

@@ -110,7 +110,15 @@ const zhCN = {
     skinMoon: '月白',
     skinDai: '黛',
     skinAmber: '琥珀',
-    appearanceClose: '×'
+    appearanceClose: '×',
+    switchVault: '切换工作文件夹',
+    preferences: '偏好设置',
+    prefsClose: '×',
+    startupTitle: '启动时',
+    startupRestore: '恢复上次会话',
+    startupRestoreDesc: '重新打开上次使用的笔记库与文档',
+    startupFresh: '每次启动显示全新页面',
+    startupFreshDesc: '不恢复上次状态，打开后从空笔记库开始'
   }
 }
 

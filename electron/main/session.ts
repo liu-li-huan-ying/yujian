@@ -5,7 +5,8 @@ import {
   DEFAULT_SESSION,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
-  type SessionState
+  type SessionState,
+  type StartupMode
 } from '../shared/ipc-channels'
 
 /**
@@ -33,7 +34,8 @@ function sanitize(raw: unknown): SessionState {
     sidebarWidth:
       typeof width === 'number' && Number.isFinite(width)
         ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width))
-        : DEFAULT_SESSION.sidebarWidth
+        : DEFAULT_SESSION.sidebarWidth,
+    startupMode: (p.startupMode === 'fresh' ? 'fresh' : 'restore') as StartupMode
   }
 }
 

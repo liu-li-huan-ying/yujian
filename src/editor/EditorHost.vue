@@ -222,6 +222,17 @@ function onReady(): void {
   }
 }
 
+/**
+ * 切换到新笔记库前清空编辑器：保真层回空、所见即所得文本清空，
+ * 加载态复位。源码面板的 modelValue 绑定会随之自动清空。
+ */
+function clear(): void {
+  loadPath.value = null
+  fidelity.loadFromDisk('')
+  milkdown.value?.setMarkdown('')
+  stopLoading()
+}
+
 /** 全文搜索结果点击：跳转到命中行（仅源码模式可精确定位） */
 function revealLine(line: number): void {
   if (mode.value !== 'source') return
@@ -277,6 +288,7 @@ async function publishImages(): Promise<{
 defineExpose({
   save,
   load,
+  clear,
   switchTo,
   captureScroll,
   revealLine,

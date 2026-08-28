@@ -312,6 +312,14 @@ markdown-editor/
 - 资源引用使用**相对路径**（`./.assets/xxx.png`），保证整库可迁移、可 Git、可用其他工具打开
 - `.mdeditor/` 只是缓存，删掉不影响任何笔记内容
 
+**切换笔记库（不重启应用）**：标题栏「切换工作文件夹」与侧栏「打开笔记库」共用同一入口
+（`dialog:openDir` 选目录）。切换时主进程 `vault.ts` 的 `watchVault` 是单例（内部先
+`stopWatching()`），新库监听会自动顶替旧库，不会泄漏 watcher。渲染层在切换前先保存当前文档的
+未保存改动（`host.save()`），再把 `filePath` / `pendingPath` 置空并调用 `EditorHost.clear()`
+（保真层回空 + Milkdown `setMarkdown('')`，源码面板随 `modelValue` 绑定自动清空），最后
+`useVault(root)` 重建文件树。旧文档路径不会被继续写入——`scheduleSave` 在 `filePath` 为空时直接
+短路。切换后界面回到空白，由用户从新库选择文档。
+
 ### 5.2 ⚠️ Markdown 往返失真 —— 本项目第一号风险
 
 **问题**：Milkdown 通过 remark 序列化，会把用户手写的 Markdown 规范化。典型表现：
@@ -425,6 +433,22 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 - 编辑器内容区样式与导出模板共用同一套 CSS，保证一致性
 - 跟随系统深色模式
 
+### 5.8 启动偏好（Startup preference）
+
+用户可决定每次打开应用时看到什么，配置项位于标题栏「偏好设置」：
+
+| 选项 | 值 | 行为 |
+|---|---|---|
+| 恢复上次会话（默认） | `restore` | 启动即重新打开上次使用的笔记库与文档，回到上次退出时的状态 |
+| 每次启动显示全新页面 | `fresh` | 启动不恢复任何笔记库/文档，打开即是空白，从「选择一个文件夹」开始 |
+
+**持久化**：`startupMode` 与 `vaultPath` / `activePath` / `mode` / `sidebarWidth` 一起存放在
+主进程 `userData/session.json`（复用既有的 `session.ts` 原子写与 `patchSession` 通道，
+不新增 IPC）。应用启动时读取 `SessionState.startupMode`：为 `fresh` 时只恢复窗口级偏好
+（`sidebarWidth`、编辑器模式），跳过 `vaultPath` / `activePath` 的恢复；为 `restore`（或
+历史文件缺失/损坏）时按原有逻辑恢复整个会话。无论哪种模式，切换/打开笔记库时仍会把
+`vaultPath` 写回 session，便于之后切回 `restore` 能恢复到最近使用的库。
+
 ---
 
 ## 6. 技术写作场景专项设计
@@ -476,6 +500,16 @@ export interface Uploader {
 }
 
 export type ExportFormat = 'html' | 'pdf' | 'md' | 'docx'
+
+export type StartupMode = 'restore' | 'fresh'
+
+export interface SessionState {
+  vaultPath: string | null    // 当前笔记库根目录
+  activePath: string | null   // 当前编辑的文档绝对路径
+  mode: EditorMode            // 编辑器模式
+  sidebarWidth: number        // 侧边栏宽度（px）
+  startupMode: StartupMode    // 启动偏好：恢复上次会话 / 全新页面
+}
 ```
 
 ---
