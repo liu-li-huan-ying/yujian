@@ -182,6 +182,15 @@ function onReady(): void {
   ready.value = true
 }
 
+/**
+ * 语言切换：销毁并重建所见即所得编辑器，使 Crepe 在构造期固化的标签
+ * （BlockEdit / Placeholder / ImageBlock / CodeMirror）按新语言重新生成。
+ * 内容从保真层回填，不改动文件。
+ */
+async function reload(): Promise<void> {
+  await milkdown.value?.reload()
+}
+
 /** 全文搜索结果点击：跳转到命中行（仅源码模式可精确定位） */
 function revealLine(line: number): void {
   if (mode.value !== 'source') return
@@ -238,6 +247,7 @@ defineExpose({
   save,
   load,
   switchTo,
+  reload,
   revealLine,
   getHTML,
   publishImages,

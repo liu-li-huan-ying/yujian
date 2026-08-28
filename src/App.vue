@@ -7,6 +7,11 @@ import ImgHostSettings from './components/ImgHostSettings.vue'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
+import { useI18n, setLocale } from './i18n'
+import type { LocaleKey } from './i18n'
+
+const { t: L, getLocale } = useI18n()
+const U = L.ui
 
 const filePath = ref<string | null>(null)
 const requestedMode = ref<EditorMode>('wysiwyg')
@@ -26,7 +31,9 @@ const fileName = computed(() =>
   filePath.value ? filePath.value.split(/[\\/]/).pop() ?? '' : '未命名'
 )
 
-const modeLabel = computed(() => (requestedMode.value === 'wysiwyg' ? '渲染模式' : '源码'))
+const modeLabel = computed(() =>
+  requestedMode.value === 'wysiwyg' ? U.modeWysiwyg : U.modeSource
+)
 
 async function refreshTree(): Promise<void> {
   tree.value = vaultPath.value ? await window.api.listVault(vaultPath.value) : []
@@ -185,12 +192,12 @@ async function onPublishImages(): Promise<void> {
   const res = await host.value?.publishImages()
   if (!res) return
   if (res.noImages) {
-    showToast('文档中没有本地图片', 'info')
+    showToast(U.toastImgHostNoImages, 'info')
   } else if (!res.ok) {
-    showToast(`上传失败：${res.error ?? '未知错误'}`, 'err')
+    showToast(`${U.toastImgHostPublishFail}${res.error ?? ''}`, 'err')
   } else {
-    const failedText = res.failed > 0 ? `，${res.failed} 张失败` : ''
-    showToast(`已上传 ${res.uploaded} 张图片到图床${failedText}`, 'ok')
+    const failedText = res.failed > 0 ? `，${res.failed} ${U.statusUnsaved}` : ''
+    showToast(`${U.toastImgHostPublishOk}${res.uploaded}${failedText}`, 'ok')
   }
 }
 
@@ -200,14 +207,14 @@ function baseName(path: string): string {
 
 async function doExport(kind: 'html' | 'pdf'): Promise<void> {
   if (!filePath.value) {
-    showToast('请先打开一个文档', 'err')
+    showToast(U.toastNoDoc, 'err')
     return
   }
-  showToast(kind === 'html' ? '正在生成 HTML…' : '正在生成 PDF…', 'info')
+  showToast(kind === 'html' ? `正在生成 ${U.exportHtml}…` : `正在生成 ${U.exportPdf}…`, 'info')
 
   const body = await host.value?.getHTML()
   if (!body) {
-    showToast('当前文档暂无内容', 'err')
+    showToast(U.toastNoContent, 'err')
     return
   }
 
@@ -223,12 +230,23 @@ async function doExport(kind: 'html' | 'pdf'): Promise<void> {
     : await window.api.exportPdf(payload)
 
   if (res.ok && res.path) {
-    showToast(`已导出：${res.path}`, 'ok')
+    showToast(`${U.toastExportHtmlOk}${res.path}`, 'ok')
   } else if (res.canceled) {
-    showToast('已取消导出', 'info')
+    showToast(U.toastExportCanceled, 'info')
   } else {
-    showToast(`导出失败：${res.error ?? '未知错误'}`, 'err')
+    showToast(`${U.toastExportErr}${res.error ?? ''}`, 'err')
   }
+}
+
+/* ── 语言切换 ── */
+
+const localeLabel = computed(() => (getLocale() === 'zh-CN' ? '中' : 'EN'))
+
+function toggleLocale(): void {
+  const next: LocaleKey = getLocale() === 'zh-CN' ? 'en-US' : 'zh-CN'
+  setLocale(next)
+  // Crepe 标签在构造时固化，重建实例使中文/英文双向切换生效
+  void host.value?.reload()
 }
 
 /* ── 会话持久化（崩溃恢复）── */
@@ -310,15 +328,18 @@ onBeforeUnmount(() => {
       <footer class="statusbar jade">
         <div class="statusbar__inner">
           <div class="statusbar__grp">
-            <span>{{ filePath ?? '未选择文件' }}</span>
+            <span>{{ filePath ?? U.statusNoFile }}</span>
           </div>
           <div class="statusbar__grp">
-            <span v-if="host?.willNormalize" class="warn">保存时将规范化排版</span>
+            <span v-if="host?.willNormalize" class="warn">{{ U.willNormalize }}</span>
             <span>
               <i class="dot" :class="host?.dirty ? 'dot--dirty' : 'dot--saved'" />
-              {{ host?.dirty ? '未保存' : '已保存' }}
+              {{ host?.dirty ? U.statusUnsaved : U.statusSaved }}
             </span>
             <span>{{ modeLabel }}</span>
+            <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
+              {{ localeLabel }}
+            </button>
           </div>
         </div>
       </footer>
@@ -404,6 +425,23 @@ onBeforeUnmount(() => {
 
 .dot--dirty {
   background: var(--hue-accent);
+}
+
+.lang-btn {
+  border: none;
+  background: transparent;
+  color: var(--hue-text-3);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lang-btn:hover {
+  color: var(--hue-text-1);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* ── 导出结果轻提示（玻璃浮层）── */

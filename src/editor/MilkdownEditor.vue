@@ -8,6 +8,7 @@ import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
+import { i18n } from '../i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -111,7 +112,6 @@ function setupImageResolver(): void {
   if (!host.value) return
   rewriteImages(host.value)
   imgObserver = new MutationObserver((mutations) => {
-    // 任意一次变更只要涉及 img 或子节点，就整体重扫一次（文档规模有限，开销可接受）
     let dirty = false
     for (const mu of mutations) {
       if (mu.type === 'attributes' && (mu.target as Element).tagName === 'IMG') {
@@ -133,13 +133,16 @@ function setupImageResolver(): void {
   })
 }
 
-async function init(): Promise<void> {
+async function init(defaultValue?: string): Promise<void> {
   if (!host.value || mounted) return
   mounted = true
 
+  // 快照当前语言包值（Crepe 构造时一次性传入）
+  const L = i18n
+
   crepe = new Crepe({
     root: host.value,
-    defaultValue: props.modelValue,
+    defaultValue: defaultValue ?? props.modelValue,
     features: {
       [Crepe.Feature.CodeMirror]: true,
       [Crepe.Feature.ListItem]: true,
@@ -151,25 +154,35 @@ async function init(): Promise<void> {
       [Crepe.Feature.Placeholder]: true,
       [Crepe.Feature.Table]: true,
       [Crepe.Feature.Latex]: true,
-      // 顶部常驻工具条与 AI 暂不启用
       [Crepe.Feature.TopBar]: false,
       [Crepe.Feature.AI]: false
     },
     featureConfigs: {
       [Crepe.Feature.CodeMirror]: {
-        // languages 默认是空数组 —— 不传就没有语法高亮
         languages,
-        // 接管预览区：mermaid 渲染成图表，其余语言保持无预览
         renderPreview,
-        previewLabel: '预览',
-        previewLoading: '渲染中…',
-        searchPlaceholder: '搜索语言',
-        noResultText: '无匹配语言',
-        copyText: '复制'
+        previewLabel: L.codeMirror.previewLabel,
+        previewLoading: L.codeMirror.previewLoading,
+        searchPlaceholder: L.codeMirror.searchPlaceholder,
+        noResultText: L.codeMirror.noResultText,
+        copyText: L.codeMirror.copyText
       },
-      // 图片：粘贴/选择文件后落盘到 .assets，返回相对路径作为 src
       [Crepe.Feature.ImageBlock]: {
-        onUpload: (file: File) => uploadToAssets(file)
+        onUpload: (file: File) => uploadToAssets(file),
+        blockUploadButton: L.imageBlock.blockUploadButton,
+        blockConfirmButton: L.imageBlock.blockConfirmButton,
+        blockCaptionPlaceholderText: L.imageBlock.blockCaptionPlaceholderText,
+        blockUploadPlaceholderText: L.imageBlock.blockUploadPlaceholderText,
+        inlineUploadButton: L.imageBlock.inlineUploadButton,
+        inlineUploadPlaceholderText: L.imageBlock.inlineUploadPlaceholderText
+      },
+      [Crepe.Feature.BlockEdit]: {
+        textGroup: L.blockEdit.textGroup,
+        listGroup: L.blockEdit.listGroup,
+        advancedGroup: L.blockEdit.advancedGroup
+      },
+      [Crepe.Feature.Placeholder]: {
+        text: L.placeholder.text
       }
     }
   })
@@ -202,7 +215,6 @@ onBeforeUnmount(() => {
 async function setMarkdown(markdown: string): Promise<void> {
   if (!crepe) return
   await crepe.editor.action(replaceAll(markdown))
-  // 重渲染后相对路径需要重新解析为 file://
   if (host.value) rewriteImages(host.value)
 }
 
@@ -224,7 +236,31 @@ function setReadonly(value: boolean): void {
   crepe?.setReadonly(value)
 }
 
-defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly })
+/**
+ * 语言切换后调用：销毁并重建 Crepe 实例，使构造期固化的标签
+ * （BlockEdit / Placeholder / ImageBlock / CodeMirror）按新语言生效。
+ * 内容从当前实例读取后原样回填，不触发保存。
+ */
+async function reload(): Promise<void> {
+  const current = crepe?.getMarkdown() ?? props.modelValue
+  if (imgObserver) {
+    imgObserver.disconnect()
+    imgObserver = null
+  }
+  if (crepe) {
+    try {
+      await crepe.destroy()
+    } catch {
+      // 销毁异常忽略，继续重建
+    }
+    crepe = null
+  }
+  if (host.value) host.value.innerHTML = ''
+  mounted = false
+  await init(current)
+}
+
+defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, reload })
 </script>
 
 <template>

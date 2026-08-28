@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import type { ImgHostConfig } from '../../electron/shared/ipc-channels'
+import { i18n } from '../i18n'
 
 const props = defineProps<{
   /** 是否有已保存的文档（决定是否允许上传图片） */
@@ -12,6 +13,8 @@ const emit = defineEmits<{
   /** 请求上传当前文档内的图片（由父组件驱动编辑器重渲染+保存） */
   (e: 'publish'): void
 }>()
+
+const U = i18n.ui
 
 interface FormState {
   provider: string
@@ -60,7 +63,7 @@ async function loadConfig(): Promise<void> {
 
 async function onSave(): Promise<void> {
   if (!form.endpoint) {
-    msg.value = { text: '请填写上传端点', type: 'err' }
+    msg.value = { text: U.imgHostFillEndpoint, type: 'err' }
     return
   }
   saving.value = true
@@ -74,7 +77,7 @@ async function onSave(): Promise<void> {
     }
     // token 为空字符串 → 主进程沿用已有密钥；非空 → 覆盖加密保存
     await window.api.setImgHost(config, form.token)
-    msg.value = { text: '图床配置已保存（密钥已加密）', type: 'ok' }
+    msg.value = { text: U.imgHostConfigSaved, type: 'ok' }
     form.token = ''
   } catch (e) {
     msg.value = { text: `保存失败：${e instanceof Error ? e.message : String(e)}`, type: 'err' }
@@ -85,11 +88,11 @@ async function onSave(): Promise<void> {
 
 async function onTest(): Promise<void> {
   if (!form.endpoint) {
-    msg.value = { text: '请先填写上传端点', type: 'err' }
+    msg.value = { text: U.imgHostFillEndpoint, type: 'err' }
     return
   }
   testing.value = true
-  msg.value = { text: '检测中…', type: 'info' }
+  msg.value = { text: U.imgHostTesting, type: 'info' }
   try {
     const cfg: ImgHostConfig = {
       provider: form.provider,
@@ -101,9 +104,9 @@ async function onTest(): Promise<void> {
     await window.api.setImgHost(cfg, form.token)
     form.token = ''
     await window.api.publishImages('', null)
-    msg.value = { text: '图床通道可用', type: 'ok' }
+    msg.value = { text: U.imgHostChannelOk, type: 'ok' }
   } catch (e) {
-    msg.value = { text: `通道异常：${e instanceof Error ? e.message : String(e)}`, type: 'err' }
+    msg.value = { text: `${U.imgHostChannelErr}${e instanceof Error ? e.message : String(e)}`, type: 'err' }
   } finally {
     testing.value = false
   }
@@ -122,55 +125,55 @@ onMounted(() => {
   <div class="overlay" @click.self="emit('close')">
     <div class="dialog jade">
       <header class="dialog__head">
-        <h2 class="dialog__title">图床设置</h2>
-        <button class="dialog__x" title="关闭" @click="emit('close')">×</button>
+        <h2 class="dialog__title">{{ U.imgHostSettingsTitle }}</h2>
+        <button class="dialog__x" :title="U.imgHostClose" @click="emit('close')">×</button>
       </header>
 
       <div class="dialog__body">
         <label class="field">
-          <span class="field__label">图床服务</span>
+          <span class="field__label">{{ U.imgHostService }}</span>
           <select v-model="form.provider" class="field__input" @change="applyProviderDefaults">
-            <option value="smms">SM.MS</option>
-            <option value="custom">自定义（兼容 PicGo）</option>
+            <option value="smms">{{ U.imgHostSmms }}</option>
+            <option value="custom">{{ U.imgHostCustom }}</option>
           </select>
         </label>
 
         <label class="field">
-          <span class="field__label">展示名称</span>
+          <span class="field__label">{{ U.imgHostName }}</span>
           <input v-model="form.name" class="field__input" placeholder="SM.MS" />
         </label>
 
         <label class="field">
-          <span class="field__label">上传端点</span>
+          <span class="field__label">{{ U.imgHostEndpoint }}</span>
           <input v-model="form.endpoint" class="field__input" placeholder="https://sm.ms/api/v2/upload" />
         </label>
 
         <label class="field">
-          <span class="field__label">密钥请求头</span>
+          <span class="field__label">{{ U.imgHostTokenHeader }}</span>
           <input v-model="form.tokenHeader" class="field__input" placeholder="Authorization" />
         </label>
 
         <label class="field">
-          <span class="field__label">密钥 / Token</span>
+          <span class="field__label">{{ U.imgHostToken }}</span>
           <input
             v-model="form.token"
             class="field__input"
             type="password"
             autocomplete="new-password"
-            placeholder="留空 = 沿用已保存密钥"
+            :placeholder="U.imgHostTokenHint"
           />
-          <span class="field__hint">密钥仅在主进程经 safeStorage 加密保存，不会下发到渲染层。</span>
+          <span class="field__hint">{{ U.imgHostTokenSecure }}</span>
         </label>
 
         <p v-if="msg" class="feedback" :class="`feedback--${msg.type}`">{{ msg.text }}</p>
       </div>
 
       <footer class="dialog__foot">
-        <button class="btn" :disabled="!hasDoc" :title="hasDoc ? '' : '请先保存文档'" @click="onPublish">
-          上传当前文档图片
+        <button class="btn" :disabled="!hasDoc" :title="hasDoc ? '' : U.imgHostNeedDoc" @click="onPublish">
+          {{ U.imgHostUploadDoc }}
         </button>
-        <button class="btn" :disabled="testing" @click="onTest">检测通道</button>
-        <button class="btn btn--primary" :disabled="saving" @click="onSave">保存配置</button>
+        <button class="btn" :disabled="testing" @click="onTest">{{ U.imgHostTestChannel }}</button>
+        <button class="btn btn--primary" :disabled="saving" @click="onSave">{{ U.imgHostSaveConfig }}</button>
       </footer>
     </div>
   </div>

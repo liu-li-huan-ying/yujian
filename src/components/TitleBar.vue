@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { EditorMode } from '../editor/EditorHost.vue'
+import { i18n } from '../i18n'
 
 defineProps<{
   fileName: string
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   (e: 'img-host'): void
 }>()
 
+const L = i18n.ui
 const maximized = ref(false)
 const isMac = window.api.platform === 'darwin'
 
@@ -46,36 +48,34 @@ onBeforeUnmount(() => {
     <!-- 拖拽区：整条标题栏可拖动窗口 -->
     <div class="bar__drag">
       <span class="bar__name">{{ fileName }}</span>
-      <span v-if="dirty" class="bar__dot" title="未保存" />
+      <span v-if="dirty" class="bar__dot" :title="L.statusUnsaved" />
     </div>
 
     <div class="bar__actions">
-      <button class="act" @click="emit('open')">打开</button>
-      <button class="act" @click="emit('save')">保存</button>
+      <button class="act" @click="emit('open')">{{ L.open }}</button>
+      <button class="act" @click="emit('save')">{{ L.save }}</button>
 
       <span class="divider" />
 
       <button
         class="act"
         :disabled="!canExport"
-        title="导出为自包含 HTML 网页"
         @click="emit('export-html')"
       >
-        HTML
+        {{ L.exportHtml }}
       </button>
       <button
         class="act"
         :disabled="!canExport"
-        title="导出为 PDF 文档"
         @click="emit('export-pdf')"
       >
-        PDF
+        {{ L.exportPdf }}
       </button>
 
       <span class="divider" />
 
-      <button class="act" title="图床设置与图片上传" @click="emit('img-host')">
-        图床
+      <button class="act" @click="emit('img-host')">
+        {{ L.imgHost }}
       </button>
 
       <div class="seg">
@@ -84,14 +84,14 @@ onBeforeUnmount(() => {
           :class="{ 'seg__item--on': mode === 'wysiwyg' }"
           @click="emit('update:mode', 'wysiwyg')"
         >
-          渲染模式
+          {{ L.modeWysiwyg }}
         </button>
         <button
           class="seg__item"
           :class="{ 'seg__item--on': mode === 'source' }"
           @click="emit('update:mode', 'source')"
         >
-          源码
+          {{ L.modeSource }}
         </button>
       </div>
     </div>
