@@ -172,6 +172,11 @@ function onKeydown(e: KeyboardEvent): void {
   } else if (k === 'o') {
     e.preventDefault()
     void openFile()
+  } else if (k === '\\') {
+    e.preventDefault()
+    // Ctrl+\ 切左侧笔记库；Ctrl+Shift+\ 切右侧大纲
+    if (e.shiftKey) onToggleOutline()
+    else onToggleSidebar()
   } else if (e.key === '/') {
     e.preventDefault()
     requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'
@@ -220,14 +225,28 @@ function onStartupMode(next: StartupMode): void {
   void window.api.patchSession({ startupMode: next })
 }
 
-/* ── 大纲面板 ── */
+/* ── 面板显隐（左右独立，持久化）── */
 
-/** 窗口窄于 900px 自动收起右侧大纲面板（设计稿 §5 响应式规则） */
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
-const outlineVisible = computed(() => windowWidth.value >= 900)
+const sidebarVisible = ref(true)
+const outlineVisible = ref(true)
+
+/** 窄窗软收起：仅影响显示，不改持久偏好，加宽后恢复用户选择 */
+const sidebarShown = computed(() => sidebarVisible.value && windowWidth.value >= 460)
+const outlineShown = computed(() => outlineVisible.value && windowWidth.value >= 720)
 
 function onResize(): void {
   windowWidth.value = window.innerWidth
+}
+
+function onToggleSidebar(): void {
+  sidebarVisible.value = !sidebarVisible.value
+  void window.api.patchSession({ sidebarVisible: sidebarVisible.value })
+}
+
+function onToggleOutline(): void {
+  outlineVisible.value = !outlineVisible.value
+  void window.api.patchSession({ outlineVisible: outlineVisible.value })
 }
 
 function onOutlineSelect(index: number): void {
@@ -326,6 +345,8 @@ onMounted(async () => {
   sidebarWidth.value = session.sidebarWidth
   requestedMode.value = session.mode
   startupMode.value = session.startupMode
+  sidebarVisible.value = session.sidebarVisible
+  outlineVisible.value = session.outlineVisible
 
   // 启动偏好为「全新页面」时不恢复上次笔记库/文档，打开即空白
   if (session.startupMode !== 'fresh') {
@@ -360,6 +381,10 @@ onBeforeUnmount(() => {
       @appearance="onAppearance"
       @switch-vault="openVault"
       @preferences="onPreferences"
+      :sidebar-visible="sidebarVisible"
+      :outline-visible="outlineVisible"
+      @toggle-sidebar="onToggleSidebar"
+      @toggle-outline="onToggleOutline"
     />
 
     <div class="body">
@@ -368,6 +393,7 @@ onBeforeUnmount(() => {
         :nodes="tree"
         :active-path="filePath"
         :width="sidebarWidth"
+        :visible="sidebarShown"
         :refresh-tree="refreshTree"
         :open-doc="openPath"
         @select="onSelect"
@@ -391,7 +417,7 @@ onBeforeUnmount(() => {
       </main>
 
       <Outline
-        v-show="outlineVisible"
+        :visible="outlineShown"
         :items="host?.outline ?? []"
         :active-index="host?.activeHeadingIndex ?? -1"
         @select="onOutlineSelect"

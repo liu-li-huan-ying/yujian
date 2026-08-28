@@ -7,6 +7,8 @@ const props = defineProps<{
   items: OutlineItem[]
   /** 当前阅读位置对应的章节序号（-1 表示顶部/无标题） */
   activeIndex: number
+  /** 面板是否可见（收起时宽度归零） */
+  visible?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'select', index: number): void }>()
@@ -29,7 +31,7 @@ watch(
 </script>
 
 <template>
-  <aside class="outline jade" aria-label="文档大纲">
+  <aside class="outline jade" :class="{ 'is-collapsed': !visible }" aria-label="文档大纲">
     <header class="outline__head">
       <span class="outline__title">{{ L.outline }}</span>
     </header>
@@ -72,6 +74,20 @@ watch(
   width: var(--w-outline);
   min-height: 0;
   border-left: 1px solid var(--hue-border-subtle);
+  /* 收起/展开用宽度过渡，与整体动效一致 */
+  transition:
+    width var(--dur-base) var(--ease),
+    opacity var(--dur-base) var(--ease),
+    border-color var(--dur-base) var(--ease);
+}
+
+/* 收起态：宽度归零、去左边框、淡出 */
+.outline.is-collapsed {
+  width: 0 !important;
+  opacity: 0;
+  border-left-color: transparent;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 .outline__head {

@@ -17,6 +17,8 @@ const props = defineProps<{
   nodes: FileNode[]
   activePath: string | null
   width: number
+  /** 面板是否可见（收起时宽度归零并隐藏拖拽条） */
+  visible?: boolean
   /** 刷新文件树（App 持有真实实现，此处注入以便 await） */
   refreshTree: () => Promise<void>
   /** 在编辑器打开指定文档 */
@@ -322,7 +324,7 @@ function startDrag(e: PointerEvent): void {
 </script>
 
 <template>
-  <aside class="sidebar jade" :style="{ width: `${width}px` }">
+  <aside class="sidebar jade" :class="{ 'is-collapsed': !visible }" :style="{ width: `${(visible ?? true) ? width : 0}px` }">
     <header class="sidebar__head">
       <span class="sidebar__title" :title="vaultPath ?? ''">
         {{ vaultName ?? '未打开笔记库' }}
@@ -469,6 +471,7 @@ function startDrag(e: PointerEvent): void {
     </div>
 
     <div
+      v-show="visible"
       class="sidebar__resizer"
       :class="{ 'sidebar__resizer--active': dragging }"
       role="separator"
@@ -511,6 +514,20 @@ function startDrag(e: PointerEvent): void {
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--hue-border-subtle);
+  /* 收起/展开用宽度过渡，与整体动效一致 */
+  transition:
+    width var(--dur-base) var(--ease),
+    opacity var(--dur-base) var(--ease),
+    border-color var(--dur-base) var(--ease);
+}
+
+/* 收起态：宽度归零、去右边框、淡出，内容不可交互 */
+.sidebar.is-collapsed {
+  width: 0 !important;
+  opacity: 0;
+  border-right-color: transparent;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 .sidebar__head {

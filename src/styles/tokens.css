@@ -320,6 +320,10 @@
   --hue-code-fg: #8fd0c6;
   --hue-shadow-1: 0 6px 20px rgba(0, 0, 0, 0.42);
   --hue-shadow-2: 0 10px 30px rgba(0, 0, 0, 0.5);
+  /* 玉质滚动条：细、半透明、克制 —— 暗色下用白调微光 */
+  --hue-scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --hue-scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
+  --hue-scrollbar-track: transparent;
 }
 
 [data-skin][data-mode='light'] {
@@ -330,6 +334,10 @@
   --hue-code-fg: #2b8378;
   --hue-shadow-1: 0 8px 24px rgba(20, 30, 28, 0.14);
   --hue-shadow-2: 0 12px 32px rgba(20, 30, 28, 0.18);
+  /* 玉质滚动条：亮色下用墨调微影 */
+  --hue-scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --hue-scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
+  --hue-scrollbar-track: transparent;
 }
 
 /* ============================================================

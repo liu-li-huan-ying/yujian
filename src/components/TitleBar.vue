@@ -9,6 +9,10 @@ defineProps<{
   dirty: boolean
   /** 是否已有打开的文档，决定是否允许导出 */
   canExport: boolean
+  /** 左侧笔记库面板是否可见（控制开关按钮激活态） */
+  sidebarVisible: boolean
+  /** 右侧大纲面板是否可见（控制开关按钮激活态） */
+  outlineVisible: boolean
 }>()
 
 const emit = defineEmits<{
@@ -21,6 +25,8 @@ const emit = defineEmits<{
   (e: 'appearance'): void
   (e: 'switch-vault'): void
   (e: 'preferences'): void
+  (e: 'toggle-sidebar'): void
+  (e: 'toggle-outline'): void
 }>()
 
 const L = i18n.ui
@@ -88,6 +94,25 @@ onBeforeUnmount(() => {
 
       <button class="act" @click="emit('preferences')" :title="L.preferences">
         {{ L.preferences }}
+      </button>
+
+      <span class="divider" />
+
+      <button
+        class="act"
+        :class="{ 'act--on': sidebarVisible }"
+        :title="L.toggleSidebarTitle"
+        @click="emit('toggle-sidebar')"
+      >
+        {{ L.sidebar }}
+      </button>
+      <button
+        class="act"
+        :class="{ 'act--on': outlineVisible }"
+        :title="L.toggleOutlineTitle"
+        @click="emit('toggle-outline')"
+      >
+        {{ L.outline }}
       </button>
 
       <div class="seg">
@@ -198,6 +223,31 @@ onBeforeUnmount(() => {
 .act {
   font-size: 11px;
   padding: 4px 10px;
+  color: var(--hue-text-3);
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.act:hover {
+  color: var(--hue-text-1);
+  background: var(--bg-hover);
+}
+
+/* 面板开关激活态：accent 文字 + 玉质高亮底，呼应分段控件的「开」语义 */
+.act--on {
+  color: var(--hue-accent);
+  background: var(--hue-active);
+}
+
+.act--on:hover {
+  color: var(--hue-accent);
+  background: var(--hue-active);
+  filter: brightness(1.05);
 }
 
 .act:disabled {

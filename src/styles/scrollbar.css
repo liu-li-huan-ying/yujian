@@ -1,0 +1,51 @@
+/* ============================================================
+   玉质滚动条 · 全局统一
+   设计取向：细、圆角、半透明、克制。hover 仅微亮一档，
+   不喧宾夺主，与「内容优先、克制的反馈」原则一致。
+   自动覆盖：侧栏 / 大纲 / 编辑区(.milkdown) / 源码(.cm-scroller) / 弹窗。
+   ============================================================ */
+
+/* Firefox 兼容：细滚动条 + 滑块/轨道配色 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hue-scrollbar-thumb) var(--hue-scrollbar-track);
+}
+
+/* WebKit / Blink（Electron Chromium） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--hue-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--hue-scrollbar-thumb);
+  /* 透明边框 + padding-box 裁剪 → 滑块两侧留出 2px 呼吸感，更纤细精致 */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--hue-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--hue-scrollbar-thumb-hover);
+}
+
+/* 横向/纵向交叉的角落：保持透明，不破坏玉质底色 */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 尊重减弱动效：去掉滑块悬停过渡 */
+@media (prefers-reduced-motion: reduce) {
+  ::-webkit-scrollbar-thumb {
+    transition: none;
+  }
+}
