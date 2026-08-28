@@ -347,17 +347,31 @@ markdown-editor/
 - 源码模式编辑后保存，**永远走原文路径**，不经过序列化
 - 提供设置项："保存时总是规范化排版"（默认关）
 
-### 5.3 Mermaid 图表方案（自研节点）
+### 5.3 Mermaid 图表方案（代码块预览钩子）
 
-由于官方插件版本不兼容（见 §2.3 陷阱二），自行实现：
+> **实现时改了方案**：原计划自研 NodeView，实际改用 Crepe 代码块自带的
+> `renderPreview` 钩子。理由见文末 —— 核心是**对文档结构零侵入**。
 
-1. 复用 Crepe 内置的 CodeMirror 代码块，识别 ` ```mermaid `
-2. 注册一个 ProseMirror **NodeView**，对语言为 `mermaid` 的代码块做装饰替换
-3. NodeView 内部：编辑态显示源码，失焦后调用 `mermaid.render()` 生成 SVG 并替换展示
-4. 双向：点击已渲染的图表 → 切回源码编辑态
-5. 渲染在渲染进程完成，导出 HTML 时 SVG 已在 DOM 中，天然支持离线导出
+官方插件版本不兼容（见 §2.3 陷阱二），因此不使用 `@milkdown/plugin-diagram`。
+改为接管 Crepe 代码块的**预览区**：
 
-**为什么不用 plugin-diagram**：版本停在 7.7.0，与 kit 7.22.1 混装会触发 Milkdown 的多实例上下文错误，排查成本高于自研成本（约 150 行）。
+1. 文档里就是一个普通的 mermaid 代码块，schema 与序列化完全不动
+2. 通过 `featureConfigs[Crepe.Feature.CodeMirror].renderPreview` 接管：
+   - `language !== 'mermaid'` → 返回 `null`，保持无预览
+   - 命中 mermaid → 返回 `undefined` 进入异步模式，渲染完成后 `applyPreview(svg)`
+3. 稳定性：400ms 防抖、自增令牌丢弃过期结果、语法错误渲染成人话提示而非抛异常
+4. mermaid 用动态 `import()` 懒加载（含 cynefin / cytoscape 依赖约 3.3MB），
+   不进主包，只有真正遇到图表才拉取
+5. 安全：`securityLevel: 'strict'`，预览内容最终由组件内 `sanitizeSvg`（DOMPurify）兜底
+6. 渲染在渲染进程完成，导出 HTML 时 SVG 已在 DOM 中，天然支持离线导出
+
+**为什么不用自研 NodeView（原方案）**：NodeView 要接管 `code_block` 渲染，
+就必须处理与 Crepe 内置 CodeMirror NodeView 的冲突；一旦动到 schema，
+就会威胁「Markdown 往返保真」这条红线。而 `renderPreview` 契约天然提供了
+同样的产品目标（代码 ⇄ 图表切换由组件自带预览开关提供），对文档零侵入，
+风险低一个数量级。
+
+**为什么不用 plugin-diagram**：版本停在 7.7.0，与 kit 7.22.1 混装会触发 Milkdown 的多实例上下文错误。
 
 ### 5.4 图片与图床
 
@@ -419,7 +433,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 |---|---|---|
 | 代码块多语言高亮 | Crepe 内置 CodeMirror，语言按需引入裁剪体积 | P1 |
 | 数学公式 | Crepe 内置 KaTeX，行内 + 块级 | P1 |
-| Mermaid 流程图 | 自研 NodeView（§5.3） | P1 |
+| Mermaid 流程图 | 代码块 renderPreview 钩子（§5.3） | P1 |
 | 表格增强 | Crepe 内置，行列拖拽 + 对齐设置 | P1 |
 | 大纲面板 | 从 ProseMirror doc 提取 heading 层级，滚动联动 | P2 |
 | 字数/阅读时间统计 | 状态栏实时显示，中英文分别计数 | P2 |

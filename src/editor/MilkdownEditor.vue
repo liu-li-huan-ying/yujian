@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { languages } from '@codemirror/language-data'
 import { Crepe } from '@milkdown/crepe'
 import { replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 import '../styles/editor.css'
+import { renderPreview } from './features/mermaid'
 
 const props = withDefaults(
   defineProps<{
@@ -44,6 +46,19 @@ async function init(): Promise<void> {
       // 顶部常驻工具条与 AI 暂不启用
       [Crepe.Feature.TopBar]: false,
       [Crepe.Feature.AI]: false
+    },
+    featureConfigs: {
+      [Crepe.Feature.CodeMirror]: {
+        // languages 默认是空数组 —— 不传就没有语法高亮
+        languages,
+        // 接管预览区：mermaid 渲染成图表，其余语言保持无预览
+        renderPreview,
+        previewLabel: '预览',
+        previewLoading: '渲染中…',
+        searchPlaceholder: '搜索语言',
+        noResultText: '无匹配语言',
+        copyText: '复制'
+      }
     }
   })
 

@@ -200,3 +200,55 @@
 .cm-editor .cm-content ::selection {
   background: var(--hue-active) !important;
 }
+
+/* ── 代码块预览区（Mermaid 图表）───────────── */
+/* 这几个类名来自 Crepe 的代码块组件内部，不是我们定义的 */
+.milkdown .preview-panel {
+  border-top: 1px solid var(--hue-border-subtle);
+}
+
+.milkdown .preview-label {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--hue-text-3);
+}
+
+.milkdown .preview {
+  display: flex;
+  justify-content: center;
+  padding: 14px 12px;
+  overflow-x: auto;
+}
+
+.milkdown .preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 语法错误：说人话，别把 mermaid 的原始异常直接糊用户脸上 */
+.mermaid-error {
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--hue-danger);
+  border-radius: var(--radius-md);
+  background: rgba(242, 104, 95, 0.08);
+  font-size: 12px;
+  color: var(--hue-text-2);
+  text-align: left;
+}
+
+.mermaid-error strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--hue-danger);
+}
+
+.mermaid-error p {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--hue-text-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
