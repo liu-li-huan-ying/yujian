@@ -428,20 +428,22 @@ onBeforeUnmount(() => {
 }
 
 .lang-btn {
-  border: none;
-  background: transparent;
-  color: var(--hue-text-3);
+  border: 1px solid var(--hue-border-subtle);
+  background: rgba(var(--hue-tint-1), 0.12);
+  color: var(--hue-text-2);
   font-size: 11px;
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 4px;
   cursor: pointer;
-  line-height: 1;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
 }
 
 .lang-btn:hover {
-  color: var(--hue-text-1);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--hue-accent);
+  border-color: var(--hue-accent);
+  background: rgba(var(--hue-tint-1), 0.22);
 }
 
 /* ── 导出结果轻提示（玻璃浮层）── */
