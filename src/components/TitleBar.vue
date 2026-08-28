@@ -54,7 +54,7 @@ onBeforeUnmount(() => {
           :class="{ 'seg__item--on': mode === 'wysiwyg' }"
           @click="emit('update:mode', 'wysiwyg')"
         >
-          所见即所得
+          渲染模式
         </button>
         <button
           class="seg__item"

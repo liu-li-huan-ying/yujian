@@ -24,7 +24,7 @@ const fileName = computed(() =>
   filePath.value ? filePath.value.split(/[\\/]/).pop() ?? '' : '未命名'
 )
 
-const modeLabel = computed(() => (requestedMode.value === 'wysiwyg' ? '所见即所得' : '源码'))
+const modeLabel = computed(() => (requestedMode.value === 'wysiwyg' ? '渲染模式' : '源码'))
 
 async function refreshTree(): Promise<void> {
   tree.value = vaultPath.value ? await window.api.listVault(vaultPath.value) : []
