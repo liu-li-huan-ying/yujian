@@ -175,6 +175,15 @@
 .milkdown .milkdown-code-block .cm-editor {
   background: transparent;
   border-radius: var(--radius-sm);
+  /* 自适应内容高度：不再继承全局 height:100% 撑满父容器 */
+  height: auto !important;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* 代码块内 CodeMirror 滚动区：紧凑内边距，不污染源码的 45vh */
+.milkdown .milkdown-code-block .cm-scroller {
+  padding: 8px 4px;
 }
 .milkdown .milkdown-code-block .cm-gutters {
   background: transparent;
@@ -294,8 +303,10 @@
   border: 1px solid var(--hue-border-subtle);
 }
 
-/* ── 源码模式：CodeMirror 套用同一套令牌 ─────── */
-.cm-editor {
+/* ── 源码模式：CodeMirror 套用同一套令牌 ───────
+   注意：.cm-editor 只限 .source-host 内生效（height:100% + 45vh 底部留白），
+   否则会污染所见即所得内代码块的尺寸，导致 1 行代码撑出整屏高度。 */
+.source-host > .cm-editor {
   height: 100%;
   background: var(--hue-editor);
   color: var(--hue-text-1);
@@ -304,7 +315,7 @@
   line-height: 1.6;
 }
 
-.cm-editor .cm-scroller {
+.source-host > .cm-editor .cm-scroller {
   font-family: var(--font-mono);
   padding: 20px 24px 45vh;
 }
@@ -396,9 +407,11 @@
   word-break: break-word;
 }
 
-/* ── 隐藏原生滚动条：交给右侧玉质阅读进度条统一指示，避免双指示破坏美感 ── */
+/* ── 隐藏原生滚动条：交给右侧玉质阅读进度条统一指示，避免双指示破坏美感 ──
+   例外：代码块内部 CodeMirror 超长时需独立滚动（max-height:70vh 兜底），
+   恢复玉质细滚动条 ── */
 .milkdown,
-.cm-scroller {
+.cm-scroller:not(.milkdown-code-block .cm-scroller) {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -406,4 +419,17 @@
 .cm-scroller::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* 代码块超长时用玉质滚动条 */
+.milkdown .milkdown-code-block .cm-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hue-scrollbar-thumb) transparent;
+}
+.milkdown .milkdown-code-block .cm-scroller::-webkit-scrollbar {
+  width: 6px;
+}
+.milkdown .milkdown-code-block .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--hue-scrollbar-thumb);
+  border-radius: 3px;
 }
