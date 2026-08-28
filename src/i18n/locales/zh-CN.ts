@@ -128,7 +128,63 @@ const zhCN = {
     startupRestore: '恢复上次会话',
     startupRestoreDesc: '重新打开上次使用的笔记库与文档',
     startupFresh: '每次启动显示全新页面',
-    startupFreshDesc: '不恢复上次状态，打开后从空笔记库开始'
+    startupFreshDesc: '不恢复上次状态，打开后从空笔记库开始',
+    newDoc: '新建文档',
+    saveAs: '另存为',
+    about: '关于',
+    more: '更多',
+    exportTitle: '导出文档',
+    exportMenuHtml: 'HTML 文件',
+    exportMenuPdf: 'PDF 文件',
+    helpTitle: '帮助与快捷键'
+  },
+
+  /* ── 帮助面板：快捷键 + 使用指南 ── */
+  help: {
+    tabShortcuts: '快捷键',
+    tabGuide: '使用指南',
+    close: '×',
+    aboutTitle: '关于 玉笺',
+    scFile: '文件',
+    scOpen: '打开文件',
+    scSave: '保存文档',
+    scView: '视图',
+    scSidebar: '显示 / 隐藏 侧栏',
+    scOutline: '显示 / 隐藏 大纲',
+    scMode: '切换 渲染 / 源码',
+    scGeneral: '通用',
+    scHelp: '打开帮助',
+    guideTitle: '快速上手 玉笺',
+    guideIntro:
+      '玉笺是一款为技术写作者打造的桌面 Markdown 编辑器：所见即所得与源码双模式、玉质美学界面、本地优先、Markdown 往返保真。',
+    guideSections: [
+      {
+        h: '1 · 打开笔记库',
+        p: '点击侧栏「选择文件夹」或标题栏文件夹图标，选定一个本地文件夹作为笔记库。库内的 .md 文档与同级 .assets 资源会实时显示在左侧文件树。'
+      },
+      {
+        h: '2 · 新建与写作',
+        p: '标题栏「＋」即可在库中新建文档。正文默认所见即所得；需要精确排版或插入原始语法时，用「渲染 / 源码」分段或 Ctrl+/ 切换。'
+      },
+      {
+        h: '3 · 双栏联动',
+        p: '左侧文件树管理文档，右侧大纲随滚动高亮当前章节、点击跳转。两栏均可独立显隐（Ctrl+\\ / Ctrl+Shift+\\），窗口过窄时自动软收起。'
+      },
+      {
+        h: '4 · 导出与分享',
+        p: '标题栏「导出」可生成单篇 HTML 或 PDF。导出直取编辑区 DOM，所见即所得；资源可选随附 .assets 或内联 base64。'
+      },
+      {
+        h: '5 · 图片与图床',
+        p: '本地图片默认存于文档同名 .assets 文件夹，链接保持相对路径。发布到外部平台时，在「更多 · 图床设置」配置图床并一键替换为远程链接。'
+      },
+      {
+        h: '6 · 外观与皮肤',
+        p: '标题栏调色板图标可在五套中国传统窑色皮肤（青瓷 / 天青 / 月白 / 黛 / 琥珀）与深 / 浅 / 跟随系统之间自由切换，材质与皮肤解耦，切换零卡顿。'
+      }
+    ],
+    aboutBody:
+      '玉笺 · 玉质 Markdown 编辑器\n版本 1.1 · Electron + Vue 3 + Milkdown\n本地优先 · 往返保真 · 无云端追踪'
   }
 }
 

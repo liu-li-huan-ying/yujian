@@ -129,7 +129,63 @@ const enUS = {
     startupRestore: 'Restore last session',
     startupRestoreDesc: 'Reopen the last vault and document',
     startupFresh: 'Show a fresh page',
-    startupFreshDesc: 'Start with an empty vault, no last state restored'
+    startupFreshDesc: 'Start with an empty vault, no last state restored',
+    newDoc: 'New Document',
+    saveAs: 'Save As',
+    about: 'About',
+    more: 'More',
+    exportTitle: 'Export',
+    exportMenuHtml: 'HTML file',
+    exportMenuPdf: 'PDF file',
+    helpTitle: 'Help & Shortcuts'
+  },
+
+  /* ── Help panel: shortcuts + guide ── */
+  help: {
+    tabShortcuts: 'Shortcuts',
+    tabGuide: 'Guide',
+    close: '×',
+    aboutTitle: 'About 玉笺',
+    scFile: 'File',
+    scOpen: 'Open file',
+    scSave: 'Save document',
+    scView: 'View',
+    scSidebar: 'Show / hide sidebar',
+    scOutline: 'Show / hide outline',
+    scMode: 'Toggle WYSIWYG / Source',
+    scGeneral: 'General',
+    scHelp: 'Open help',
+    guideTitle: 'Get Started with 玉笺',
+    guideIntro:
+      '玉笺 is a desktop Markdown editor for technical writers: WYSIWYG and source modes, a jade-textured interface, local-first, with faithful Markdown round-tripping.',
+    guideSections: [
+      {
+        h: '1 · Open a vault',
+        p: 'Click "Choose Folder" in the sidebar or the folder icon in the title bar to pick a local folder as your vault. Its .md files and sibling .assets show up live in the left file tree.'
+      },
+      {
+        h: '2 · Create & write',
+        p: 'The "＋" in the title bar creates a document in the vault. The body is WYSIWYG by default; switch to precise editing via the "WYSIWYG / Source" segment or Ctrl+/.'
+      },
+      {
+        h: '3 · Two synced panels',
+        p: 'The left tree manages documents; the right outline highlights the current section on scroll and jumps on click. Both panels toggle independently (Ctrl+\\ / Ctrl+Shift+\\) and auto-collapse on narrow windows.'
+      },
+      {
+        h: '4 · Export & share',
+        p: 'The title-bar "Export" produces a single HTML or PDF. Export reads the editor DOM directly, true WYSIWYG; assets can ship as a sibling .assets folder or inline base64.'
+      },
+      {
+        h: '5 · Images & img host',
+        p: 'Local images live in a same-named .assets folder with relative links. To publish externally, configure an img host under "More · Image Host" and replace links in one click.'
+      },
+      {
+        h: '6 · Appearance & skins',
+        p: 'The palette icon cycles five traditional Chinese kiln skins (Celadon / Sky / Moon / Dai / Amber) and dark / light / system — material and hue are decoupled, switching is instant.'
+      }
+    ],
+    aboutBody:
+      '玉笺 · Jade Markdown Editor\nVersion 1.1 · Electron + Vue 3 + Milkdown\nLocal-first · Faithful round-trip · No cloud tracking'
   }
 }
 

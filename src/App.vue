@@ -7,6 +7,7 @@ import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
 import PreferencesSettings from './components/PreferencesSettings.vue'
 import Outline from './components/Outline.vue'
+import HelpPanel from './components/HelpPanel.vue'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange, StartupMode } from '../electron/shared/ipc-channels'
@@ -180,6 +181,9 @@ function onKeydown(e: KeyboardEvent): void {
   } else if (e.key === '/') {
     e.preventDefault()
     requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'
+  } else if (e.key === 'F1') {
+    e.preventDefault()
+    onHelp('shortcuts')
   }
 }
 
@@ -217,6 +221,16 @@ const startupMode = ref<StartupMode>('restore')
 
 function onPreferences(): void {
   showPreferences.value = true
+}
+
+/* ── 帮助面板（快捷键 + 使用指南）── */
+
+const showHelp = ref(false)
+const helpTab = ref<'shortcuts' | 'guide'>('shortcuts')
+
+function onHelp(tab: 'shortcuts' | 'guide' = 'shortcuts'): void {
+  helpTab.value = tab
+  showHelp.value = true
 }
 
 /** 切换启动偏好并持久化（下次启动生效） */
@@ -372,15 +386,19 @@ onBeforeUnmount(() => {
       :mode="requestedMode"
       :dirty="host?.dirty ?? false"
       :can-export="!!filePath"
+      @new-doc="newDoc"
       @open="openFile"
-      @save="saveFile"
+      @switch-vault="openVault"
       @update:mode="requestedMode = $event"
       @export-html="doExport('html')"
       @export-pdf="doExport('pdf')"
-      @img-host="onImgHost"
       @appearance="onAppearance"
-      @switch-vault="openVault"
+      @img-host="onImgHost"
       @preferences="onPreferences"
+      @save="saveFile"
+      @save-as="saveFileAs"
+      @help="onHelp('shortcuts')"
+      @about="onHelp('guide')"
       :sidebar-visible="sidebarVisible"
       :outline-visible="outlineVisible"
       @toggle-sidebar="onToggleSidebar"
@@ -468,6 +486,13 @@ onBeforeUnmount(() => {
       :value="startupMode"
       @close="showPreferences = false"
       @change="onStartupMode"
+    />
+
+    <!-- 帮助面板（快捷键 + 使用指南）-->
+    <HelpPanel
+      v-if="showHelp"
+      :initial="helpTab"
+      @close="showHelp = false"
     />
 </template>
 
