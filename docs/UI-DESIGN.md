@@ -273,6 +273,8 @@
 * 当前阅读位置对应项：accent 文字色 + `--bg-active` 背景
 * 点击跳转，滚动时自动高亮（节流 100ms）
 
+> ✅ **已实现**：右侧独立玉质面板（宽 `var(--w-outline)` = 196px，表头 30px 与侧栏对齐）。标题按 16px/级缩进；激活态为 accent 文字色 + `--hue-active` 背景 + 左侧 2px accent 竖条；滚动高亮复用 `ReadingProgress` 同款捕获滚动 + 100ms 节流，源码模式按 CodeMirror 首可见行比对标题行号。窗口 < 900px 自动收起（见 `src/App.vue` `outlineVisible`）。
+
 ### 5.4 状态栏
 
 左区：字数 · 预计阅读时长

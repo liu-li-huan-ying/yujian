@@ -3,79 +3,80 @@
 > 所见即所得的跨平台桌面 Markdown 编辑器，可一键切换源码模式。
 > 默认面向**技术写作**场景：代码高亮、Mermaid 图表、数学公式、表格与多格式导出。
 
-[![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vue.js&logoColor=white)](https://vuejs.org/)
+[![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron\&logoColor=white)](https://www.electronjs.org/)
+[![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vue.js\&logoColor=white)](https://vuejs.org/)
 [![Milkdown](https://img.shields.io/badge/Milkdown-Crepe%207.22-ff69b4)](https://milkdown.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#)
 
 **玉笺**（yù jiān，意为"玉制的信笺"）是一款本地优先的 Markdown 写作工具：文件夹即笔记库，文档是普通的 `.md` 文件，数据永远可读、可 Git、可迁移。编辑器内核基于 [Milkdown Crepe](https://milkdown.dev/)，Markdown 是一等公民，未编辑的文档保存时一字不改写回原文。
 
----
+***
 
 ## ✨ 功能特性
 
 ### 编辑体验
 
-- **双模式编辑** — 默认所见即所得（WYSIWYG），一键切到源码模式（`Ctrl + /`），两模式共享同一份 Markdown 文本，切换无内容丢失。
-- **Markdown 往返保真** — 未编辑的文档保存时原样写回，不让格式化器污染你的 Git diff（详见 `docs/ARCHITECTURE.md` §5.2）。
-- **技术写作套件** — 代码块语法高亮（`@codemirror/language-data` 全语言包）、Mermaid 图表渲染、KaTeX 数学公式、表格、任务列表。
+* **双模式编辑** — 默认所见即所得（WYSIWYG），一键切到源码模式（`Ctrl + /`），两模式共享同一份 Markdown 文本，切换无内容丢失。
+* **Markdown 往返保真** — 未编辑的文档保存时原样写回，不让格式化器污染你的 Git diff（详见 `docs/ARCHITECTURE.md` §5.2）。
+* **技术写作套件** — 代码块语法高亮（`@codemirror/language-data` 全语言包）、Mermaid 图表渲染、KaTeX 数学公式、表格、任务列表。
+* **文档大纲** — 右侧面板实时提取标题层级，点击跳转到对应章节；滚动时自动高亮当前所在章节（节流 100ms）。窗口窄于 900px 自动收起。
 
 ### 笔记库 (Vault)
 
-- **文件夹即笔记库** — 打开任意文件夹作为工作目录，左侧文件树浏览其中所有 `.md`。
-- **自动保存 + 崩溃恢复** — 编辑状态持久化到 `userData/session.json`，断电/崩溃重启后自动恢复上次笔记库与文档。
-- **外部改动同步** — 基于 chokidar 单例监听，文档被别的程序修改/删除时实时反映到界面（不污染 Git diff 的纯内容变化会被智能忽略）。
-- **切换工作文件夹** — 标题栏「切换工作文件夹」按钮可在**不重启应用**的情况下切换到另一个目录；切换前自动保存当前文档，并清空活动状态，新库打开即空白。
-- **全文搜索** — 基于 [MiniSearch](https://minisearch.search/) 的倒排索引，搜索结果点击直接定位到命中行（自动切源码模式以精确跳转）。
+* **文件夹即笔记库** — 打开任意文件夹作为工作目录，左侧文件树浏览其中所有 `.md`。
+* **自动保存 + 崩溃恢复** — 编辑状态持久化到 `userData/session.json`，断电/崩溃重启后自动恢复上次笔记库与文档。
+* **外部改动同步** — 基于 chokidar 单例监听，文档被别的程序修改/删除时实时反映到界面（不污染 Git diff 的纯内容变化会被智能忽略）。
+* **切换工作文件夹** — 标题栏「切换工作文件夹」按钮可在**不重启应用**的情况下切换到另一个目录；切换前自动保存当前文档，并清空活动状态，新库打开即空白。
+* **全文搜索** — 基于 [MiniSearch](https://minisearch.search/) 的倒排索引，搜索结果点击直接定位到命中行（自动切源码模式以精确跳转）。
 
 ### 图片与图床
 
-- **粘贴即落盘** — 截图/图片粘贴后自动存入文档同级 `.assets` 文件夹，引用一律相对路径，本地是唯一真源。
-- **图床发布** — 支持 SM.MS 与自定义（兼容 PicGo）图床；密钥经主进程 `safeStorage` **加密保存，永不下发到渲染层**。可将文档中的本地图片批量替换为远程 URL（用于发布到公众号等平台）。
+* **粘贴即落盘** — 截图/图片粘贴后自动存入文档同级 `.assets` 文件夹，引用一律相对路径，本地是唯一真源。
+* **图床发布** — 支持 SM.MS 与自定义（兼容 PicGo）图床；密钥经主进程 `safeStorage` **加密保存，永不下发到渲染层**。可将文档中的本地图片批量替换为远程 URL（用于发布到公众号等平台）。
 
 ### 导出
 
-- **导出 HTML** — 直取 ProseMirror DOM（所见即所得交付），自动内联数学公式与 Mermaid 渲染结果。
-- **导出 PDF** — 通过 `webContents.printToPDF` 输出，与编辑器内观感一致。
+* **导出 HTML** — 直取 ProseMirror DOM（所见即所得交付），自动内联数学公式与 Mermaid 渲染结果。
+* **导出 PDF** — 通过 `webContents.printToPDF` 输出，与编辑器内观感一致。
 
 ### 外观与个性化
 
-- **五套皮肤**（中国传统窑色系）— 青瓷（默认）、天青、月白、黛、琥珀。
-- **三种明暗** — 深色 / 浅色 / 跟随系统（`prefers-color-scheme`）。
-- **材质系统** — 框架层玉质、浮起层玻璃（`backdrop-filter`），内容层保持纯净实色以保证对比度与导出一致（详见 `docs/UI-DESIGN.md`）。
-- **皮肤/明暗持久化** — 选择存入 `localStorage`，跨会话保留；切换皮肤不重建编辑器实例。
+* **五套皮肤**（中国传统窑色系）— 青瓷（默认）、天青、月白、黛、琥珀。
+* **三种明暗** — 深色 / 浅色 / 跟随系统（`prefers-color-scheme`）。
+* **材质系统** — 框架层玉质、浮起层玻璃（`backdrop-filter`），内容层保持纯净实色以保证对比度与导出一致（详见 `docs/UI-DESIGN.md`）。
+* **皮肤/明暗持久化** — 选择存入 `localStorage`，跨会话保留；切换皮肤不重建编辑器实例。
 
 ### 偏好设置
 
-- **启动行为** — 标题栏「偏好设置」面板可选：
-  - **恢复上次会话**（默认）— 重新打开上次使用的笔记库与文档；
-  - **每次启动显示全新页面** — 不恢复任何上次状态，打开即从空笔记库开始。
-  - 配置持久化于 `session.json`，于应用启动时读取。
+* **启动行为** — 标题栏「偏好设置」面板可选：
+  * **恢复上次会话**（默认）— 重新打开上次使用的笔记库与文档；
+  * **每次启动显示全新页面** — 不恢复任何上次状态，打开即从空笔记库开始。
+  * 配置持久化于 `session.json`，于应用启动时读取。
 
 ### 国际化
 
-- **中 / 英 双语** — 状态栏一键切换；Crepe 菜单标签随语言重建（Vue `:key` 重挂载），UI 文案响应式更新。
+* **中 / 英 双语** — 状态栏一键切换；Crepe 菜单标签随语言重建（Vue `:key` 重挂载），UI 文案响应式更新。
 
----
+***
 
 ## 🧱 技术栈
 
-| 层      | 选型                                | 说明                                                          |
-| ------- | ----------------------------------- | ------------------------------------------------------------- |
-| 运行时  | Electron 44                        | 官方预编译二进制，不依赖任何 C++ 工具链                          |
-| 构建    | electron-vite 5 + vite ~7.3.6      | vite 不可升 8（electron-vite 的 peer 限制）                    |
-| 前端    | Vue 3.5 + TypeScript ~5.9.3        | `<script setup>` + 组合式 API                                 |
-| 编辑内核 | @milkdown/crepe 7.22.1             | 基于 ProseMirror + remark，Markdown 往返一致性最好             |
-| 源码模式 | CodeMirror 6                       | 与 WYSIWYG 共享同一份 Markdown 文本                            |
-| 图表    | Mermaid 11 / KaTeX 0.18            | 图表与公式渲染                                                 |
-| 搜索    | MiniSearch 7                       | 纯 JS 倒排索引，零原生编译                                       |
-| 监听    | chokidar 4                         | 笔记库文件变化监听（单例 watcher，切换文件夹无泄漏）              |
-| 状态    | pinia 4                            | 跨组件状态（已验证与 Vue 3.5 兼容）                             |
+| 层    | 选型                             | 说明                                       |
+| ---- | ------------------------------ | ---------------------------------------- |
+| 运行时  | Electron 44                    | 官方预编译二进制，不依赖任何 C++ 工具链                   |
+| 构建   | electron-vite 5 + vite \~7.3.6 | vite 不可升 8（electron-vite 的 peer 限制）      |
+| 前端   | Vue 3.5 + TypeScript \~5.9.3   | `<script setup>` + 组合式 API               |
+| 编辑内核 | @milkdown/crepe 7.22.1         | 基于 ProseMirror + remark，Markdown 往返一致性最好 |
+| 源码模式 | CodeMirror 6                   | 与 WYSIWYG 共享同一份 Markdown 文本              |
+| 图表   | Mermaid 11 / KaTeX 0.18        | 图表与公式渲染                                  |
+| 搜索   | MiniSearch 7                   | 纯 JS 倒排索引，零原生编译                          |
+| 监听   | chokidar 4                     | 笔记库文件变化监听（单例 watcher，切换文件夹无泄漏）           |
+| 状态   | pinia 4                        | 跨组件状态（已验证与 Vue 3.5 兼容）                   |
 
 > 依赖选型受本机约束驱动：无 MSVC / 无 WebView2，Tauri 不可行，故选 Electron；同时避免一切需 node-gyp 编译的依赖（better-sqlite3 / sharp / resvg 等），优先纯 JS 或 WASM 实现。详见 `docs/ARCHITECTURE.md` §0。
 
----
+***
 
 ## 🏗️ 架构概览
 
@@ -96,13 +97,13 @@
                                          └────────────────┘
 ```
 
-- `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`，渲染层拿不到 Node 能力。
-- 图床密钥等敏感数据只存主进程，用 `safeStorage` 加密，绝不出现在渲染层。
-- 会话状态（`vaultPath` / `activePath` / `mode` / `sidebarWidth` / `startupMode`）统一在 `electron/shared/ipc-channels.ts` 的 `SessionState` 类型，主进程 `session.ts` 原子写（`临时文件 + rename`）。
+* `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`，渲染层拿不到 Node 能力。
+* 图床密钥等敏感数据只存主进程，用 `safeStorage` 加密，绝不出现在渲染层。
+* 会话状态（`vaultPath` / `activePath` / `mode` / `sidebarWidth` / `startupMode`）统一在 `electron/shared/ipc-channels.ts` 的 `SessionState` 类型，主进程 `session.ts` 原子写（`临时文件 + rename`）。
 
 完整的模块划分、数据流向、保真策略与风险应对见 **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)**。
 
----
+***
 
 ## 🚀 快速开始
 
@@ -129,7 +130,7 @@ npm run dist
 ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" node node_modules/electron/install.js
 ```
 
----
+***
 
 ## ⚠️ 已知环境坑
 
@@ -137,9 +138,9 @@ ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" node node_modules/elec
 
 部分 IDE（如 WorkBuddy、VS Code）本身是 Electron 应用，会向派生 shell 注入 `ELECTRON_RUN_AS_NODE=1`，使 `electron.exe` 退化成纯 Node：
 
-- `process.type` 变成 `undefined`（正常应为 `browser`）；
-- `require('electron')` 返回**二进制路径字符串**而非 API 对象；
-- 应用不报错，但永远不创建窗口。
+* `process.type` 变成 `undefined`（正常应为 `browser`）；
+* `require('electron')` 返回**二进制路径字符串**而非 API 对象；
+* 应用不报错，但永远不创建窗口。
 
 `scripts/dev.mjs` 已在启动前 `delete process.env.ELECTRON_RUN_AS_NODE`，`npm run dev` 可直接用。命令行手动运行时：
 
@@ -159,33 +160,33 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 
 无 GPU 的沙箱里 GPU 进程反复崩溃会触发 "GPU process isn't usable. Goodbye"。可设 `MD_EDITOR_COMPAT_MODE=1 npm run dev` 进入兼容模式（含 `--no-sandbox`）。
 
----
+***
 
 ## 🎨 设计文档
 
-- **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** — 架构设计、模块划分、保真策略、9 阶段路线图与风险应对。
-- **[`docs/UI-DESIGN.md`](./docs/UI-DESIGN.md)** — 设计令牌、组件规范、材质系统（玉质/玻璃）、皮肤架构。
-- **[`docs/preview/theme-yujian.html`](./docs/preview/theme-yujian.html)** — 玉质主题效果预览（浏览器直接打开）。
+* **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** — 架构设计、模块划分、保真策略、9 阶段路线图与风险应对。
+* **[`docs/UI-DESIGN.md`](./docs/UI-DESIGN.md)** — 设计令牌、组件规范、材质系统（玉质/玻璃）、皮肤架构。
+* **[`docs/preview/theme-yujian.html`](./docs/preview/theme-yujian.html)** — 玉质主题效果预览（浏览器直接打开）。
 
----
+***
 
 ## 🗺️ 开发路线图
 
-| 阶段         | 目标                          | 状态        |
-| ------------ | ----------------------------- | ----------- |
-| 0. 地基      | 脚手架 + 窗口 + IPC 打通        | ✅ 已完成    |
-| 1. 编辑器核心 | Crepe 接入 + 双模式 + 打开/保存  | ✅ 已完成    |
-| 2. 笔记库    | 文件树 + 自动保存 + 崩溃恢复     | ✅ 已完成    |
-| 3. 写作套件  | Mermaid + 公式 + 表格 + 代码块  | ✅ 已完成    |
-| 4. 图片      | 粘贴落盘 + 图床配置             | ✅ 已完成    |
-| 5. 搜索      | MiniSearch 索引 + 搜索面板      | ✅ 已完成    |
-| 6. 导出      | HTML / PDF / 单 md            | ✅ 已完成    |
-| 7. 打磨      | 主题/皮肤、体积裁剪、快捷键、设置面板 | 🟡 进行中（皮肤 + 偏好/外观面板已完成；体积裁剪待做） |
-| 8. 分发      | electron-builder 打包         | 🟡 配置就绪（已写 NSIS/dmg/AppImage 目标，待产出可分发安装包） |
+| 阶段       | 目标                      | 状态                                         |
+| -------- | ----------------------- | ------------------------------------------ |
+| 0. 地基    | 脚手架 + 窗口 + IPC 打通       | ✅ 已完成                                      |
+| 1. 编辑器核心 | Crepe 接入 + 双模式 + 打开/保存  | ✅ 已完成                                      |
+| 2. 笔记库   | 文件树 + 自动保存 + 崩溃恢复       | ✅ 已完成                                      |
+| 3. 写作套件  | Mermaid + 公式 + 表格 + 代码块 | ✅ 已完成                                      |
+| 4. 图片    | 粘贴落盘 + 图床配置             | ✅ 已完成                                      |
+| 5. 搜索    | MiniSearch 索引 + 搜索面板    | ✅ 已完成                                      |
+| 6. 导出    | HTML / PDF / 单 md       | ✅ 已完成                                      |
+| 7. 打磨    | 主题/皮肤、体积裁剪、快捷键、设置面板     | 🟡 进行中（皮肤 + 偏好/外观面板已完成；体积裁剪待做）             |
+| 8. 分发    | electron-builder 打包     | 🟡 配置就绪（已写 NSIS/dmg/AppImage 目标，待产出可分发安装包） |
 
 **已实现路线图之外的增强**：中英双语 i18n、切换工作文件夹、启动偏好设置、五套皮肤 + 明暗/跟随系统、应用图标（玉笺）。
 
----
+***
 
 ## 📄 许可证
 
