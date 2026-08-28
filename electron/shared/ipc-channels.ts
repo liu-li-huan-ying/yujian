@@ -19,6 +19,9 @@ export const IPC = {
   VAULT_RENAME: 'vault:rename',
   VAULT_DELETE: 'vault:delete',
 
+  // 笔记库：全文搜索
+  VAULT_SEARCH: 'vault:search',
+
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
   SESSION_PATCH: 'session:patch',
@@ -63,6 +66,23 @@ export interface VaultChange {
   kind: VaultChangeKind
   /** 绝对路径 */
   path: string
+}
+
+/* ── 全文搜索结果 ─────────────────────────── */
+
+export interface SearchLineHit {
+  /** 行号（从 1 开始） */
+  line: number
+  /** 命中行文本（已截断，去除首尾空白） */
+  text: string
+}
+
+export interface SearchFileResult {
+  /** 文档绝对路径 */
+  path: string
+  /** 文件名（含扩展名） */
+  name: string
+  hits: SearchLineHit[]
 }
 
 /* ── 会话状态（崩溃恢复）────────────────────── */

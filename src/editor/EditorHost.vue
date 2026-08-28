@@ -22,6 +22,7 @@ const emit = defineEmits<{
 const fidelity = useFidelity()
 const mode = ref<EditorMode>('wysiwyg')
 const milkdown = ref<InstanceType<typeof MilkdownEditor> | null>(null)
+const source = ref<InstanceType<typeof SourceEditor> | null>(null)
 const saving = ref(false)
 const ready = ref(false)
 
@@ -179,10 +180,17 @@ function onReady(): void {
   ready.value = true
 }
 
+/** 全文搜索结果点击：跳转到命中行（仅源码模式可精确定位） */
+function revealLine(line: number): void {
+  if (mode.value !== 'source') return
+  source.value?.revealLine(line)
+}
+
 defineExpose({
   save,
   load,
   switchTo,
+  revealLine,
   dirty,
   willNormalize,
   mode,
@@ -212,6 +220,7 @@ defineExpose({
 
     <div ref="sourcePane" class="pane" :class="{ 'pane--hidden': mode !== 'source' }">
       <SourceEditor
+        ref="source"
         :model-value="fidelity.currentText.value"
         @update:model-value="onSourceUpdate"
       />

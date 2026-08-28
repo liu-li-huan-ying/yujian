@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import {
   SIDEBAR_MAX,
   SIDEBAR_MIN,
-  type FileNode
+  type FileNode,
+  type SearchFileResult
 } from '../../electron/shared/ipc-channels'
 import FileTree from './FileTree.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import SearchResults from './SearchResults.vue'
 
 const props = defineProps<{
   vaultPath: string | null
@@ -29,6 +31,8 @@ const emit = defineEmits<{
   (e: 'renamed', oldPath: string, newPath: string): void
   /** 删除了当前正在编辑的文档：让 App 清空活动路径 */
   (e: 'deleted', path: string): void
+  /** 全文搜索结果点击：让 App 打开文档并定位到命中行 */
+  (e: 'open-result', payload: { path: string; line: number }): void
 }>()
 
 /** 目录默认折叠，展开状态提升到此处，方便会话恢复时自动展开祖先链 */
@@ -46,6 +50,45 @@ const confirmState = ref<{ open: boolean; node: FileNode } | null>(null)
 /** 轻量错误提示 */
 const toast = ref<{ msg: string } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+/* ── 全文搜索 ── */
+
+const searchQuery = ref('')
+const isSearching = ref(false)
+const searchResults = ref<SearchFileResult[]>([])
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(searchQuery, (q) => {
+  const query = q.trim()
+  if (!query) {
+    searchResults.value = []
+    isSearching.value = false
+    return
+  }
+  isSearching.value = true
+  if (searchTimer) clearTimeout(searchTimer)
+  // 防抖：连续输入不每次重扫整个库
+  searchTimer = setTimeout(async () => {
+    if (!props.vaultPath) return
+    try {
+      searchResults.value = await window.api.searchVault(props.vaultPath, query)
+    } catch (e) {
+      showToast(errMsg(e))
+      searchResults.value = []
+    } finally {
+      isSearching.value = false
+    }
+  }, 300)
+})
+
+function clearSearch(): void {
+  searchQuery.value = ''
+  searchResults.value = []
+}
+
+function onOpenResult(path: string, line: number): void {
+  emit('open-result', { path, line })
+}
 
 const vaultName = computed(() => {
   if (!props.vaultPath) return null
@@ -109,6 +152,8 @@ watch(
   () => props.vaultPath,
   () => {
     expanded.value = new Set()
+    searchQuery.value = ''
+    searchResults.value = []
   }
 )
 
@@ -319,30 +364,72 @@ function startDrag(e: PointerEvent): void {
     </header>
 
     <div class="sidebar__body" @contextmenu.prevent>
-      <p v-if="!vaultPath" class="empty">
-        还没有笔记库。<br />
-        <button class="link" type="button" @click="emit('open-vault')">
-          选择一个文件夹
+      <!-- 全文搜索框（仅打开笔记库后可用） -->
+      <div v-if="vaultPath" class="search">
+        <svg class="search__icon" width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
+          <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.3" />
+          <path d="M9 9 L12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        <input
+          v-model="searchQuery"
+          class="search__input"
+          type="text"
+          placeholder="搜索文档内容…"
+          aria-label="全文搜索"
+          @keydown.esc="clearSearch"
+        />
+        <button
+          v-if="searchQuery"
+          class="search__clear"
+          type="button"
+          title="清除"
+          aria-label="清除搜索"
+          @click="clearSearch"
+        >
+          ×
         </button>
-        即可开始写作。
-      </p>
+      </div>
 
-      <p v-else-if="nodes.length === 0" class="empty">
-        这个文件夹里还没有 Markdown 文档。
-      </p>
+      <!-- 搜索态：结果列表 / 进行中 / 无结果 -->
+      <template v-if="searchQuery.trim()">
+        <div v-if="isSearching" class="searching">搜索中…</div>
+        <SearchResults
+          v-else-if="searchResults.length"
+          :results="searchResults"
+          :query="searchQuery"
+          :active-path="activePath"
+          @open="onOpenResult"
+        />
+        <p v-else class="empty">未找到「{{ searchQuery.trim() }}」相关内容</p>
+      </template>
 
-      <FileTree
-        v-else
-        :nodes="nodes"
-        :active-path="activePath"
-        :expanded="expanded"
-        :editing-path="editingPath"
-        @select="emit('select', $event)"
-        @toggle="toggle"
-        @context-menu="onContextMenu"
-        @rename-confirm="(p, v) => void doRename(p, v)"
-        @rename-cancel="onRenameCancel"
-      />
+      <!-- 普通文件树态 -->
+      <template v-else>
+        <p v-if="!vaultPath" class="empty">
+          还没有笔记库。<br />
+          <button class="link" type="button" @click="emit('open-vault')">
+            选择一个文件夹
+          </button>
+          即可开始写作。
+        </p>
+
+        <p v-else-if="nodes.length === 0" class="empty">
+          这个文件夹里还没有 Markdown 文档。
+        </p>
+
+        <FileTree
+          v-else
+          :nodes="nodes"
+          :active-path="activePath"
+          :expanded="expanded"
+          :editing-path="editingPath"
+          @select="emit('select', $event)"
+          @toggle="toggle"
+          @context-menu="onContextMenu"
+          @rename-confirm="(p, v) => void doRename(p, v)"
+          @rename-cancel="onRenameCancel"
+        />
+      </template>
     </div>
 
     <div
@@ -484,6 +571,66 @@ function startDrag(e: PointerEvent): void {
 .sidebar__resizer--active {
   background: var(--hue-accent);
   opacity: 0.5;
+}
+
+/* 全文搜索框：玉质输入框 */
+.search {
+  position: sticky;
+  top: -2px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+  padding: 0 8px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input, var(--bg-hover));
+  border: 1px solid var(--hue-border-subtle);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--hue-text-3);
+}
+
+.search__icon {
+  flex-shrink: 0;
+}
+
+.search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--hue-text-1);
+}
+
+.search__input::placeholder {
+  color: var(--hue-text-3);
+}
+
+.search__clear {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--hue-text-3);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px 2px;
+  border-radius: var(--radius-sm);
+}
+
+.search__clear:hover {
+  color: var(--hue-text-1);
+  background: var(--bg-hover);
+}
+
+.searching {
+  padding: 12px 8px;
+  font-size: 12px;
+  color: var(--hue-text-3);
 }
 
 /* 操作失败提示：固定在侧栏底部，自动消失 */

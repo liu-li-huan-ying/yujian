@@ -7,7 +7,7 @@ import {
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
-import { createDoc, createFolder, deleteItem, listTree, renameItem, stopWatching, watchVault } from './vault'
+import { createDoc, createFolder, deleteItem, listTree, renameItem, searchVault, stopWatching, watchVault } from './vault'
 import { patchSession, readSession } from './session'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -163,6 +163,10 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.VAULT_UNWATCH, () => stopWatching())
+
+  ipcMain.handle(IPC.VAULT_SEARCH, (_event, root: string, query: string) =>
+    searchVault(root, query)
+  )
 
   // ── 会话持久化（崩溃恢复）──
 

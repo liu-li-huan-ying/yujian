@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
   type FileNode,
+  type SearchFileResult,
   type SessionState,
   type VaultChange,
   type WindowState
@@ -51,6 +52,10 @@ const api = {
 
   listVault: (root: string): Promise<FileNode[]> =>
     ipcRenderer.invoke(IPC.VAULT_LIST, root),
+
+  /** 全文搜索：在笔记库内递归检索所有 Markdown 文档内容，返回命中行 */
+  searchVault: (root: string, query: string): Promise<SearchFileResult[]> =>
+    ipcRenderer.invoke(IPC.VAULT_SEARCH, root, query),
 
   watchVault: (root: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_WATCH, root),

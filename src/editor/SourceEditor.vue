@@ -55,6 +55,21 @@ onBeforeUnmount(() => {
   view?.destroy()
   view = null
 })
+
+/** 跳转到指定行（全文搜索结果点击时调用）：选中该行并滚动到视图中央 */
+function revealLine(line: number): void {
+  if (!view) return
+  const total = view.state.doc.lines
+  const target = Math.min(Math.max(line, 1), total)
+  const lineObj = view.state.doc.line(target)
+  view.dispatch({
+    selection: { anchor: lineObj.from },
+    effects: EditorView.scrollIntoView(lineObj.from, { y: 'center' })
+  })
+  view.focus()
+}
+
+defineExpose({ revealLine })
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import EditorHost from './editor/EditorHost.vue'
@@ -91,6 +91,17 @@ function onDeleted(path: string): void {
     filePath.value = null
     void window.api.patchSession({ activePath: null })
   }
+}
+
+/** 全文搜索结果点击：打开文档并定位到命中行（源码模式可精确定位） */
+async function onOpenResult(payload: { path: string; line: number }): Promise<void> {
+  await openPath(payload.path)
+  // 渲染模式无法精确定位行，切换到源码模式以便跳转
+  if (requestedMode.value !== 'source') {
+    requestedMode.value = 'source'
+    await nextTick()
+  }
+  host.value?.revealLine(payload.line)
 }
 
 /* ── 外部改动同步 ── */
@@ -204,6 +215,7 @@ onBeforeUnmount(() => {
         @update:width="sidebarWidth = $event"
         @renamed="onRenamed"
         @deleted="onDeleted"
+        @open-result="onOpenResult"
       />
 
       <main class="editor">

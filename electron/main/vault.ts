@@ -1,7 +1,7 @@
-import { access, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
-import type { FileNode, VaultChange, VaultChangeKind } from '../shared/ipc-channels'
+import type { FileNode, SearchFileResult, SearchLineHit, VaultChange, VaultChangeKind } from '../shared/ipc-channels'
 
 const MD_EXT = new Set(['.md', '.markdown'])
 
@@ -191,4 +191,63 @@ export function stopWatching(): void {
   if (!watcher) return
   void watcher.close().catch(() => {})
   watcher = null
+}
+
+/* ── 全文搜索 ───────────────────────────────── */
+
+const MAX_HITS_PER_FILE = 20
+const MAX_RESULT_FILES = 80
+
+/** 单文件内按行匹配（不区分大小写），返回命中行（已截断） */
+async function searchInFile(file: string, query: string): Promise<SearchLineHit[]> {
+  let content: string
+  try {
+    content = await readFile(file, 'utf-8')
+  } catch {
+    return []
+  }
+  const lower = query.toLowerCase()
+  const hits: SearchLineHit[] = []
+  const lines = content.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].toLowerCase().includes(lower)) {
+      hits.push({ line: i + 1, text: lines[i].trim().slice(0, 240) })
+      if (hits.length >= MAX_HITS_PER_FILE) break
+    }
+  }
+  return hits
+}
+
+/**
+ * 递归全文搜索。规则与 listTree 一致：跳过点目录、node_modules、同名 `.assets`，
+ * 仅搜索 Markdown 文档。为控制开销，单文件最多 20 个命中、总共最多 80 个文件。
+ */
+export async function searchVault(root: string, query: string): Promise<SearchFileResult[]> {
+  const q = query.trim()
+  if (!q) return []
+
+  const results: SearchFileResult[] = []
+
+  async function walk(dir: string): Promise<void> {
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (shouldSkipDir(entry.name)) continue
+        await walk(full)
+      } else if (entry.isFile() && isMarkdown(entry.name)) {
+        const hits = await searchInFile(full, q)
+        if (hits.length) results.push({ path: full, name: entry.name, hits })
+      }
+      if (results.length >= MAX_RESULT_FILES) return
+    }
+  }
+
+  await walk(root)
+  return results
 }
