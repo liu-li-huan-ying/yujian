@@ -21,6 +21,11 @@ function sync(): void {
   void window.api.isMaximized().then((v) => (maximized.value = v))
 }
 
+/* 模板不直接引用全局对象：包一层具名函数，类型可推断、职责也更清晰 */
+const minimize = (): void => window.api.minimize()
+const toggleMaximize = (): void => window.api.toggleMaximize()
+const close = (): void => window.api.close()
+
 onMounted(() => {
   sync()
   window.api.onWindowStateChange((state) => (maximized.value = state.maximized))
@@ -63,13 +68,13 @@ onBeforeUnmount(() => {
 
     <!-- macOS 用原生红绿灯，不渲染自绘按钮 -->
     <div v-if="!isMac" class="win">
-      <button class="win__btn" title="最小化" @click="window.api.minimize()">
+      <button class="win__btn" title="最小化" @click="minimize()">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1" />
         </svg>
       </button>
 
-      <button class="win__btn" :title="maximized ? '向下还原' : '最大化'" @click="window.api.toggleMaximize()">
+      <button class="win__btn" :title="maximized ? '向下还原' : '最大化'" @click="toggleMaximize()">
         <svg v-if="maximized" width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path d="M3.2 1.4h5.4v5.4" stroke="currentColor" stroke-width="1" />
           <rect x="1.4" y="3.2" width="5.4" height="5.4" stroke="currentColor" stroke-width="1" />
@@ -79,7 +84,7 @@ onBeforeUnmount(() => {
         </svg>
       </button>
 
-      <button class="win__btn win__btn--close" title="关闭" @click="window.api.close()">
+      <button class="win__btn win__btn--close" title="关闭" @click="close()">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path
             d="M1.4 1.4l7.2 7.2M8.6 1.4l-7.2 7.2"

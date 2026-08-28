@@ -27,6 +27,5 @@
     "src/**/*.vue",
     "electron/**/*.ts"
   ],
-  "exclude": ["node_modules", "out", "dist"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["node_modules", "out", "dist"]
 }

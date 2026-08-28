@@ -1,9 +1,19 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { IPC, type WindowState } from '../shared/ipc-channels'
+import {
+  IPC,
+  type SessionState,
+  type VaultChange,
+  type WindowState
+} from '../shared/ipc-channels'
+import { createDoc, listTree, stopWatching, watchVault } from './vault'
+import { patchSession, readSession } from './session'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
+
+/** 主窗口引用：笔记库监听需要往渲染层推事件 */
+let mainWindow: BrowserWindow | null = null
 
 /**
  * 兼容模式：受限环境（CI、无 GPU 的容器、沙箱）下 GPU 进程会反复崩溃，
@@ -45,6 +55,12 @@ function createWindow(): void {
   })
 
   registerWindowIpc(win)
+
+  mainWindow = win
+  win.on('closed', () => {
+    mainWindow = null
+    stopWatching()
+  })
 
   win.once('ready-to-show', () => win.show())
 
@@ -91,14 +107,17 @@ function registerIpc(): void {
   )
 
   ipcMain.handle(IPC.FILE_WRITE, async (_event, filePath: string, content: string) => {
-    // 先写临时文件再改名：写入中断也不会损坏原文
+    // 先写临时文件再改名：写入中途崩溃也不会损坏原文
     const dir = dirname(filePath)
     const tmp = join(dir, `.${Date.now()}.tmp`)
     await mkdir(dir, { recursive: true })
     await writeFile(tmp, content, 'utf-8')
-    const { rename } = await import('node:fs/promises')
     await rename(tmp, filePath)
   })
+
+  ipcMain.handle(IPC.FILE_CREATE, async (_event, dir: string, name?: string) =>
+    createDoc(dir, name ?? '未命名')
+  )
 
   ipcMain.handle(IPC.DIALOG_OPEN_FILE, async () => {
     const result = await dialog.showOpenDialog({
@@ -115,6 +134,31 @@ function registerIpc(): void {
     })
     return result.canceled ? null : result.filePath
   })
+
+  ipcMain.handle(IPC.DIALOG_OPEN_DIR, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  // ── 笔记库 ──
+
+  ipcMain.handle(IPC.VAULT_LIST, async (_event, root: string) => listTree(root))
+
+  ipcMain.handle(IPC.VAULT_WATCH, (_event, root: string) => {
+    watchVault(root, (change: VaultChange) => {
+      mainWindow?.webContents.send(IPC.VAULT_CHANGE, change)
+    })
+  })
+
+  ipcMain.handle(IPC.VAULT_UNWATCH, () => stopWatching())
+
+  // ── 会话持久化（崩溃恢复）──
+
+  ipcMain.handle(IPC.SESSION_GET, () => readSession())
+
+  ipcMain.handle(IPC.SESSION_PATCH, async (_event, patch: Partial<SessionState>) =>
+    patchSession(patch)
+  )
 }
 
 void app.whenReady().then(() => {
