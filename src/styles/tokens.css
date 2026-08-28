@@ -1,0 +1,145 @@
+/* ============================================================
+   玉质编辑器 · 设计令牌
+   三层结构：结构层 / 材质层（均不变） + 色相层（换皮肤只改这层）
+   ============================================================ */
+
+:root {
+  /* ── 结构层：排版 ───────────────────────────── */
+  --font-ui: -apple-system, "PingFang SC", "Microsoft YaHei",
+             "Noto Sans CJK SC", system-ui, sans-serif;
+  /* Sarasa Mono SC 不可省：技术写作含大量中文注释，缺失会导致缩进错乱 */
+  --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Cascadia Code",
+               Menlo, Consolas, monospace;
+
+  /* ── 结构层：尺寸 ───────────────────────────── */
+  --h-titlebar: 38px;
+  --h-crumb: 30px;
+  --h-statusbar: 26px;
+  --w-sidebar: 224px;
+  --w-outline: 196px;
+  --w-column: 720px;
+  --h-row: 28px;
+
+  /* ── 结构层：圆角与动效 ─────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+
+  /* ── 材质层：玉的配方（所有皮肤共用）─────────── */
+  --material-highlight-top: rgba(255, 255, 255, 0.055);
+  --material-tint-1-alpha: 0.13;
+  --material-tint-2-alpha: 0.1;
+  --material-noise-opacity: 0.045;
+  --material-blur: 28px;
+  --material-saturate: 160%;
+
+  /* 极细噪点：消除塑料感与渐变色带，肉眼几乎不可见但质感差异明显 */
+  --noise-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* ── 结构层：层级透明度 ─────────────────────── */
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================
+   色相层 · 青瓷 Celadon（默认皮肤）
+   ============================================================ */
+
+[data-skin='celadon'][data-mode='dark'] {
+  --hue-base: #23292b;
+  --hue-bar: #1f2527;
+  --hue-tint-1: 126, 196, 182;
+  --hue-tint-2: 95, 168, 160;
+  --hue-accent: #5fa8a0;
+  --hue-editor: #1c1e1f;
+  --hue-code: rgba(255, 255, 255, 0.035);
+  --hue-text-1: #e8e9e7;
+  --hue-text-2: #a3a7a5;
+  --hue-text-3: #8b908e;
+  --hue-success: #4ec9a0;
+  --hue-danger: #f2685f;
+  --hue-active: rgba(95, 168, 160, 0.16);
+  --hue-highlight: rgba(255, 255, 255, 0.055);
+  --hue-border-subtle: rgba(255, 255, 255, 0.055);
+}
+
+[data-skin='celadon'][data-mode='light'] {
+  --hue-base: #eff2f0;
+  --hue-bar: #f3f5f3;
+  --hue-tint-1: 184, 214, 206;
+  --hue-tint-2: 196, 222, 216;
+  --hue-accent: #248077;
+  --hue-editor: #fcfcfb;
+  --hue-code: #f3f5f3;
+  --hue-text-1: #1b1d1c;
+  --hue-text-2: #575b5a;
+  --hue-text-3: #6e7372;
+  --hue-success: #2e8b6b;
+  --hue-danger: #c93f36;
+  --hue-active: rgba(36, 128, 119, 0.11);
+  --hue-highlight: rgba(255, 255, 255, 0.85);
+  --hue-border-subtle: rgba(0, 0, 0, 0.065);
+  --material-tint-1-alpha: 0.42;
+  --material-tint-2-alpha: 0.34;
+  --material-highlight-top: rgba(255, 255, 255, 0.85);
+}
+
+/* ============================================================
+   材质类 · 玉质（静态渲染，零运行时开销）
+   ============================================================ */
+
+.jade {
+  position: relative;
+  background: linear-gradient(180deg, var(--material-highlight-top) 0%, transparent 20%),
+    radial-gradient(
+      120% 62% at 12% 0%,
+      rgba(var(--hue-tint-1), var(--material-tint-1-alpha)) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      95% 55% at 85% 105%,
+      rgba(var(--hue-tint-2), var(--material-tint-2-alpha)) 0%,
+      transparent 58%
+    ),
+    var(--hue-base);
+}
+
+.jade::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--noise-texture);
+  opacity: var(--material-noise-opacity);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* ============================================================
+   材质类 · 玻璃（仅用于小面积浮层，实时模糊）
+   ============================================================ */
+
+.glass {
+  background: rgba(32, 37, 38, 0.66);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 48px rgba(0, 0, 0, 0.38);
+}
+
+/* ============================================================
+   无障碍：尊重系统的减弱动效偏好（材质保留，因为它不是动效）
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+  }
+}

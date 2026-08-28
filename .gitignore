@@ -1,0 +1,19 @@
+node_modules/
+out/
+dist/
+release/
+
+# 智能体工作数据（本地记忆、环境探测记录），不进版本库
+.workbuddy/
+
+*.log
+npm-debug.log*
+yarn-error.log*
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.idea/
+.vscode/*
+!.vscode/extensions.json

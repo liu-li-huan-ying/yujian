@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>玉质主题预览 · Markdown 编辑器</title>
+<style>
+  :root{
+    --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    --font-ui: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    font-family: var(--font-ui);
+    background: #0E1013;
+    background-image:
+      radial-gradient(60% 40% at 12% 8%, rgba(95,168,160,.16) 0%, rgba(95,168,160,0) 70%),
+      radial-gradient(50% 40% at 88% 22%, rgba(122,140,253,.13) 0%, rgba(122,140,253,0) 70%),
+      radial-gradient(70% 50% at 50% 100%, rgba(78,201,160,.08) 0%, rgba(78,201,160,0) 70%);
+    color:#E8E9E7;
+    padding: 48px 24px 72px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap{ max-width: 1080px; margin:0 auto; }
+
+  .page-title{ font-size:26px; font-weight:500; margin:0 0 10px; letter-spacing:.01em; }
+  .page-sub{ font-size:14px; line-height:1.75; color:#9AA09E; margin:0 0 40px; max-width:640px; }
+
+  .sec{ margin-bottom:56px; }
+  .sec-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:8px; }
+  .sec-title{ font-size:16px; font-weight:500; }
+  .sec-note{ font-size:12px; color:#8B908E; }
+  .sec-desc{ font-size:13px; line-height:1.7; color:#9AA09E; margin:0 0 16px; max-width:660px; }
+
+  /* ---------- 应用外壳 ---------- */
+  .app{
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,.10);
+    box-shadow: 0 24px 60px rgba(0,0,0,.42);
+  }
+  .app--light{ border-color: rgba(0,0,0,.10); box-shadow: 0 24px 60px rgba(0,0,0,.16); }
+  .app__body{ display:flex; height:390px; }
+  .app__main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+
+  /* ---------- 玉质材质 ---------- */
+  .jade{ position:relative; }
+  .jade::after{
+    content:''; position:absolute; inset:0;
+    background-image: var(--noise);
+    opacity:.045; mix-blend-mode: overlay; pointer-events:none;
+  }
+  .jade-dark{
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.055) 0%, rgba(255,255,255,0) 20%),
+      radial-gradient(120% 62% at 12% 0%, rgba(126,196,182,.13) 0%, rgba(126,196,182,0) 62%),
+      radial-gradient(95% 55% at 85% 105%, rgba(95,168,160,.10) 0%, rgba(95,168,160,0) 58%),
+      #23292B;
+    color:#E8E9E7;
+  }
+  .jade-light{
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,0) 24%),
+      radial-gradient(120% 60% at 10% 0%, rgba(184,214,206,.42) 0%, rgba(184,214,206,0) 60%),
+      radial-gradient(95% 55% at 88% 105%, rgba(196,222,216,.34) 0%, rgba(196,222,216,0) 58%),
+      #EFF2F0;
+    color:#1B1D1C;
+  }
+
+  /* ---------- 深色内容层 ---------- */
+  .ed-dark{ background:#1C1E1F; color:#E8E9E7; }
+  .ed-light{ background:#FCFCFB; color:#1B1D1C; }
+
+  /* ---------- 标题栏 ---------- */
+  .bar{ height:40px; display:flex; align-items:center; gap:10px; padding:0 14px; position:relative; z-index:1;
+        border-bottom:1px solid rgba(255,255,255,.055); }
+  .jade-light .bar, .app--light .bar{ border-bottom-color: rgba(0,0,0,.065); }
+  .bar__name{ font-size:13px; color:inherit; }
+  .bar__ext{ font-size:12px; opacity:.55; }
+  .bar__spacer{ flex:1; }
+  .seg{ display:flex; align-items:center; gap:2px; padding:2px; border-radius:7px;
+        background: rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.07); }
+  .app--light .seg{ background: rgba(0,0,0,.045); border-color: rgba(0,0,0,.06); }
+  .seg span{ font-size:11px; padding:3px 10px; border-radius:5px; }
+  .seg .on{ background:#5FA8A0; color:#0E1013; font-weight:500; }
+  .app--light .seg .on{ background:#248077; color:#FCFCFB; }
+  .seg .off{ opacity:.6; }
+  .win{ display:flex; align-items:center; gap:8px; margin-left:6px; }
+  .win i{ display:block; width:10px; height:10px; border-radius:50%; background:currentColor; opacity:.28; }
+
+  /* ---------- 侧边栏 ---------- */
+  .side{ width:212px; display:flex; flex-direction:column; position:relative; z-index:1;
+         border-right:1px solid rgba(255,255,255,.055); }
+  .side--r{ border-right:none; border-left:1px solid rgba(255,255,255,.055); width:186px; }
+  .app--light .side{ border-right-color: rgba(0,0,0,.065); }
+  .app--light .side--r{ border-left-color: rgba(0,0,0,.065); }
+
+  .side__pad{ padding:12px; position:relative; z-index:1; }
+  .pick{ display:flex; align-items:center; justify-content:space-between; padding:7px 10px;
+         border-radius:7px; font-size:12px;
+         background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.06); }
+  .app--light .pick{ background: rgba(255,255,255,.72); border-color: rgba(0,0,0,.06); }
+  .srch{ display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px;
+         border-radius:7px; font-size:12px; opacity:.9;
+         background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.06); }
+  .app--light .srch{ background: rgba(255,255,255,.72); border-color: rgba(0,0,0,.06); }
+  .kbd{ margin-left:auto; font-size:11px; opacity:.6; border:1px solid currentColor; border-radius:4px; padding:0 4px; }
+  .lbl{ font-size:11px; letter-spacing:.05em; opacity:.55; padding:2px 12px 6px; }
+
+  .tree{ padding:0 6px; position:relative; z-index:1; }
+  .tree div{ font-size:12.5px; padding:6px 10px; border-radius:6px; display:flex; align-items:center; gap:7px; }
+  .tree .folder{ opacity:.85; }
+  .tree .file{ padding-left:26px; opacity:.72; }
+  .tree .act{ background: rgba(95,168,160,.16); opacity:1; font-weight:500; }
+  .app--light .tree .act{ background: rgba(36,128,119,.11); }
+  .tri{ width:8px; height:8px; border-right:1.4px solid currentColor; border-bottom:1.4px solid currentColor;
+        transform: rotate(45deg); opacity:.5; display:inline-block; }
+
+  .side__foot{ height:30px; display:flex; align-items:center; padding:0 14px; font-size:11px;
+               opacity:.55; border-top:1px solid rgba(255,255,255,.055); margin-top:auto; position:relative; z-index:1; }
+  .app--light .side__foot{ border-top-color: rgba(0,0,0,.065); }
+
+  /* ---------- 编辑区 ---------- */
+  .crumb{ height:30px; display:flex; align-items:center; gap:6px; padding:0 22px; font-size:11px;
+          opacity:.55; border-bottom:1px solid rgba(255,255,255,.045); }
+  .app--light .crumb{ border-bottom-color: rgba(0,0,0,.055); }
+  .canvas{ flex:1; padding:24px 30px; overflow:hidden; }
+  .col{ max-width:520px; margin:0 auto; }
+  .h1{ font-size:22px; font-weight:500; line-height:1.35; margin:0 0 12px; }
+  .h2{ font-size:15px; font-weight:500; margin:20px 0 8px; }
+  .p{ font-size:13.5px; line-height:1.78; margin:0 0 14px; opacity:.86; }
+  .code{ border-radius:8px; overflow:hidden; margin:14px 0;
+         background: rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.06); }
+  .app--light .code{ background:#F3F5F3; border-color: rgba(0,0,0,.07); }
+  .code__bar{ height:26px; display:flex; align-items:center; padding:0 12px; font-size:11px; opacity:.5;
+              border-bottom:1px solid rgba(255,255,255,.05); }
+  .app--light .code__bar{ border-bottom-color: rgba(0,0,0,.05); }
+  .code pre{ margin:0; padding:11px 13px; font-family:var(--font-mono); font-size:12px; line-height:1.65; }
+  .k{ color:#8FB8D8; } .app--light .k{ color:#8250DF; }
+  .s{ color:#9BD4A4; } .app--light .s{ color:#0A7C5A; }
+  .f{ color:#A9C7E8; } .app--light .f{ color:#0550AE; }
+  .quote{ margin:16px 0; padding:2px 0 2px 14px; border-left:2px solid #5FA8A0; font-size:13px; line-height:1.7; opacity:.66; }
+  .app--light .quote{ border-left-color:#248077; }
+
+  /* ---------- 状态栏 ---------- */
+  .status{ height:28px; display:flex; align-items:center; justify-content:space-between; padding:0 14px;
+           font-size:11px; opacity:.62; border-top:1px solid rgba(255,255,255,.055); position:relative; z-index:1; }
+  .app--light .status{ border-top-color: rgba(0,0,0,.065); }
+  .status .grp{ display:flex; gap:14px; align-items:center; }
+  .dot{ width:6px; height:6px; border-radius:50%; background:#4EC9A0; display:inline-block; margin-right:5px; }
+
+  /* ---------- 玻璃 ---------- */
+  .glass-host{ position:relative; }
+  .glass{
+    position:absolute; top:34px; left:50%; transform:translateX(-50%);
+    width:430px; border-radius:12px; overflow:hidden;
+    background: rgba(252,252,251,.62);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border:1px solid rgba(255,255,255,.55);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 18px 48px rgba(20,40,36,.20);
+  }
+  .glass--dark{
+    background: rgba(32,37,38,.66);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border:1px solid rgba(255,255,255,.09);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 18px 48px rgba(0,0,0,.38);
+  }
+  .glass__in{ padding:9px 12px; font-size:14px; display:flex; align-items:center; gap:9px;
+              border-bottom:1px solid rgba(0,0,0,.06); color:#1B1D1C; }
+  .glass--dark .glass__in{ border-bottom-color: rgba(255,255,255,.07); color:#E8E9E7; }
+  .glass__caret{ width:2px; height:15px; background:#248077; border-radius:1px; }
+  .glass--dark .glass__caret{ background:#5FA8A0; }
+  .glass__row{ padding:8px 12px; font-size:12.5px; display:flex; align-items:center; gap:9px; color:#3D4341; }
+  .glass--dark .glass__row{ color:#C4C9C7; }
+  .glass__row.on{ background: rgba(36,128,119,.10); color:#1B1D1C; }
+  .glass--dark .glass__row.on{ background: rgba(95,168,160,.16); color:#E8E9E7; }
+  .glass__hint{ margin-left:auto; font-size:11px; opacity:.5; }
+  .glass__foot{ padding:7px 12px; font-size:11px; opacity:.5; border-top:1px solid rgba(0,0,0,.05);
+                display:flex; gap:12px; color:#1B1D1C; }
+  .glass--dark .glass__foot{ border-top-color: rgba(255,255,255,.06); color:#E8E9E7; }
+
+  /* ---------- 说明卡 ---------- */
+  .note{ border-radius:10px; padding:18px 20px; font-size:13px; line-height:1.8;
+         background: rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.07); color:#B9BFBD; }
+  .note b{ color:#E8E9E7; font-weight:500; }
+  .note ul{ margin:10px 0 0; padding-left:18px; }
+  .note li{ margin-bottom:6px; }
+
+  .swatch-row{ display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .sw{ border-radius:8px; padding:10px 12px; min-width:118px; border:1px solid rgba(255,255,255,.09); }
+  .sw__bar{ height:22px; border-radius:5px; margin-bottom:8px; border:1px solid rgba(255,255,255,.10); }
+  .sw__n{ font-size:12px; font-weight:500; }
+  .sw__h{ font-size:11px; opacity:.55; font-family:var(--font-mono); margin-top:2px; }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="page-title">玉质主题 · 材质预览</h1>
+  <p class="page-sub">
+    框架层用玉质与玻璃表达深度，内容层保持纯净实色。编辑区不做任何纹理与渐变——它要陪你几个小时，
+    任何材质都会变成视觉噪音，并且会破坏"所见即所得导出"的一致性。
+  </p>
+
+  <!-- 深色 墨玉 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-title">深色 · 墨玉</span>
+      <span class="sec-note">侧栏底色 #23292B，叠加顶部微高光 + 左上青色透光 + 极细噪点</span>
+    </div>
+    <p class="sec-desc">
+      玉的关键不是绿，而是<b>温润</b>：光进去以后被散射开，所以颜色不均匀、边缘略亮、内部有絮状层次。
+      深色下用墨玉——深青灰底，只在左上和右下各留一团极淡的青色透光。
+    </p>
+
+    <div class="app">
+      <div class="bar jade jade-dark">
+        <span class="bar__name">electron-架构</span><span class="bar__ext">.md</span>
+        <span class="bar__spacer"></span>
+        <div class="seg"><span class="on">所见即所得</span><span class="off">源码</span></div>
+        <div class="win"><i></i><i></i><i></i></div>
+      </div>
+
+      <div class="app__body">
+        <aside class="side jade jade-dark">
+          <div class="side__pad">
+            <div class="pick"><span>我的笔记库</span><span class="tri" style="transform:rotate(-135deg)"></span></div>
+            <div class="srch"><span>搜索</span><span class="kbd">Ctrl K</span></div>
+          </div>
+          <div class="lbl">文件</div>
+          <div class="tree">
+            <div class="folder"><span class="tri"></span>技术笔记</div>
+            <div class="file act">electron-架构.md</div>
+            <div class="file">vite-版本锁定.md</div>
+            <div class="file">prosemirror-节点.md</div>
+            <div class="folder" style="margin-top:3px"><span class="tri"></span>随笔</div>
+            <div class="file">读书记.md</div>
+          </div>
+          <div class="side__foot">128 篇文档</div>
+        </aside>
+
+        <main class="app__main ed-dark">
+          <div class="crumb"><span>我的笔记库</span><span>/</span><span>技术笔记</span><span>/</span><span>electron-架构.md</span></div>
+          <div class="canvas">
+            <div class="col">
+              <div class="h1">Electron 进程模型</div>
+              <p class="p">Electron 应用由主进程、预加载脚本与渲染进程三类构成。理解它们的权限边界，是设计 IPC 通道的前提。</p>
+              <div class="h2">主进程</div>
+              <p class="p">每个应用有且仅有一个主进程，拥有完整的 Node.js 权限，负责窗口生命周期与全部系统级操作。</p>
+              <div class="code">
+                <div class="code__bar">TypeScript</div>
+<pre><span class="k">const</span> win = <span class="k">new</span> <span class="f">BrowserWindow</span>({
+  webPreferences: {
+    contextIsolation: <span class="s">true</span>,
+    nodeIntegration: <span class="s">false</span>,
+  },
+})</pre>
+              </div>
+              <div class="quote">注意：图床密钥必须留在主进程。打包后的渲染层脚本可被轻易反编译。</div>
+              <div class="h2">渲染进程</div>
+              <p class="p">每个窗口对应一个独立的渲染进程，运行在 Chromium 沙箱中，不应直接接触文件系统。</p>
+            </div>
+          </div>
+        </main>
+
+        <aside class="side side--r jade jade-dark">
+          <div class="crumb" style="border-bottom:1px solid rgba(255,255,255,.05);padding:0 14px">大纲</div>
+          <div class="tree" style="padding-top:8px">
+            <div style="padding-left:10px">Electron 进程模型</div>
+            <div class="act" style="padding-left:24px">主进程</div>
+            <div class="file" style="padding-left:24px">渲染进程</div>
+            <div class="file" style="padding-left:24px">IPC 通道设计</div>
+            <div class="file" style="padding-left:34px">安全基线</div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="status jade jade-dark">
+        <div class="grp"><span>1,284 字</span><span>约 5 分钟</span></div>
+        <div class="grp"><span><span class="dot"></span>已保存</span><span>行 42, 列 8</span><span>UTF-8</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 浅色 羊脂玉 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-title">浅色 · 羊脂玉</span>
+      <span class="sec-note">侧栏底色 #EFF2F0，编辑区 #FCFCFB（微暖白，不是纯白）</span>
+    </div>
+    <p class="sec-desc">
+      羊脂玉的特征是<b>暖白偏一点点青</b>，不是冷白。所以编辑区用 #FCFCFB 而不是 #FFFFFF——纯白在长时间阅读下偏刺眼。
+      侧栏比编辑区略深一点，让内容区"浮"起来。
+    </p>
+
+    <div class="app app--light">
+      <div class="bar jade jade-light">
+        <span class="bar__name">electron-架构</span><span class="bar__ext">.md</span>
+        <span class="bar__spacer"></span>
+        <div class="seg"><span class="on">所见即所得</span><span class="off">源码</span></div>
+        <div class="win"><i></i><i></i><i></i></div>
+      </div>
+
+      <div class="app__body">
+        <aside class="side jade jade-light">
+          <div class="side__pad">
+            <div class="pick"><span>我的笔记库</span><span class="tri" style="transform:rotate(-135deg)"></span></div>
+            <div class="srch"><span>搜索</span><span class="kbd">Ctrl K</span></div>
+          </div>
+          <div class="lbl">文件</div>
+          <div class="tree">
+            <div class="folder"><span class="tri"></span>技术笔记</div>
+            <div class="file act">electron-架构.md</div>
+            <div class="file">vite-版本锁定.md</div>
+            <div class="file">prosemirror-节点.md</div>
+            <div class="folder" style="margin-top:3px"><span class="tri"></span>随笔</div>
+            <div class="file">读书记.md</div>
+          </div>
+          <div class="side__foot">128 篇文档</div>
+        </aside>
+
+        <main class="app__main ed-light">
+          <div class="crumb"><span>我的笔记库</span><span>/</span><span>技术笔记</span><span>/</span><span>electron-架构.md</span></div>
+          <div class="canvas">
+            <div class="col">
+              <div class="h1">Electron 进程模型</div>
+              <p class="p">Electron 应用由主进程、预加载脚本与渲染进程三类构成。理解它们的权限边界，是设计 IPC 通道的前提。</p>
+              <div class="h2">主进程</div>
+              <p class="p">每个应用有且仅有一个主进程，拥有完整的 Node.js 权限，负责窗口生命周期与全部系统级操作。</p>
+              <div class="code">
+                <div class="code__bar">TypeScript</div>
+<pre><span class="k">const</span> win = <span class="k">new</span> <span class="f">BrowserWindow</span>({
+  webPreferences: {
+    contextIsolation: <span class="s">true</span>,
+    nodeIntegration: <span class="s">false</span>,
+  },
+})</pre>
+              </div>
+              <div class="quote">注意：图床密钥必须留在主进程。打包后的渲染层脚本可被轻易反编译。</div>
+              <div class="h2">渲染进程</div>
+              <p class="p">每个窗口对应一个独立的渲染进程，运行在 Chromium 沙箱中，不应直接接触文件系统。</p>
+            </div>
+          </div>
+        </main>
+
+        <aside class="side side--r jade jade-light">
+          <div class="crumb" style="border-bottom:1px solid rgba(0,0,0,.05);padding:0 14px">大纲</div>
+          <div class="tree" style="padding-top:8px">
+            <div style="padding-left:10px">Electron 进程模型</div>
+            <div class="act" style="padding-left:24px">主进程</div>
+            <div class="file" style="padding-left:24px">渲染进程</div>
+            <div class="file" style="padding-left:24px">IPC 通道设计</div>
+            <div class="file" style="padding-left:34px">安全基线</div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="status jade jade-light">
+        <div class="grp"><span>1,284 字</span><span>约 5 分钟</span></div>
+        <div class="grp"><span><span class="dot"></span>已保存</span><span>行 42, 列 8</span><span>UTF-8</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 玻璃 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-title">玻璃 · 浮层特写</span>
+      <span class="sec-note">命令面板，实时背景模糊 blur(28px) + 饱和度提升 + 1px 高光边</span>
+    </div>
+    <p class="sec-desc">
+      玻璃和玉的区别在于<b>透视而非散射</b>：玉是"光进去散开"，玻璃是"背后的东西透过来"。
+      所以玻璃只在小面积浮层上用——它需要有东西可透才有意义，也才值得付性能代价。
+    </p>
+
+    <div class="glass-host">
+      <div class="app app--light">
+        <div class="bar jade jade-light">
+          <span class="bar__name">electron-架构</span><span class="bar__ext">.md</span>
+          <span class="bar__spacer"></span>
+          <div class="seg"><span class="on">所见即所得</span><span class="off">源码</span></div>
+          <div class="win"><i></i><i></i><i></i></div>
+        </div>
+        <div class="app__body" style="height:300px">
+          <aside class="side jade jade-light">
+            <div class="side__pad">
+              <div class="pick"><span>我的笔记库</span><span class="tri" style="transform:rotate(-135deg)"></span></div>
+              <div class="srch"><span>搜索</span><span class="kbd">Ctrl K</span></div>
+            </div>
+            <div class="lbl">文件</div>
+            <div class="tree">
+              <div class="folder"><span class="tri"></span>技术笔记</div>
+              <div class="file act">electron-架构.md</div>
+              <div class="file">vite-版本锁定.md</div>
+              <div class="file">prosemirror-节点.md</div>
+            </div>
+          </aside>
+          <main class="app__main ed-light">
+            <div class="crumb"><span>技术笔记</span><span>/</span><span>electron-架构.md</span></div>
+            <div class="canvas">
+              <div class="col">
+                <div class="h1">Electron 进程模型</div>
+                <p class="p">应用由主进程、预加载脚本与渲染进程三类构成。理解它们的权限边界，是设计 IPC 通道的前提。</p>
+                <div class="h2">主进程</div>
+                <p class="p">每个应用有且仅有一个主进程，拥有完整的 Node.js 权限，负责窗口生命周期与全部系统级操作。</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <div class="glass">
+        <div class="glass__in"><span class="glass__caret"></span>切换到源码模式</div>
+        <div class="glass__row on"><span>切换编辑模式</span><span class="glass__hint">Ctrl /</span></div>
+        <div class="glass__row"><span>导出为 HTML</span><span class="glass__hint">Ctrl E</span></div>
+        <div class="glass__row"><span>在笔记库中搜索</span><span class="glass__hint">Ctrl K</span></div>
+        <div class="glass__foot"><span>↑↓ 选择</span><span>Enter 执行</span><span>Esc 关闭</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 玻璃 深色版 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-title">玻璃 · 深色版</span>
+      <span class="sec-note">同一套规则，深色下降低不透明度、提高边缘高光</span>
+    </div>
+    <div class="glass-host">
+      <div class="app">
+        <div class="bar jade jade-dark">
+          <span class="bar__name">electron-架构</span><span class="bar__ext">.md</span>
+          <span class="bar__spacer"></span>
+          <div class="seg"><span class="on">所见即所得</span><span class="off">源码</span></div>
+          <div class="win"><i></i><i></i><i></i></div>
+        </div>
+        <div class="app__body" style="height:270px">
+          <aside class="side jade jade-dark">
+            <div class="side__pad">
+              <div class="pick"><span>我的笔记库</span><span class="tri" style="transform:rotate(-135deg)"></span></div>
+              <div class="srch"><span>搜索</span><span class="kbd">Ctrl K</span></div>
+            </div>
+            <div class="lbl">文件</div>
+            <div class="tree">
+              <div class="folder"><span class="tri"></span>技术笔记</div>
+              <div class="file act">electron-架构.md</div>
+              <div class="file">vite-版本锁定.md</div>
+            </div>
+          </aside>
+          <main class="app__main ed-dark">
+            <div class="crumb"><span>技术笔记</span><span>/</span><span>electron-架构.md</span></div>
+            <div class="canvas">
+              <div class="col">
+                <div class="h1">Electron 进程模型</div>
+                <p class="p">应用由主进程、预加载脚本与渲染进程三类构成。理解它们的权限边界，是设计 IPC 通道的前提。</p>
+                <div class="h2">主进程</div>
+                <p class="p">每个应用有且仅有一个主进程，拥有完整的 Node.js 权限。</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+      <div class="glass glass--dark">
+        <div class="glass__in"><span class="glass__caret"></span>切换到源码模式</div>
+        <div class="glass__row on"><span>切换编辑模式</span><span class="glass__hint">Ctrl /</span></div>
+        <div class="glass__row"><span>导出为 HTML</span><span class="glass__hint">Ctrl E</span></div>
+        <div class="glass__row"><span>在笔记库中搜索</span><span class="glass__hint">Ctrl K</span></div>
+        <div class="glass__foot"><span>↑↓ 选择</span><span>Enter 执行</span><span>Esc 关闭</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 色板 -->
+  <section class="sec">
+    <div class="sec-head"><span class="sec-title">材质色板</span></div>
+    <div class="swatch-row">
+      <div class="sw">
+        <div class="sw__bar" style="background:linear-gradient(160deg,#2B3235,#23292B)"></div>
+        <div class="sw__n">墨玉 · 深</div><div class="sw__h">#23292B</div>
+      </div>
+      <div class="sw">
+        <div class="sw__bar" style="background:#1C1E1F"></div>
+        <div class="sw__n">编辑区 · 深</div><div class="sw__h">#1C1E1F</div>
+      </div>
+      <div class="sw">
+        <div class="sw__bar" style="background:#5FA8A0"></div>
+        <div class="sw__n">青瓷强调 · 深</div><div class="sw__h">#5FA8A0 · 6.1:1</div>
+      </div>
+      <div class="sw">
+        <div class="sw__bar" style="background:linear-gradient(160deg,#F7F9F7,#EFF2F0)"></div>
+        <div class="sw__n">羊脂玉 · 浅</div><div class="sw__h">#EFF2F0</div>
+      </div>
+      <div class="sw">
+        <div class="sw__bar" style="background:#FCFCFB;border-color:rgba(0,0,0,.14)"></div>
+        <div class="sw__n">编辑区 · 浅</div><div class="sw__h">#FCFCFB</div>
+      </div>
+      <div class="sw">
+        <div class="sw__bar" style="background:#248077"></div>
+        <div class="sw__n">青瓷强调 · 浅</div><div class="sw__h">#248077 · 4.6:1</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 约束 -->
+  <section class="sec">
+    <div class="sec-head"><span class="sec-title">必须知道的三个技术约束</span></div>
+    <div class="note">
+      <b>1. 窗口级材质跨平台不一致。</b>
+      让侧边栏真的透出桌面壁纸，需要系统 API：macOS 用 <code>vibrancy</code>，Windows 11 用
+      <code>backgroundMaterial: 'mica' | 'acrylic'</code>。<b>Windows 10 及以下不支持，会自动降级为实色。</b>
+      Electron 44 两者都支持，但我们必须接受"Mac 上更透，Win10 上是实色"这个现实。
+      <ul>
+        <li><b>2. 窗口内浮层用 <code>backdrop-filter</code> 就够</b>，但它只能模糊 DOM 内的元素，透不出桌面。</li>
+        <li><b>3. 性能</b>：<code>backdrop-filter</code> 在滚动和动画时开销明显。所以侧边栏用<b>静态玉质</b>
+            （渐变 + 噪点预渲染，零运行时开销），只有小面积浮层才用实时模糊。这是本方案把两者分开的核心原因。</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
