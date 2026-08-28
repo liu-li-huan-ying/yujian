@@ -369,10 +369,14 @@
 
 ### 5.11 统一玻璃材质（所有浮层）
 
-* **原则**：标题栏下拉（`TitleMenu`）、右键菜单（`ContextMenu`）、帮助 / 偏好 / 外观面板、编辑区 slash 菜单**共用同一套玻璃配方**，单一事实来源在 `tokens.css` 的 `.glass`。
+* **原则**：标题栏下拉（`TitleMenu`）、右键菜单（`ContextMenu`）、帮助 / 偏好 / 外观面板、**编辑区内所有 Crepe 浮层**共用同一套玻璃配方，单一事实来源在 `tokens.css` 的 `.glass`。
 * **明暗联动**：`.glass` 默认暗色（墨玉半透 `rgba(32,37,38,.66)` + 白描边 + 投影）；`[data-skin][data-mode='light'] .glass` 与 `.glass[data-mode='light']`（面板预览用）切换为羊脂玉半透 `rgba(245,248,246,.78)` + 墨调描边。
 * **修复的割裂**：早期 `.glass` 仅写死暗色，亮色下标题栏下拉 / 右键菜单仍是暗玻璃，而关于面板自己覆写了亮玻璃，三者质感不一致。现统一后，所有浮层在任意皮肤 / 明暗下都同款。
-* 编辑区 slash 菜单（`.milkdown-slash-menu`）原本是 Crepe 实心表面，现也接入同一玻璃配方（`src/styles/editor.css`）。
+* **编辑区浮层全覆盖**：Crepe 默认把浮层做成实心 `--crepe-color-surface`，现统一玻璃化（`src/styles/editor.css`）：
+  * 块操作「+」菜单 → 复用 slash 菜单已玻璃化；
+  * 选取气泡工具条 `.milkdown-toolbar`（加粗 / 斜体 / 链接…）；
+  * 链接预览浮层 `.milkdown-link-preview > .link-preview` 与链接编辑浮层 `.milkdown-link-edit > .link-edit`；
+  * 以上全部用与 `.glass` 完全一致的暗 / 亮背景、模糊、描边、投影，确保与标题栏下拉、右键菜单、关于面板零差异。
 
 ***
 
