@@ -359,6 +359,14 @@
 * 文案走 i18n（`t.help`），中英文同步。
 * 组件：`src/components/HelpPanel.vue`。
 
+### 5.10 块操作手柄（一致性左轨）
+
+* **问题**：Crepe 用 floating-ui 按「块自身左缘」动态定位块手柄（`+` 增加 / `⠿` 拖拽）并带 `flip()` 中间件。结果：窄窗时块左缘贴边 → 手柄 `flip` 到**右侧**；列表等缩进块 → 手柄右移，整列手柄参差错落。
+* **方案**：用 `!important` 覆盖 Crepe 写入的 `left` 内联样式，把手柄钉死在「内容列左缘外侧的固定沟槽」（`left: max(10px, calc(50% - var(--w-column)/2 - 40px))`），只保留 floating-ui 计算的动态 `top` 跟随当前块 —— 形成一条像 Notion / Typora 的**一致左轨**，再也不会忽左忽右。
+* **视觉**：手柄重做为玉质玻璃药丸（圆角 `var(--radius-md)` + `var(--hue-surface)` 实底 + 发丝边 + `var(--hue-shadow-1)` 投影），图标默认 `--hue-text-3`、悬停 / 激活变 `--hue-accent`。
+* **配套**：编辑区左内边距由 30px 增到 56px，给窄窗下的手柄留白，避免压到正文。
+* 实现：`src/styles/editor.css` 的 `.milkdown .milkdown-block-handle` 段。
+
 ***
 
 ## 6. 图片资源方案（UI 落地）
