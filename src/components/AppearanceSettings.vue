@@ -247,11 +247,6 @@ function selectMode(key: ModeKey): void {
 }
 
 .panel[data-mode='light'] {
-  background: rgba(245, 248, 246, 0.9);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  backdrop-filter: blur(30px) saturate(115%);
-  -webkit-backdrop-filter: blur(30px) saturate(115%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 16px 46px rgba(31, 41, 39, 0.16);
+  /* 玻璃材质与描边由全局 .glass 统一提供，此处无需重复定义 */
 }
 </style>

@@ -44,9 +44,9 @@
   line-height: 1.75;
   color: var(--hue-text-1);
   padding: 24px 30px 45vh;
-  /* 左侧预留 56px 沟槽：容纳块操作手柄（增加/拖拽），
-     窄窗时手柄也不会压到正文；宽窗时正文仍居中于内容列。 */
-  padding-left: 56px;
+  /* 左侧预留 84px 沟槽：容纳块操作手柄（约 64px 宽）并留 12px 呼吸缝，
+     窄窗时手柄也不压到正文；宽窗时正文仍居中于内容列。 */
+  padding-left: 84px;
   min-height: 100%;
   outline: none;
   caret-color: var(--hue-accent);
@@ -241,6 +241,11 @@
 .milkdown .milkdown-table-block td {
   border: 1px solid var(--hue-border-subtle);
   padding: 8px 13px;
+  /* 修复：表格为 table-layout:fixed，长串（加粗/强调等无空格 token）会
+     撑破单元格、与左右单元格叠字。anywhere 让任何长串在单元格内断行。 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 /* 去掉相邻单元格的重复发丝边，只保留单向网格线 */
 .milkdown .milkdown-table-block th + th,
@@ -301,13 +306,15 @@
   background: var(--hue-active);
 }
 
-/* ── 块操作手柄（增加块 / 拖拽）：统一固定左侧沟槽，消除忽左忽右 ──
-   Crepe 用 floating-ui 按「块自身左缘」动态定位并带 flip() 中间件：
-   窄窗时块左缘贴边 → 翻到右侧；列表等缩进块 → 把手右移，视觉参差。
-   这里用 !important 覆盖其内联 left，把把手钉在「内容列左缘外侧的固定沟槽」，
-   仅保留动态 top 跟随当前块，得到像 Notion/Typora 的一致左轨。 */
+/* ── 块操作手柄（增加块 / 拖拽）：Notion 式一致左轨，绝不压字 ──
+   Crepe 用 floating-ui 以 placement:'left' 把手柄放在「块自身左缘左侧」
+   （带 flip() 中间件，但我们的沟槽宽度始终够用，故不会右翻）。
+   这里不再用全局 left 覆盖（那会忽略 56px/30px 的非对称内边距，
+   把手落到文字上），而是保留 floating-ui 算出的块左缘，仅用 transform
+   向左挪 12px 形成与正文的呼吸缝。缩进块（列表）的手柄随之右移，
+   始终在块左缘左侧 —— 视觉一致、永不遮字。 */
 .milkdown .milkdown-block-handle {
-  left: max(10px, calc(50% - var(--w-column) / 2 - 40px)) !important;
+  transform: translateX(-12px) !important;
   gap: 2px;
   padding: 3px;
   border-radius: var(--radius-md);
@@ -341,10 +348,21 @@
   fill: var(--hue-accent);
 }
 
-/* ── 浮层菜单（slash / 块菜单）补一道描边，避免悬浮发虚 ── */
+/* ── 编辑区 slash 菜单：与标题栏下拉 / 右键菜单同一套玻璃材质 ── */
 .milkdown .milkdown-slash-menu {
-  border: 1px solid var(--hue-border-subtle);
+  background: rgba(32, 37, 38, 0.66);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 48px rgba(0, 0, 0, 0.38);
 }
+[data-skin][data-mode='light'] .milkdown .milkdown-slash-menu {
+  background: rgba(245, 248, 246, 0.78);
+  border: 1px solid rgba(20, 30, 28, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 18px 48px rgba(20, 30, 28, 0.18);
+}
+/* 菜单项 hover/选中沿用玉质令牌（Crepe 默认用 --crepe-color-*，已重映射） */
 
 /* ── 源码模式：CodeMirror 套用同一套令牌 ───────
    注意：.cm-editor 只限 .source-host 内生效（height:100% + 45vh 底部留白），

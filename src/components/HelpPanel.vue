@@ -304,16 +304,8 @@ const groups = computed(() => [
   font-family: var(--font-mono);
 }
 
-/* 浅色模式：面板改用柔和浅色玻璃 */
+/* 浅色模式：遮罩层略调淡（玻璃材质本身由 .glass 统一提供） */
 .overlay[data-mode='light'] {
   background: rgba(30, 36, 38, 0.18);
-}
-
-.panel[data-mode='light'] {
-  background: rgba(245, 248, 246, 0.9);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  backdrop-filter: blur(30px) saturate(115%);
-  -webkit-backdrop-filter: blur(30px) saturate(115%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 16px 46px rgba(31, 41, 39, 0.16);
 }
 </style>
