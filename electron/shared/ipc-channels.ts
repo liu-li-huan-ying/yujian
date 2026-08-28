@@ -115,6 +115,10 @@ export interface SessionState {
   sidebarWidth: number
   /** 启动偏好：恢复上次会话 / 每次启动显示全新页面 */
   startupMode: StartupMode
+  /** 左侧笔记库面板是否可见（默认显示） */
+  sidebarVisible: boolean
+  /** 右侧大纲面板是否可见（默认显示） */
+  outlineVisible: boolean
 }
 
 export const DEFAULT_SESSION: SessionState = {
@@ -122,7 +126,9 @@ export const DEFAULT_SESSION: SessionState = {
   activePath: null,
   mode: 'wysiwyg',
   sidebarWidth: 224,
-  startupMode: 'restore'
+  startupMode: 'restore',
+  sidebarVisible: true,
+  outlineVisible: true
 }
 
 /* ── 导出（HTML / PDF）────────────────────────── */

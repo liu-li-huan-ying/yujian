@@ -35,7 +35,9 @@ function sanitize(raw: unknown): SessionState {
       typeof width === 'number' && Number.isFinite(width)
         ? Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width))
         : DEFAULT_SESSION.sidebarWidth,
-    startupMode: (p.startupMode === 'fresh' ? 'fresh' : 'restore') as StartupMode
+    startupMode: (p.startupMode === 'fresh' ? 'fresh' : 'restore') as StartupMode,
+    sidebarVisible: p.sidebarVisible !== false,
+    outlineVisible: p.outlineVisible !== false
   }
 }
 
