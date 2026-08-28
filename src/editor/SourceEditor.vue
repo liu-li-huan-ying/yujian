@@ -168,7 +168,15 @@ function revealLine(line: number): void {
   view.focus()
 }
 
-defineExpose({ revealLine })
+/** 按比例（0~1，文档纵向阅读进度）定位源码滚动位置，用于切回源码时对齐所见即所得视口 */
+function scrollToRatio(ratio: number): void {
+  if (!view) return
+  const scroller = view.scrollDOM
+  const max = scroller.scrollHeight - scroller.clientHeight
+  scroller.scrollTop = Math.max(0, Math.min(1, ratio)) * max
+}
+
+defineExpose({ revealLine, scrollToRatio })
 </script>
 
 <template>

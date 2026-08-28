@@ -63,7 +63,7 @@ ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" node node_modules/elec
 
 - `docs/ARCHITECTURE.md` — 架构设计、模块划分、9 阶段路线图
 - `docs/UI-DESIGN.md` — 设计令牌、组件规范、材质系统、皮肤架构
-- `docs/preview/theme-jade.html` — 玉质主题效果预览（浏览器直接打开）
+- `docs/preview/theme-yujian.html` — 玉质主题效果预览（浏览器直接打开）
 
 ## 路线图
 

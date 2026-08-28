@@ -256,6 +256,8 @@ const localeLabel = computed(() => (getLocale() === 'zh-CN' ? '中' : 'EN'))
 
 function toggleLocale(): void {
   const next: LocaleKey = getLocale() === 'zh-CN' ? 'en-US' : 'zh-CN'
+  // 语言切换会重挂编辑器实例（:key），先保存当前滚动位置，重挂后由 onReady 恢复
+  host.value?.captureScroll()
   setLocale(next)
   // 自增 key → Vue 销毁旧 MilkdownEditor / 挂载新实例，
   // 构造期固化的标签（BlockEdit 等）自动按新语言生成

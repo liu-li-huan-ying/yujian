@@ -37,6 +37,31 @@ const activePane = computed(() =>
   mode.value === 'wysiwyg' ? wysiwygPane.value : sourcePane.value
 )
 
+/** 切换语言/模式时保存并恢复所见即所得滚动位置（避免切走后回顶） */
+const wysiwygScroll = ref(0)
+
+function wysiwygEl(): HTMLElement | null {
+  return wysiwygPane.value?.querySelector('.milkdown') as HTMLElement | null
+}
+
+/** 当前所见即所得视口中心的文档纵向进度（0~1），用于切到源码时按比例对齐 */
+function wysiwygRatio(): number {
+  const el = wysiwygEl()
+  if (!el || el.scrollHeight <= 0) return 0
+  return (el.scrollTop + el.clientHeight * 0.5) / el.scrollHeight
+}
+
+/** 保存当前滚动位置（语言切换前由父组件调用；切模式时内部调用） */
+function captureScroll(): void {
+  wysiwygScroll.value = wysiwygEl()?.scrollTop ?? 0
+}
+
+/** 把保存的位置恢复到所见即所得滚动容器（重挂/重渲染后调用） */
+function restoreScroll(): void {
+  const el = wysiwygEl()
+  if (el) el.scrollTop = wysiwygScroll.value
+}
+
 /** 加载状态机：覆盖首次加载 / 切换文件 / 重新渲染（切回所见即所得） */
 type LoadStatus = 'idle' | 'loading' | 'error' | 'timeout'
 const loadStatus = ref<LoadStatus>('idle')
@@ -114,17 +139,23 @@ function switchTo(next: EditorMode): void {
   if (next === mode.value) return
 
   if (next === 'source') {
+    // 切到源码前保存所见即所得位置，并按视口中心比例对齐源码滚动（避免跳到源码头部）
+    captureScroll()
     milkdown.value?.setReadonly(true)
     mode.value = 'source'
+    requestAnimationFrame(() => source.value?.scrollToRatio(wysiwygRatio()))
   } else {
-    // 灌入源码文本并重新渲染：这一步对大文档有真实耗时，用进度条覆盖
+    // 切回所见即所得：内容在隐藏期保留滚动，重渲染(setMarkdown)会回顶，
+    // 因此先保存、重渲染后再恢复原位
+    captureScroll()
     startLoading()
     try {
       milkdown.value?.setMarkdown(fidelity.currentText.value)
       milkdown.value?.setReadonly(false)
       mode.value = 'wysiwyg'
-      // 让进度条至少绘制一帧再收起，保证「重新渲染」可见
+      // 让进度条至少绘制一帧，并恢复滚动位置
       requestAnimationFrame(() => {
+        restoreScroll()
         if (loadStatus.value === 'loading') stopLoading()
       })
     } catch (e) {
@@ -182,6 +213,8 @@ async function load(path: string): Promise<void> {
 
 function onReady(): void {
   ready.value = true
+  // 语言切换导致重挂后，恢复之前的滚动位置（避免回顶）
+  requestAnimationFrame(restoreScroll)
   // 语言切换导致重挂后，新实例默认 readonly=false；
   // 若当前在源码模式，需立即恢复只读（避免用户误编辑所见即所得实例）
   if (mode.value === 'source') {
@@ -245,6 +278,7 @@ defineExpose({
   save,
   load,
   switchTo,
+  captureScroll,
   revealLine,
   getHTML,
   publishImages,
