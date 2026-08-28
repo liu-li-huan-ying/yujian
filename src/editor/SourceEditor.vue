@@ -6,12 +6,90 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 
-const props = defineProps<{ modelValue: string }>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    /** 当前文档路径：决定 .assets 落盘位置 */
+    filePath?: string | null
+    /** 当前笔记库根：无文档时用于决定落盘位置 */
+    vaultPath?: string | null
+  }>(),
+  { filePath: null, vaultPath: null }
+)
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 
 const host = ref<HTMLDivElement | null>(null)
 let view: EditorView | null = null
 let applying = false
+
+/* ── 图片粘贴 / 拖入落盘 ───────────────────────── */
+
+function readFileAsBase64(file: File): Promise<{ base64: string; ext: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? '')
+      const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl)
+      const base64 = m ? m[2] : dataUrl.split(',')[1] ?? ''
+      const ext = extFromName(file.name) || extFromType(file.type) || 'png'
+      resolve({ base64, ext })
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+function extFromName(name: string): string {
+  const m = /\.([a-z0-9]+)$/i.exec(name)
+  return m ? m[1].toLowerCase() : ''
+}
+
+function extFromType(type: string): string {
+  const map: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/bmp': 'bmp',
+    'image/svg+xml': 'svg'
+  }
+  return map[type] ?? ''
+}
+
+/** 落盘单张图片，返回用于引用的相对路径 */
+async function saveImageFile(file: File): Promise<string> {
+  const { base64, ext } = await readFileAsBase64(file)
+  const saved = await window.api.saveAsset({
+    docPath: props.filePath,
+    vaultPath: props.vaultPath,
+    base64,
+    ext
+  })
+  return saved.relPath
+}
+
+/** 把若干图片文件落盘，并在光标处插入 Markdown 引用 */
+async function handleImageFiles(files: File[], editor: EditorView): Promise<void> {
+  const images = files.filter((f) => f.type.startsWith('image/'))
+  if (images.length === 0) return
+  try {
+    const refs = await Promise.all(
+      images.map(async (f) => {
+        const rel = await saveImageFile(f)
+        const alt = f.name.replace(/\.[^.]+$/, '')
+        return `![${alt}](${rel})`
+      })
+    )
+    const text = refs.join('\n') + '\n'
+    const head = editor.state.selection.main.head
+    editor.dispatch({
+      changes: { from: head, insert: text },
+      selection: { anchor: head + text.length }
+    })
+  } catch (e) {
+    console.error('图片保存失败', e)
+  }
+}
 
 onMounted(() => {
   if (!host.value) return
@@ -30,6 +108,27 @@ onMounted(() => {
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || applying) return
           emit('update:modelValue', update.state.doc.toString())
+        }),
+        // 粘贴 / 拖入图片：落盘到 .assets 并插入相对路径引用
+        EditorView.domEventHandlers({
+          paste(event, editor) {
+            const files = event.clipboardData?.files
+            if (files && files.length && Array.from(files).some((f) => f.type.startsWith('image/'))) {
+              event.preventDefault()
+              void handleImageFiles(Array.from(files), editor)
+              return true
+            }
+            return false
+          },
+          drop(event, editor) {
+            const files = event.dataTransfer?.files
+            if (files && files.length && Array.from(files).some((f) => f.type.startsWith('image/'))) {
+              event.preventDefault()
+              void handleImageFiles(Array.from(files), editor)
+              return true
+            }
+            return false
+          }
         })
       ]
     })

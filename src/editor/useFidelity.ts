@@ -50,6 +50,16 @@ export function useFidelity() {
     isDirty.value = false
   }
 
+  /**
+   * 外部整体替换内容（如图床发布后引用被改写为远程 URL）。
+   * 视为已编辑：标记为脏以便自动保存把它落盘。
+   */
+  function applyExternal(markdown: string): void {
+    rawText.value = markdown
+    docText.value = markdown
+    isDirty.value = true
+  }
+
   /** 当前应写入磁盘的内容 */
   const currentText = computed(() => (isDirty.value ? docText.value : rawText.value))
 
@@ -65,6 +75,7 @@ export function useFidelity() {
     loadFromDisk,
     markEdited,
     onSourceEdited,
-    afterSave
+    afterSave,
+    applyExternal
   }
 }

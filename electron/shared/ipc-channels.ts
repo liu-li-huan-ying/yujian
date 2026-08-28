@@ -35,7 +35,18 @@ export const IPC = {
 
   // 导出（渲染模式所见即所得 → HTML / PDF）
   EXPORT_HTML: 'export:html',
-  EXPORT_PDF: 'export:pdf'
+  EXPORT_PDF: 'export:pdf',
+
+  // 图片：粘贴/拖入落盘到文档同级 .assets
+  ASSET_SAVE: 'asset:save',
+
+  // 图床：配置读写（密钥只在主进程，safeStorage 加密）
+  IMGHOST_GET: 'imghost:get',
+  IMGHOST_SET: 'imghost:set',
+  // 图床：上传文档内本地图片，返回远程 URL（密钥不离开主进程）
+  IMGHOST_UPLOAD: 'imghost:upload',
+  // 图床：上传文档内全部本地图片并把 Markdown 引用改写为远程 URL
+  IMGHOST_PUBLISH: 'imghost:publish'
 } as const
 
 export interface WindowState {
@@ -127,6 +138,71 @@ export interface ExportResult {
   /** 失败时的错误信息 */
   error?: string
 }
+
+/* ── 图片落盘 ─────────────────────────────── */
+
+export interface SaveAssetPayload {
+  /** 当前文档路径（无则为 null，落到库根或临时目录） */
+  docPath: string | null
+  /** 当前笔记库根（无文档时用于决定落盘位置） */
+  vaultPath: string | null
+  /** 图片字节的 base64 */
+  base64: string
+  /** 扩展名（png/jpg/...，不含点） */
+  ext: string
+}
+
+export interface SavedAsset {
+  /** 磁盘绝对路径 */
+  absPath: string
+  /** 相对文档目录的路径（如 `笔记.assets/foo.png`） */
+  relPath: string
+}
+
+/* ── 图床 ─────────────────────────────────── */
+
+/** 图床配置（密钥不出现在此结构，由主进程单独加密存储） */
+export interface ImgHostConfig {
+  /** 提供方标识，如 smms */
+  provider: string
+  /** 展示用名称 */
+  name: string
+  /** 上传端点（SM.MS: https://sm.ms/api/v2/upload） */
+  endpoint: string
+  /** 自定义请求头（如 Authorization），值留空，真正密钥在主进程解密注入 */
+  tokenHeader: string
+}
+
+export interface ImgHostUploadItem {
+  /** 本地磁盘绝对路径 */
+  path: string
+  /** 用于回带对应关系的本地引用（相对或 file:// 绝对） */
+  ref: string
+}
+
+export interface ImgHostUploadResult {
+  ok: boolean
+  /** 每个本地引用的上传结果 */
+  items: Array<{ ref: string; url?: string; error?: string }>
+}
+
+/* ── 图床发布（上传 + 改写）────────────────────── */
+
+/** 上传文档内本地图片并把引用改写为远程 URL 的结果 */
+export interface PublishResult {
+  ok: boolean
+  /** 文档中没有可上传的本地图片 */
+  noImages?: boolean
+  /** 改写后的完整 Markdown（成功且有图片时返回） */
+  markdown?: string
+  /** 成功上传的张数 */
+  uploaded: number
+  /** 失败的张数 */
+  failed: number
+  /** 失败时的错误信息 */
+  error?: string
+}
+
 
 /** 侧边栏可调宽度范围，与 --w-sidebar 默认值呼应 */
 export const SIDEBAR_MIN = 180

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import EditorHost from './editor/EditorHost.vue'
+import ImgHostSettings from './components/ImgHostSettings.vue'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
@@ -170,6 +171,29 @@ function showToast(msg: string, type: 'ok' | 'err' | 'info' = 'info'): void {
   toastTimer = setTimeout(() => (toast.value = null), 2600)
 }
 
+/* ── 图床设置 / 上传 ── */
+
+const showImgHost = ref(false)
+
+function onImgHost(): void {
+  showImgHost.value = true
+}
+
+/** 图床弹窗里的「上传当前文档图片」：交给编辑器执行发布+重渲染+保存 */
+async function onPublishImages(): Promise<void> {
+  showImgHost.value = false
+  const res = await host.value?.publishImages()
+  if (!res) return
+  if (res.noImages) {
+    showToast('文档中没有本地图片', 'info')
+  } else if (!res.ok) {
+    showToast(`上传失败：${res.error ?? '未知错误'}`, 'err')
+  } else {
+    const failedText = res.failed > 0 ? `，${res.failed} 张失败` : ''
+    showToast(`已上传 ${res.uploaded} 张图片到图床${failedText}`, 'ok')
+  }
+}
+
 function baseName(path: string): string {
   return (path.split(/[\\/]/).pop() ?? 'document').replace(/\.(md|markdown)$/i, '')
 }
@@ -252,6 +276,7 @@ onBeforeUnmount(() => {
       @update:mode="requestedMode = $event"
       @export-html="doExport('html')"
       @export-pdf="doExport('pdf')"
+      @img-host="onImgHost"
     />
 
     <div class="body">
@@ -275,6 +300,7 @@ onBeforeUnmount(() => {
         <EditorHost
           ref="host"
           :file-path="filePath"
+          :vault-path="vaultPath"
           :requested-mode="requestedMode"
           @saved="lastSavedAt = Date.now()"
         />
@@ -304,6 +330,14 @@ onBeforeUnmount(() => {
         {{ toast.msg }}
       </div>
     </Transition>
+
+    <!-- 图床设置 / 上传弹窗 -->
+    <ImgHostSettings
+      v-if="showImgHost"
+      :has-doc="!!filePath"
+      @close="showImgHost = false"
+      @publish="onPublishImages"
+    />
 </template>
 
 <style scoped>

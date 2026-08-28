@@ -6,12 +6,19 @@ import {
   IPC,
   type ExportPayload,
   type ExportResult,
+  type ImgHostConfig,
+  type ImgHostUploadItem,
+  type PublishResult,
+  type SaveAssetPayload,
+  type SavedAsset,
   type SessionState,
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
 import { createDoc, createFolder, deleteItem, listTree, renameItem, searchVault, stopWatching, watchVault } from './vault'
 import { patchSession, readSession } from './session'
+import { saveAsset } from './assets'
+import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -180,6 +187,26 @@ function registerIpc(): void {
   )
 
   // ── 导出（HTML / PDF）──
+
+  ipcMain.handle(IPC.ASSET_SAVE, async (_event, payload: SaveAssetPayload): Promise<SavedAsset> =>
+    saveAsset(payload.docPath, payload.vaultPath, payload.base64, payload.ext)
+  )
+
+  ipcMain.handle(IPC.IMGHOST_GET, () => getImgHost())
+
+  ipcMain.handle(IPC.IMGHOST_SET, (_event, config: ImgHostConfig | null, token: string) =>
+    setImgHost(config, token)
+  )
+
+  ipcMain.handle(IPC.IMGHOST_UPLOAD, async (_event, items: ImgHostUploadItem[]) =>
+    uploadToImgHost(items)
+  )
+
+  ipcMain.handle(
+    IPC.IMGHOST_PUBLISH,
+    async (_event, markdown: string, docPath: string | null): Promise<PublishResult> =>
+      publishImages(markdown, docPath)
+  )
 
   ipcMain.handle(IPC.EXPORT_HTML, async (_event, payload: ExportPayload): Promise<ExportResult> => {
     const result = await dialog.showSaveDialog({

@@ -16,6 +16,7 @@ const emit = defineEmits<{
   (e: 'update:mode', value: EditorMode): void
   (e: 'export-html'): void
   (e: 'export-pdf'): void
+  (e: 'img-host'): void
 }>()
 
 const maximized = ref(false)
@@ -69,6 +70,12 @@ onBeforeUnmount(() => {
         @click="emit('export-pdf')"
       >
         PDF
+      </button>
+
+      <span class="divider" />
+
+      <button class="act" title="图床设置与图片上传" @click="emit('img-host')">
+        图床
       </button>
 
       <div class="seg">

@@ -10,6 +10,8 @@ export type EditorMode = 'wysiwyg' | 'source'
 
 const props = defineProps<{
   filePath: string | null
+  /** 当前笔记库根：无文档时决定图片落盘位置 */
+  vaultPath?: string | null
   /** 外部请求切换模式（如标题栏按钮、快捷键） */
   requestedMode?: EditorMode
 }>()
@@ -198,12 +200,47 @@ async function getHTML(): Promise<string> {
   return (await milkdown.value?.getHTML()) ?? ''
 }
 
+/**
+ * 上传文档内全部本地图片到图床，并把引用改写为远程 URL。
+ * 密钥只在主进程；这里只拿到改写后的 Markdown，应用到保真层后重渲染并保存。
+ */
+async function publishImages(): Promise<{
+  ok: boolean
+  noImages?: boolean
+  uploaded: number
+  failed: number
+  error?: string
+}> {
+  if (!props.filePath) {
+    return { ok: false, uploaded: 0, failed: 0, error: '请先保存文档后再上传图片' }
+  }
+  const text = fidelity.currentText.value
+  const res = await window.api.publishImages(text, props.filePath)
+  if (!res.ok) {
+    return { ok: false, uploaded: res.uploaded, failed: res.failed, error: res.error }
+  }
+  if (res.noImages) {
+    return { ok: true, noImages: true, uploaded: 0, failed: 0 }
+  }
+  if (res.markdown == null) {
+    return { ok: false, uploaded: res.uploaded, failed: res.failed, error: '改写结果缺失' }
+  }
+  // 应用到保真层：远程 URL 成为新真源，标记脏以触发自动保存
+  fidelity.applyExternal(res.markdown)
+  if (mode.value === 'wysiwyg') {
+    await milkdown.value?.setMarkdown(res.markdown)
+  }
+  scheduleSave()
+  return { ok: true, uploaded: res.uploaded, failed: res.failed }
+}
+
 defineExpose({
   save,
   load,
   switchTo,
   revealLine,
   getHTML,
+  publishImages,
   dirty,
   willNormalize,
   mode,
@@ -226,6 +263,8 @@ defineExpose({
       <MilkdownEditor
         ref="milkdown"
         :model-value="fidelity.currentText.value"
+        :file-path="props.filePath"
+        :vault-path="props.vaultPath"
         @update:model-value="onWysiwygUpdate"
         @ready="onReady"
       />
@@ -235,6 +274,8 @@ defineExpose({
       <SourceEditor
         ref="source"
         :model-value="fidelity.currentText.value"
+        :file-path="props.filePath"
+        :vault-path="props.vaultPath"
         @update:model-value="onSourceUpdate"
       />
     </div>

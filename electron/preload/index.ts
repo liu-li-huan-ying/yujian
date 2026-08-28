@@ -4,6 +4,12 @@ import {
   type ExportPayload,
   type ExportResult,
   type FileNode,
+  type ImgHostConfig,
+  type ImgHostUploadItem,
+  type ImgHostUploadResult,
+  type PublishResult,
+  type SaveAssetPayload,
+  type SavedAsset,
   type SearchFileResult,
   type SessionState,
   type VaultChange,
@@ -95,7 +101,31 @@ const api = {
     ipcRenderer.invoke(IPC.EXPORT_HTML, payload),
 
   exportPdf: (payload: ExportPayload): Promise<ExportResult> =>
-    ipcRenderer.invoke(IPC.EXPORT_PDF, payload)
+    ipcRenderer.invoke(IPC.EXPORT_PDF, payload),
+
+  // ── 图片落盘 ──
+
+  saveAsset: (payload: SaveAssetPayload): Promise<SavedAsset> =>
+    ipcRenderer.invoke(IPC.ASSET_SAVE, payload),
+
+  // ── 图床（密钥只在主进程）──
+
+  getImgHost: (): Promise<ImgHostConfig | null> =>
+    ipcRenderer.invoke(IPC.IMGHOST_GET),
+
+  /**
+   * 保存图床配置。token 为密钥明文，仅经此 IPC 传入主进程后由 safeStorage 加密落盘，
+   * 绝不回传渲染层、绝不出现在 ImgHostConfig（渲染层读到的配置不含密钥）。
+   */
+  setImgHost: (config: ImgHostConfig | null, token: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.IMGHOST_SET, config, token),
+
+  uploadToImgHost: (items: ImgHostUploadItem[]): Promise<ImgHostUploadResult> =>
+    ipcRenderer.invoke(IPC.IMGHOST_UPLOAD, items),
+
+  /** 上传文档内本地图片到图床，并把 Markdown 中的本地引用改写为远程 URL（密钥只在主进程） */
+  publishImages: (markdown: string, docPath: string | null): Promise<PublishResult> =>
+    ipcRenderer.invoke(IPC.IMGHOST_PUBLISH, markdown, docPath)
 }
 
 export type ElectronAPI = typeof api
