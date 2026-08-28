@@ -14,6 +14,11 @@ export const IPC = {
   VAULT_UNWATCH: 'vault:unwatch',
   VAULT_CHANGE: 'vault:change',
 
+  // 笔记库：文件树变更（新建文件夹 / 重命名 / 删除）
+  VAULT_CREATE_DIR: 'vault:createDir',
+  VAULT_RENAME: 'vault:rename',
+  VAULT_DELETE: 'vault:delete',
+
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
   SESSION_PATCH: 'session:patch',

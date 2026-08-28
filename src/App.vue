@@ -77,6 +77,22 @@ async function newDoc(): Promise<void> {
   await openPath(created)
 }
 
+/** 文件树里重命名了当前正在编辑的文档 → 同步活动路径，避免继续往旧路径保存 */
+function onRenamed(oldPath: string, newPath: string): void {
+  if (oldPath === filePath.value) {
+    filePath.value = newPath
+    void window.api.patchSession({ activePath: newPath })
+  }
+}
+
+/** 文件树里删除了当前正在编辑的文档 → 清空活动路径 */
+function onDeleted(path: string): void {
+  if (path === filePath.value) {
+    filePath.value = null
+    void window.api.patchSession({ activePath: null })
+  }
+}
+
 /* ── 外部改动同步 ── */
 
 let treeTimer: ReturnType<typeof setTimeout> | null = null
@@ -180,10 +196,14 @@ onBeforeUnmount(() => {
         :nodes="tree"
         :active-path="filePath"
         :width="sidebarWidth"
+        :refresh-tree="refreshTree"
+        :open-doc="openPath"
         @select="onSelect"
         @open-vault="openVault"
         @new-doc="newDoc"
         @update:width="sidebarWidth = $event"
+        @renamed="onRenamed"
+        @deleted="onDeleted"
       />
 
       <main class="editor">

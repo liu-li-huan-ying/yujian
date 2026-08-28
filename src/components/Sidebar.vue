@@ -6,12 +6,18 @@ import {
   type FileNode
 } from '../../electron/shared/ipc-channels'
 import FileTree from './FileTree.vue'
+import ContextMenu, { type MenuItem } from './ContextMenu.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 const props = defineProps<{
   vaultPath: string | null
   nodes: FileNode[]
   activePath: string | null
   width: number
+  /** 刷新文件树（App 持有真实实现，此处注入以便 await） */
+  refreshTree: () => Promise<void>
+  /** 在编辑器打开指定文档 */
+  openDoc: (path: string) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -19,15 +25,49 @@ const emit = defineEmits<{
   (e: 'open-vault'): void
   (e: 'new-doc'): void
   (e: 'update:width', width: number): void
+  /** 重命名了当前正在编辑的文档：让 App 同步活动路径 */
+  (e: 'renamed', oldPath: string, newPath: string): void
+  /** 删除了当前正在编辑的文档：让 App 清空活动路径 */
+  (e: 'deleted', path: string): void
 }>()
 
 /** 目录默认折叠，展开状态提升到此处，方便会话恢复时自动展开祖先链 */
 const expanded = ref<Set<string>>(new Set())
 
+/** 正在内联重命名的节点路径（null 表示无） */
+const editingPath = ref<string | null>(null)
+
+/** 右键上下文菜单状态 */
+const menu = ref<{ x: number; y: number; node: FileNode } | null>(null)
+
+/** 删除二次确认状态 */
+const confirmState = ref<{ open: boolean; node: FileNode } | null>(null)
+
+/** 轻量错误提示 */
+const toast = ref<{ msg: string } | null>(null)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
 const vaultName = computed(() => {
   if (!props.vaultPath) return null
   return props.vaultPath.split(/[\\/]/).filter(Boolean).pop() ?? props.vaultPath
 })
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e)
+}
+
+/** 取一个节点的父目录绝对路径 */
+function parentDir(p: string): string {
+  const norm = p.replace(/[\\/]$/, '')
+  const i = Math.max(norm.lastIndexOf('/'), norm.lastIndexOf('\\'))
+  return i < 0 ? p : norm.slice(0, i)
+}
+
+function expand(path: string): void {
+  const next = new Set(expanded.value)
+  next.add(path)
+  expanded.value = next
+}
 
 function toggle(path: string): void {
   const next = new Set(expanded.value)
@@ -71,6 +111,137 @@ watch(
     expanded.value = new Set()
   }
 )
+
+/* ── 右键菜单 ── */
+
+function onContextMenu(payload: { x: number; y: number; node: FileNode }): void {
+  menu.value = payload
+}
+
+function buildMenuItems(node: FileNode): MenuItem[] {
+  const items: MenuItem[] = [
+    { action: 'new-file', label: '新建文件' },
+    { action: 'new-folder', label: '新建文件夹' },
+    { action: 'sep', label: '', separator: true },
+    { action: 'rename', label: node.type === 'dir' ? '重命名' : '重命名' },
+    { action: 'delete', label: '删除', danger: true }
+  ]
+  return items
+}
+
+function onMenuSelect(action: string): void {
+  const node = menu.value?.node
+  menu.value = null
+  if (!node) return
+
+  // 右键文件：新建项落在它的父目录；右键文件夹：新建项落在文件夹内部
+  const parent = node.type === 'dir' ? node.path : parentDir(node.path)
+
+  switch (action) {
+    case 'new-file':
+      void createNewFile(parent)
+      break
+    case 'new-folder':
+      void createNewFolder(parent)
+      break
+    case 'rename':
+      editingPath.value = node.path
+      break
+    case 'delete':
+      confirmState.value = { open: true, node }
+      break
+  }
+}
+
+/* ── 新建 ── */
+
+async function createNewFile(parent: string): Promise<void> {
+  try {
+    const path = await window.api.createDoc(parent)
+    expand(parent)
+    await props.refreshTree()
+    editingPath.value = path
+    await props.openDoc(path)
+  } catch (e) {
+    showToast(errMsg(e))
+  }
+}
+
+async function createNewFolder(parent: string): Promise<void> {
+  try {
+    const path = await window.api.createFolder(parent)
+    expand(parent)
+    await props.refreshTree()
+    editingPath.value = path
+  } catch (e) {
+    showToast(errMsg(e))
+  }
+}
+
+/* ── 重命名 ── */
+
+async function doRename(path: string, value: string): Promise<void> {
+  const node = findNode(props.nodes, path)
+  const wasActive = path === props.activePath
+  let newPath = path
+  try {
+    newPath = await window.api.renameItem(path, value)
+    // 重命名目录后，把展开状态迁移到新路径，避免折叠
+    if (node?.type === 'dir' && expanded.value.has(path)) {
+      const next = new Set(expanded.value)
+      next.delete(path)
+      next.add(newPath)
+      expanded.value = next
+    }
+    if (wasActive) emit('renamed', path, newPath)
+  } catch (e) {
+    showToast(errMsg(e))
+  } finally {
+    editingPath.value = null
+    await props.refreshTree()
+  }
+}
+
+function onRenameCancel(): void {
+  editingPath.value = null
+}
+
+/* ── 删除 ── */
+
+async function doDelete(): Promise<void> {
+  const node = confirmState.value?.node
+  if (!node) return
+  try {
+    await window.api.deleteItem(node.path)
+    if (node.path === props.activePath) emit('deleted', node.path)
+  } catch (e) {
+    showToast(errMsg(e))
+  } finally {
+    confirmState.value = null
+    await props.refreshTree()
+  }
+}
+
+function findNode(nodes: FileNode[], path: string): FileNode | null {
+  for (const n of nodes) {
+    if (n.path === path) return n
+    if (n.children) {
+      const hit = findNode(n.children, path)
+      if (hit) return hit
+    }
+  }
+  return null
+}
+
+/* ── 轻量错误提示 ── */
+
+function showToast(msg: string): void {
+  toast.value = { msg }
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toast.value = null
+  }, 3200)
+}
 
 /* ── 拖拽调宽 ── */
 
@@ -147,7 +318,7 @@ function startDrag(e: PointerEvent): void {
       </div>
     </header>
 
-    <div class="sidebar__body">
+    <div class="sidebar__body" @contextmenu.prevent>
       <p v-if="!vaultPath" class="empty">
         还没有笔记库。<br />
         <button class="link" type="button" @click="emit('open-vault')">
@@ -165,8 +336,12 @@ function startDrag(e: PointerEvent): void {
         :nodes="nodes"
         :active-path="activePath"
         :expanded="expanded"
+        :editing-path="editingPath"
         @select="emit('select', $event)"
         @toggle="toggle"
+        @context-menu="onContextMenu"
+        @rename-confirm="(p, v) => void doRename(p, v)"
+        @rename-cancel="onRenameCancel"
       />
     </div>
 
@@ -177,6 +352,31 @@ function startDrag(e: PointerEvent): void {
       aria-orientation="vertical"
       @pointerdown="startDrag"
     />
+
+    <!-- 右键上下文菜单 -->
+    <ContextMenu
+      v-if="menu"
+      :x="menu.x"
+      :y="menu.y"
+      :items="buildMenuItems(menu.node)"
+      @select="onMenuSelect"
+      @close="menu = null"
+    />
+
+    <!-- 删除二次确认 -->
+    <ConfirmDialog
+      v-if="confirmState"
+      :open="confirmState.open"
+      title="删除确认"
+      :message="`确定要删除「${confirmState.node.name}」吗？此操作不可撤销。`"
+      confirm-label="删除"
+      danger
+      @confirm="void doDelete()"
+      @cancel="confirmState = null"
+    />
+
+    <!-- 操作失败提示 -->
+    <div v-if="toast" class="toast glass" role="alert">{{ toast.msg }}</div>
   </aside>
 </template>
 
@@ -284,5 +484,32 @@ function startDrag(e: PointerEvent): void {
 .sidebar__resizer--active {
   background: var(--hue-accent);
   opacity: 0.5;
+}
+
+/* 操作失败提示：固定在侧栏底部，自动消失 */
+.toast {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 70;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--hue-text-1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 12px 32px rgba(0, 0, 0, 0.34);
+  animation: toast-in var(--dur-base) var(--ease);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

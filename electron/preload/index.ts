@@ -26,6 +26,18 @@ const api = {
   createDoc: (dir: string, name?: string): Promise<string> =>
     ipcRenderer.invoke(IPC.FILE_CREATE, dir, name),
 
+  /** 在指定父目录下新建文件夹，返回最终路径 */
+  createFolder: (parentDir: string, name?: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.VAULT_CREATE_DIR, parentDir, name),
+
+  /** 重命名文件或文件夹（含同名 .assets 同步），返回新路径 */
+  renameItem: (oldPath: string, newName: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.VAULT_RENAME, oldPath, newName),
+
+  /** 删除文件或文件夹（递归删除，含同名 .assets 清理） */
+  deleteItem: (targetPath: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.VAULT_DELETE, targetPath),
+
   openFileDialog: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC.DIALOG_OPEN_FILE),
 

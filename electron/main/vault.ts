@@ -1,5 +1,5 @@
-import { access, mkdir, readdir, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { access, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
 import type { FileNode, VaultChange, VaultChangeKind } from '../shared/ipc-channels'
 
@@ -82,6 +82,74 @@ export async function createDoc(dir: string, baseName = '未命名'): Promise<st
 
   await writeFile(candidate, '', 'utf-8')
   return candidate
+}
+
+/** 新建文件夹（目录）。同名自动追加序号，绝不覆盖已有目录 */
+export async function createFolder(parentDir: string, baseName = '未命名文件夹'): Promise<string> {
+  await mkdir(parentDir, { recursive: true })
+
+  let candidate = join(parentDir, baseName)
+  let n = 1
+  while (await exists(candidate)) {
+    candidate = join(parentDir, `${baseName} ${n}`)
+    n += 1
+  }
+
+  await mkdir(candidate)
+  return candidate
+}
+
+/** 重命名文件或文件夹。会顺带搬运同名的 `.assets` 资源目录（文档图片存储约定） */
+export async function renameItem(oldPath: string, newName: string): Promise<string> {
+  const name = (newName ?? '').trim()
+  if (!name) throw new Error('名称不能为空')
+  // 不允许用路径分隔符伪造多级目录
+  if (/[\\/]/.test(name)) throw new Error('名称不能包含路径分隔符')
+  if (name === '.' || name === '..') throw new Error('名称无效')
+
+  const parent = dirname(oldPath)
+  const newPath = join(parent, name)
+  if (newPath === oldPath) return oldPath
+  if (await exists(newPath)) throw new Error(`已存在同名项目：${name}`)
+
+  await rename(oldPath, newPath)
+
+  // 尽力同步同名 .assets（仅文档文件、且文件名确实变了时才搬）
+  try {
+    const oldBase = basename(oldPath)
+    const newBase = basename(newPath)
+    if (isMarkdown(oldBase)) {
+      const oldNoExt = oldBase.slice(0, oldBase.toLowerCase().lastIndexOf('.'))
+      const newNoExt = newBase.slice(0, newBase.toLowerCase().lastIndexOf('.'))
+      if (oldNoExt && newNoExt && oldNoExt !== newNoExt) {
+        const oldAssets = join(parent, `${oldNoExt}.assets`)
+        const newAssets = join(parent, `${newNoExt}.assets`)
+        if ((await exists(oldAssets)) && !(await exists(newAssets))) {
+          await rename(oldAssets, newAssets)
+        }
+      }
+    }
+  } catch {
+    // .assets 同步失败不应让主流程报错
+  }
+
+  return newPath
+}
+
+/** 删除文件或文件夹（递归）。删除文档时一并清理同名的 `.assets` 资源目录 */
+export async function deleteItem(targetPath: string): Promise<void> {
+  await rm(targetPath, { recursive: true, force: true })
+
+  try {
+    const base = basename(targetPath)
+    if (isMarkdown(base)) {
+      const noExt = base.slice(0, base.toLowerCase().lastIndexOf('.'))
+      const assets = join(dirname(targetPath), `${noExt}.assets`)
+      if (await exists(assets)) await rm(assets, { recursive: true, force: true })
+    }
+  } catch {
+    // 资源目录清理失败不影响删除结果
+  }
 }
 
 /* ── 目录监听 ───────────────────────────────── */

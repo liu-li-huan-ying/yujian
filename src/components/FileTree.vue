@@ -1,18 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { FileNode } from '../../electron/shared/ipc-channels'
+import RenameInput from './RenameInput.vue'
 
 const props = defineProps<{
   nodes: FileNode[]
   activePath: string | null
   /** 已展开的目录绝对路径集合（由 Sidebar 持有，便于会话恢复时展开祖先链） */
   expanded: Set<string>
+  /** 正在内联重命名的节点路径（null 表示无）；由 Sidebar 持有 */
+  editingPath: string | null
   depth?: number
 }>()
 
 const emit = defineEmits<{
   (e: 'select', node: FileNode): void
   (e: 'toggle', path: string): void
+  (e: 'context-menu', payload: { x: number; y: number; node: FileNode }): void
+  (e: 'rename-confirm', path: string, value: string): void
+  (e: 'rename-cancel'): void
 }>()
 
 const level = computed(() => props.depth ?? 0)
@@ -21,6 +27,23 @@ const level = computed(() => props.depth ?? 0)
 function displayName(node: FileNode): string {
   if (node.type === 'dir') return node.name
   return node.name.replace(/\.(md|markdown)$/i, '')
+}
+
+function onContextMenu(node: FileNode, e: MouseEvent): void {
+  emit('context-menu', { x: e.clientX, y: e.clientY, node })
+}
+
+function onRenameConfirm(node: FileNode, value: string): void {
+  emit('rename-confirm', node.path, value)
+}
+
+function onRenameCancel(): void {
+  emit('rename-cancel')
+}
+
+/** 递归子组件转发：直接 emit 会因 $event 只取首参而丢失第二个参数，故用显式函数 */
+function fwdRenameConfirm(path: string, value: string): void {
+  emit('rename-confirm', path, value)
 }
 </script>
 
@@ -37,6 +60,7 @@ function displayName(node: FileNode): string {
         :title="node.name"
         type="button"
         @click="node.type === 'dir' ? emit('toggle', node.path) : emit('select', node)"
+        @contextmenu.prevent="onContextMenu(node, $event)"
       >
         <svg
           v-if="node.type === 'dir'"
@@ -58,7 +82,13 @@ function displayName(node: FileNode): string {
         </svg>
         <span v-else class="chev" aria-hidden="true" />
 
-        <span class="name">{{ displayName(node) }}</span>
+        <RenameInput
+          v-if="props.editingPath === node.path"
+          :initial="node.name"
+          @confirm="(v: string) => onRenameConfirm(node, v)"
+          @cancel="onRenameCancel"
+        />
+        <span v-else class="name">{{ displayName(node) }}</span>
       </button>
 
       <!-- 递归自身：Vue SFC 支持按文件名自引用 -->
@@ -67,9 +97,13 @@ function displayName(node: FileNode): string {
         :nodes="node.children"
         :active-path="activePath"
         :expanded="expanded"
+        :editing-path="editingPath"
         :depth="level + 1"
         @select="emit('select', $event)"
         @toggle="emit('toggle', $event)"
+        @context-menu="emit('context-menu', $event)"
+        @rename-confirm="fwdRenameConfirm"
+        @rename-cancel="onRenameCancel"
       />
     </li>
   </ul>

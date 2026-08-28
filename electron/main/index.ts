@@ -7,7 +7,7 @@ import {
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
-import { createDoc, listTree, stopWatching, watchVault } from './vault'
+import { createDoc, createFolder, deleteItem, listTree, renameItem, stopWatching, watchVault } from './vault'
 import { patchSession, readSession } from './session'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
@@ -117,6 +117,18 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.FILE_CREATE, async (_event, dir: string, name?: string) =>
     createDoc(dir, name ?? '未命名')
+  )
+
+  ipcMain.handle(IPC.VAULT_CREATE_DIR, async (_event, parentDir: string, name?: string) =>
+    createFolder(parentDir, name ?? '未命名文件夹')
+  )
+
+  ipcMain.handle(IPC.VAULT_RENAME, async (_event, oldPath: string, newName: string) =>
+    renameItem(oldPath, newName)
+  )
+
+  ipcMain.handle(IPC.VAULT_DELETE, async (_event, targetPath: string) =>
+    deleteItem(targetPath)
   )
 
   ipcMain.handle(IPC.DIALOG_OPEN_FILE, async () => {
