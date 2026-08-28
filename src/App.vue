@@ -165,6 +165,13 @@ async function saveFileAs(): Promise<void> {
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  // 无需修饰键的全局快捷键：F1 打开帮助/快捷键面板。
+  // 必须放在修饰键守卫之前，否则 !(ctrlKey||metaKey) 会直接 return，F1 毫无反应。
+  if (e.key === 'F1') {
+    e.preventDefault()
+    onHelp('shortcuts')
+    return
+  }
   if (!(e.ctrlKey || e.metaKey)) return
   const k = e.key.toLowerCase()
   if (k === 's') {
@@ -181,9 +188,6 @@ function onKeydown(e: KeyboardEvent): void {
   } else if (e.key === '/') {
     e.preventDefault()
     requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'
-  } else if (e.key === 'F1') {
-    e.preventDefault()
-    onHelp('shortcuts')
   }
 }
 
