@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import TitleBar from './components/TitleBar.vue'
 import EditorHost from './editor/EditorHost.vue'
 import type { EditorMode } from './editor/EditorHost.vue'
 
@@ -36,10 +37,6 @@ async function saveFileAs(): Promise<void> {
   lastSavedAt.value = Date.now()
 }
 
-function toggleMode(): void {
-  requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'
-}
-
 function onKeydown(e: KeyboardEvent): void {
   if (!(e.ctrlKey || e.metaKey)) return
   const k = e.key.toLowerCase()
@@ -51,7 +48,7 @@ function onKeydown(e: KeyboardEvent): void {
     void openFile()
   } else if (e.key === '/') {
     e.preventDefault()
-    toggleMode()
+    requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'
   }
 }
 
@@ -61,30 +58,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <div class="shell">
-    <header class="titlebar jade">
-      <div class="titlebar__inner">
-        <span class="titlebar__name">{{ fileName }}</span>
-        <div class="spacer" />
-        <button class="act" @click="openFile">打开</button>
-        <button class="act" @click="saveFile">保存</button>
-        <div class="seg">
-          <button
-            class="seg__item"
-            :class="{ 'seg__item--on': requestedMode === 'wysiwyg' }"
-            @click="requestedMode = 'wysiwyg'"
-          >
-            所见即所得
-          </button>
-          <button
-            class="seg__item"
-            :class="{ 'seg__item--on': requestedMode === 'source' }"
-            @click="requestedMode = 'source'"
-          >
-            源码
-          </button>
-        </div>
-      </div>
-    </header>
+    <TitleBar
+      :file-name="fileName"
+      :mode="requestedMode"
+      :dirty="host?.dirty ?? false"
+      @open="openFile"
+      @save="saveFile"
+      @update:mode="requestedMode = $event"
+    />
 
     <div class="body">
       <main class="editor">
@@ -100,7 +81,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <footer class="statusbar jade">
       <div class="statusbar__inner">
         <div class="statusbar__grp">
-          <span>{{ filePath ? filePath : '未选择文件' }}</span>
+          <span>{{ filePath ?? '未选择文件' }}</span>
         </div>
         <div class="statusbar__grp">
           <span v-if="host?.willNormalize" class="warn">保存时将规范化排版</span>
@@ -123,57 +104,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   background: var(--hue-editor);
 }
 
-.titlebar {
-  height: var(--h-titlebar);
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--hue-border-subtle);
-}
-.titlebar__inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 100%;
-  padding: 0 14px;
-}
-.titlebar__name {
-  font-size: 13px;
-  color: var(--hue-text-1);
-}
-.spacer {
-  flex: 1;
-}
-.act {
-  font-size: 11px;
-  padding: 4px 10px;
-}
-.seg {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border-default);
-  border-radius: 7px;
-  background: var(--hue-highlight);
-}
-.seg__item {
-  border: none;
-  background: transparent;
-  font-size: 11px;
-  padding: 3px 10px;
-  color: var(--hue-text-3);
-}
-.seg__item--on {
-  background: var(--hue-accent);
-  color: var(--hue-editor);
-  font-weight: 500;
-}
-
 .body {
   flex: 1;
   display: flex;
   min-height: 0;
 }
+
 .editor {
   flex: 1;
   min-width: 0;
@@ -186,6 +122,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex-shrink: 0;
   border-top: 1px solid var(--hue-border-subtle);
 }
+
 .statusbar__inner {
   position: relative;
   z-index: 1;
@@ -197,14 +134,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 11px;
   color: var(--hue-text-3);
 }
+
 .statusbar__grp {
   display: flex;
   gap: 14px;
   align-items: center;
 }
+
 .warn {
   color: var(--hue-accent);
 }
+
 .dot {
   display: inline-block;
   width: 6px;
@@ -213,9 +153,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   margin-right: 5px;
   vertical-align: middle;
 }
+
 .dot--saved {
   background: var(--hue-success);
 }
+
 .dot--dirty {
   background: var(--hue-accent);
 }

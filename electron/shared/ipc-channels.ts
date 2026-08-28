@@ -5,8 +5,19 @@ export const IPC = {
   FILE_LIST_DIR: 'file:listDir',
   DIALOG_OPEN_FILE: 'dialog:openFile',
   DIALOG_SAVE_FILE: 'dialog:saveFile',
-  DIALOG_OPEN_DIR: 'dialog:openDir'
+  DIALOG_OPEN_DIR: 'dialog:openDir',
+
+  // 自定义标题栏的窗口控制
+  WIN_MINIMIZE: 'win:minimize',
+  WIN_TOGGLE_MAXIMIZE: 'win:toggleMaximize',
+  WIN_CLOSE: 'win:close',
+  WIN_IS_MAXIMIZED: 'win:isMaximized',
+  WIN_STATE_CHANGE: 'win:stateChange'
 } as const
+
+export interface WindowState {
+  maximized: boolean
+}
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
 

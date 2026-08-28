@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { IPC } from '../shared/ipc-channels'
+import { IPC, type WindowState } from '../shared/ipc-channels'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -29,6 +29,13 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#16171B',
+    // 隐藏原生标题栏，改用自绘标题栏。
+    // 注意：不能用 frame:false —— 那会让 Windows 窗口失去拖拽边框与阴影。
+    // titleBarStyle:'hidden' 只移除标题栏区域，缩放与阴影都保留。
+    // macOS 用 hiddenInset 保留原生红绿灯（更符合平台习惯）。
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    trafficLightPosition:
+      process.platform === 'darwin' ? { x: 14, y: 12 } : undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -36,6 +43,8 @@ function createWindow(): void {
       sandbox: true
     }
   })
+
+  registerWindowIpc(win)
 
   win.once('ready-to-show', () => win.show())
 
@@ -52,6 +61,27 @@ function createWindow(): void {
 }
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+
+/** 自绘标题栏的窗口控制 */
+function registerWindowIpc(win: BrowserWindow): void {
+  ipcMain.on(IPC.WIN_MINIMIZE, () => win.minimize())
+
+  ipcMain.on(IPC.WIN_TOGGLE_MAXIMIZE, () => {
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+  })
+
+  ipcMain.on(IPC.WIN_CLOSE, () => win.close())
+
+  ipcMain.handle(IPC.WIN_IS_MAXIMIZED, () => win.isMaximized())
+
+  const notify = (): void => {
+    const state: WindowState = { maximized: win.isMaximized() }
+    win.webContents.send(IPC.WIN_STATE_CHANGE, state)
+  }
+  win.on('maximize', notify)
+  win.on('unmaximize', notify)
+}
 
 function registerIpc(): void {
   ipcMain.handle(IPC.APP_VERSION, () => app.getVersion())
