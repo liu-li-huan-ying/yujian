@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import MilkdownEditor from './MilkdownEditor.vue'
 import SourceEditor from './SourceEditor.vue'
 import LoadingBar from '../components/LoadingBar.vue'
+import ReadingProgress from '../components/ReadingProgress.vue'
 import { useFidelity } from './useFidelity'
 
 export type EditorMode = 'wysiwyg' | 'source'
@@ -23,6 +24,13 @@ const mode = ref<EditorMode>('wysiwyg')
 const milkdown = ref<InstanceType<typeof MilkdownEditor> | null>(null)
 const saving = ref(false)
 const ready = ref(false)
+
+/** 两个面板的 DOM 根，交给 ReadingProgress 自动定位真正的滚动容器 */
+const wysiwygPane = ref<HTMLDivElement | null>(null)
+const sourcePane = ref<HTMLDivElement | null>(null)
+const activePane = computed(() =>
+  mode.value === 'wysiwyg' ? wysiwygPane.value : sourcePane.value
+)
 
 /** 加载状态机：覆盖首次加载 / 切换文件 / 重新渲染（切回所见即所得） */
 type LoadStatus = 'idle' | 'loading' | 'error' | 'timeout'
@@ -193,7 +201,7 @@ defineExpose({
     />
 
     <!-- 两个容器始终挂载，仅切换可见性，避免销毁 Crepe 实例 -->
-    <div class="pane" :class="{ 'pane--hidden': mode !== 'wysiwyg' }">
+    <div ref="wysiwygPane" class="pane" :class="{ 'pane--hidden': mode !== 'wysiwyg' }">
       <MilkdownEditor
         ref="milkdown"
         :model-value="fidelity.currentText.value"
@@ -202,12 +210,15 @@ defineExpose({
       />
     </div>
 
-    <div class="pane" :class="{ 'pane--hidden': mode !== 'source' }">
+    <div ref="sourcePane" class="pane" :class="{ 'pane--hidden': mode !== 'source' }">
       <SourceEditor
         :model-value="fidelity.currentText.value"
         @update:model-value="onSourceUpdate"
       />
     </div>
+
+    <!-- 右侧竖向阅读进度条：与玉质/玻璃风格统一，可点击/拖拽跳转 -->
+    <ReadingProgress :pane="activePane" />
   </div>
 </template>
 

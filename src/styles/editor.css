@@ -252,3 +252,15 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ── 隐藏原生滚动条：交给右侧玉质阅读进度条统一指示，避免双指示破坏美感 ── */
+.milkdown,
+.cm-scroller {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.milkdown::-webkit-scrollbar,
+.cm-scroller::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
