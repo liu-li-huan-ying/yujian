@@ -238,15 +238,18 @@ async function doExport(kind: 'html' | 'pdf'): Promise<void> {
   }
 }
 
-/* ── 语言切换 ── */
+/* ── 语言切换（key 驱动 Vue 重挂 Crepe）── */
+
+const langVer = ref(0)
 
 const localeLabel = computed(() => (getLocale() === 'zh-CN' ? '中' : 'EN'))
 
-async function toggleLocale(): Promise<void> {
+function toggleLocale(): void {
   const next: LocaleKey = getLocale() === 'zh-CN' ? 'en-US' : 'zh-CN'
   setLocale(next)
-  // Crepe 标签在构造时固化，重建实例使中文/英文双向切换生效（await 保证顺序）
-  await host.value?.reload()
+  // 自增 key → Vue 销毁旧 MilkdownEditor / 挂载新实例，
+  // 构造期固化的标签（BlockEdit 等）自动按新语言生成
+  langVer.value++
 }
 
 /* ── 会话持久化（崩溃恢复）── */
@@ -320,6 +323,7 @@ onBeforeUnmount(() => {
           :file-path="filePath"
           :vault-path="vaultPath"
           :requested-mode="requestedMode"
+          :lang-key="langVer"
           @saved="lastSavedAt = Date.now()"
         />
       </main>

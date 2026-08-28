@@ -29,13 +29,7 @@ const emit = defineEmits<{
 
 const host = ref<HTMLDivElement | null>(null)
 let crepe: Crepe | null = null
-let mounted = false
 let imgObserver: MutationObserver | null = null
-/** 重入锁：防止快速连点语言切换时 create/destroy 交叠把实例搞坏 */
-let reloading = false
-let reloadPending = false
-/** 跨重建保留只读状态（源码模式下所见即所得实例是 readonly） */
-let readonlyState = false
 
 /* ── 图片粘贴落盘 ─────────────────────────────── */
 
@@ -139,8 +133,7 @@ function setupImageResolver(): void {
 }
 
 async function init(defaultValue?: string): Promise<void> {
-  if (!host.value || mounted) return
-  mounted = true
+  if (!host.value) return
 
   // 快照当前语言包值（Crepe 构造时一次性传入）
   const L = i18n
@@ -199,7 +192,7 @@ async function init(defaultValue?: string): Promise<void> {
   })
 
   await crepe.create()
-  crepe.setReadonly(readonlyState)
+  crepe.setReadonly(props.readonly)
   setupImageResolver()
   emit('ready')
 }
@@ -213,7 +206,6 @@ onBeforeUnmount(() => {
   imgObserver = null
   void crepe?.destroy()
   crepe = null
-  mounted = false
 })
 
 /** 供父组件在切回 WYSIWYG 时灌入源码文本（异步：导出需等 DOM 刷新后再读） */
@@ -238,54 +230,10 @@ function getHTML(): string {
 }
 
 function setReadonly(value: boolean): void {
-  readonlyState = value
   crepe?.setReadonly(value)
 }
 
-/**
- * 语言切换后调用：销毁并重建 Crepe 实例，使构造期固化的标签
- * （BlockEdit / Placeholder / ImageBlock / CodeMirror）按新语言生效。
- * 内容从当前实例读取后原样回填，不触发保存。
- *
- * 重入保护：快速连点时只跑最后一次（合并待处理），保证最终语言与
- * 当前 i18n 一致；任一次失败都复位状态，允许后续重试，不会卡死。
- */
-async function reload(): Promise<void> {
-  if (reloading) {
-    reloadPending = true
-    return
-  }
-  reloading = true
-  try {
-    do {
-      reloadPending = false
-      const current = crepe?.getMarkdown() ?? props.modelValue
-      if (imgObserver) {
-        imgObserver.disconnect()
-        imgObserver = null
-      }
-      if (crepe) {
-        try {
-          await crepe.destroy()
-        } catch {
-          // 销毁异常忽略，继续重建
-        }
-        crepe = null
-      }
-      if (host.value) host.value.innerHTML = ''
-      mounted = false
-      await init(current)
-    } while (reloadPending)
-  } catch (e) {
-    console.error('[MilkdownEditor] 语言切换重建失败', e)
-    mounted = false
-    crepe = null
-  } finally {
-    reloading = false
-  }
-}
-
-defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, reload })
+defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly })
 </script>
 
 <template>

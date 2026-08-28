@@ -14,6 +14,8 @@ const props = defineProps<{
   vaultPath?: string | null
   /** 外部请求切换模式（如标题栏按钮、快捷键） */
   requestedMode?: EditorMode
+  /** 语言版本号：变化时 Vue 重挂 MilkdownEditor 使新语言标签生效 */
+  langKey?: number
 }>()
 
 const emit = defineEmits<{
@@ -180,15 +182,11 @@ async function load(path: string): Promise<void> {
 
 function onReady(): void {
   ready.value = true
-}
-
-/**
- * 语言切换：销毁并重建所见即所得编辑器，使 Crepe 在构造期固化的标签
- * （BlockEdit / Placeholder / ImageBlock / CodeMirror）按新语言重新生成。
- * 内容从保真层回填，不改动文件。
- */
-async function reload(): Promise<void> {
-  await milkdown.value?.reload()
+  // 语言切换导致重挂后，新实例默认 readonly=false；
+  // 若当前在源码模式，需立即恢复只读（避免用户误编辑所见即所得实例）
+  if (mode.value === 'source') {
+    milkdown.value?.setReadonly(true)
+  }
 }
 
 /** 全文搜索结果点击：跳转到命中行（仅源码模式可精确定位） */
@@ -247,7 +245,6 @@ defineExpose({
   save,
   load,
   switchTo,
-  reload,
   revealLine,
   getHTML,
   publishImages,
@@ -271,6 +268,7 @@ defineExpose({
     <!-- 两个容器始终挂载，仅切换可见性，避免销毁 Crepe 实例 -->
     <div ref="wysiwygPane" class="pane" :class="{ 'pane--hidden': mode !== 'wysiwyg' }">
       <MilkdownEditor
+        :key="props.langKey ?? 0"
         ref="milkdown"
         :model-value="fidelity.currentText.value"
         :file-path="props.filePath"

@@ -171,10 +171,7 @@
 
 .cm-editor .cm-scroller {
   font-family: var(--font-mono);
-  padding: 20px 0 45vh;
-  /* 行号与正文作为一个整体居中：否则正文居中、行号贴左会空出一大片 */
-  max-width: var(--w-column);
-  margin: 0 auto;
+  padding: 20px 24px 45vh;
 }
 
 .cm-editor .cm-content {
@@ -185,16 +182,17 @@
   outline: none;
 }
 
+/* 行号 gutter：固定宽度，不随行数/内容变化 */
 .cm-editor .cm-gutters {
   background: transparent;
   border-right: 1px solid var(--hue-border-subtle);
   color: var(--hue-text-3);
-  min-width: 2.6em !important;
+  width: 3em !important;
+  flex-shrink: 0;
 }
 
 .cm-editor .cm-lineNumbers .cm-gutterElement {
-  padding: 0 12px 0 8px !important;
-  min-width: 1.8em !important;
+  padding: 0 10px 0 8px !important;
   text-align: right;
 }
 
