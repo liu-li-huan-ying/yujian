@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="220" viewBox="0 0 1080 220" role="img" aria-label="块操作手柄一致左轨，绝不压字">
+  <defs>
+  <linearGradient id="jHi" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.055"/>
+    <stop offset="20%" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="jT1" cx="12%" cy="0%" r="70%">
+    <stop offset="0%" stop-color="rgb(126,196,182)" stop-opacity="0.13"/>
+    <stop offset="62%" stop-color="rgb(126,196,182)" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="jT2" cx="85%" cy="100%" r="60%">
+    <stop offset="0%" stop-color="rgb(95,168,160)" stop-opacity="0.10"/>
+    <stop offset="58%" stop-color="rgb(95,168,160)" stop-opacity="0"/>
+  </radialGradient></defs><rect x="0" y="0" width="1080" height="220" fill="#1C1E1F"/><line x1="96" y1="0" x2="96" y2="220" stroke="rgba(255,255,255,0.05)" stroke-width="1" opacity="1"/><text x="48" y="200" font-size="10" fill="#8B908E" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">96px 沟槽</text><rect x="18" y="70" width="52" height="28" fill="#262C2E" stroke="rgba(255,255,255,0.10)" rx="6"/><rect x="22" y="74" width="20" height="20" fill="rgba(255,255,255,0.06)" rx="4"/><rect x="46" y="74" width="20" height="20" fill="rgba(255,255,255,0.06)" rx="4"/><text x="44" y="92" font-size="16" fill="#A3A7A5" text-anchor="middle" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">+</text><text x="120" y="90" font-size="14" fill="#E8E9E7" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">保留 Crepe 算出的「块自身左缘」，仅 translateX(-12px) 向左挪出呼吸缝；</text><text x="120" y="118" font-size="14" fill="#8FD0C6" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">缩进块手柄随之右移，始终在块左缘左侧、永不遮字。</text><text x="120" y="160" font-size="13" fill="#8B908E" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">编辑区左侧预留 96px 沟槽，最窄窗口也不被裁切。</text></svg>

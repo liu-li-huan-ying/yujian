@@ -12,7 +12,11 @@
     "build": "electron-vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "dist": "electron-vite build && electron-builder --win",
-    "release": "electron-vite build && electron-builder --win --publish=onTag"
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "release": "electron-vite build && electron-builder --win --publish=onTag",
+    "release:mac": "electron-vite build && electron-builder --mac --publish=onTag",
+    "release:linux": "electron-vite build && electron-builder --linux --publish=onTag"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
@@ -90,7 +94,9 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "forceCodeSigning": false,
+      "notarize": false
     },
     "linux": {
       "icon": "build/icon.png",

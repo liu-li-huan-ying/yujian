@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="430" viewBox="0 0 1080 430" role="img" aria-label="三层材质分层：框架玉质 / 浮层玻璃 / 内容实色">
+  <defs>
+  <linearGradient id="jHi" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.055"/>
+    <stop offset="20%" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="jT1" cx="12%" cy="0%" r="70%">
+    <stop offset="0%" stop-color="rgb(126,196,182)" stop-opacity="0.13"/>
+    <stop offset="62%" stop-color="rgb(126,196,182)" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="jT2" cx="85%" cy="100%" r="60%">
+    <stop offset="0%" stop-color="rgb(95,168,160)" stop-opacity="0.10"/>
+    <stop offset="58%" stop-color="rgb(95,168,160)" stop-opacity="0"/>
+  </radialGradient>
+    <linearGradient id="gHi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs><rect x="0" y="0" width="1080" height="130" fill="#23292B"/><rect x="0" y="0" width="1080" height="130" fill="url(#jT1)"/><rect x="0" y="0" width="1080" height="130" fill="url(#jT2)"/><rect x="0" y="0" width="1080" height="130" fill="url(#jHi)"/><rect x="40" y="26" width="280" height="78" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.08)" rx="10"/><text x="62" y="56" font-size="13" fill="#A3A7A5" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">标题栏</text><text x="62" y="80" font-size="11" fill="#8B908E" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">侧边栏 · 大纲 · 状态栏</text><text x="700" y="76" font-size="14" fill="#E8E9E7" text-anchor="end" font-weight="500" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">① 框架层 = 玉质（静态预渲染，零运行时开销）</text><rect x="0" y="150" width="1080" height="130" fill="#23292B"/><rect x="0" y="150" width="1080" height="130" fill="url(#jT1)"/><rect x="0" y="150" width="1080" height="130" fill="url(#jT2)"/><rect x="0" y="150" width="1080" height="130" fill="url(#jHi)"/><rect x="360" y="170" width="360" height="96" fill="rgba(32,37,38,0.66)" stroke="rgba(255,255,255,0.09)" rx="12"/><rect x="360" y="170" width="360" height="1" fill="rgba(255,255,255,0.10)"/><line x1="360" y1="202" x2="720" y2="202" stroke="rgba(255,255,255,0.07)" stroke-width="1" opacity="1"/><rect x="368" y="178" width="344" height="16" fill="rgba(95,168,160,0.16)"/><text x="376" y="190" font-size="13" fill="#E8E9E7" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">导出文档</text><text x="376" y="222" font-size="12.5" fill="#A3A7A5" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">导出为 HTML</text><text x="376" y="246" font-size="12.5" fill="#A3A7A5" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">导出为 PDF</text><text x="700" y="226" font-size="14" fill="#E8E9E7" text-anchor="end" font-weight="500" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">② 浮层 = 玻璃（实时模糊，仅小面积浮层）</text><rect x="0" y="300" width="1080" height="130" fill="#1C1E1F"/><rect x="40" y="324" width="1000" height="82" fill="rgba(255,255,255,0.02)" rx="8"/><text x="60" y="364" font-size="14" fill="#A3A7A5" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">正文 16px / 行高 1.75 · 内容列 720 居中 · 纯净实色不加纹理</text><text x="700" y="376" font-size="14" fill="#E8E9E7" text-anchor="end" font-weight="500" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif">③ 内容层 = 纯净实色（保对比度与导出一致）</text></svg>

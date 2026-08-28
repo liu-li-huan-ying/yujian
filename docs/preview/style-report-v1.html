@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>玉笺 Markdown 编辑器 · 第一版样式报告</title>
+<style>
+  :root{
+    --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    --font-ui: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; font-family:var(--font-ui);
+    background:#0E1013;
+    background-image:
+      radial-gradient(60% 40% at 12% 6%, rgba(95,168,160,.14) 0%, rgba(95,168,160,0) 70%),
+      radial-gradient(50% 38% at 88% 20%, rgba(122,140,253,.10) 0%, rgba(122,140,253,0) 70%);
+    color:#E8E9E7;
+    padding:48px 24px 80px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width:1080px; margin:0 auto; }
+
+  .page-title{ font-size:27px; font-weight:500; margin:0 0 8px; letter-spacing:.01em; }
+  .page-sub{ font-size:14px; line-height:1.75; color:#9AA09E; margin:0 0 12px; max-width:760px; }
+  .page-tag{ display:inline-block; font-size:11px; letter-spacing:.06em; color:#8B908E;
+    border:1px solid rgba(255,255,255,.10); border-radius:999px; padding:3px 11px; margin-bottom:40px; }
+
+  .sec{ margin-bottom:54px; }
+  .sec-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:8px; flex-wrap:wrap; }
+  .sec-title{ font-size:17px; font-weight:500; }
+  .sec-no{ font-size:12px; color:var(--hue-accent,#5FA8A0); font-family:var(--font-mono); }
+  .sec-note{ font-size:12px; color:#8B908E; }
+  .sec-desc{ font-size:13px; line-height:1.8; color:#9AA09E; margin:0 0 16px; max-width:760px; }
+
+  /* ── 应用外壳（青瓷·深，真实令牌）── */
+  .app{
+    border-radius:12px; overflow:hidden;
+    border:1px solid rgba(255,255,255,.10);
+    box-shadow:0 24px 60px rgba(0,0,0,.42);
+  }
+  .app--light{ border-color:rgba(0,0,0,.10); box-shadow:0 24px 60px rgba(0,0,0,.16); }
+  .app__body{ display:flex; height:392px; }
+  .app__main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+
+  .jade{ position:relative; }
+  .jade::after{ content:''; position:absolute; inset:0;
+    background-image:var(--noise); opacity:.045; mix-blend-mode:overlay; pointer-events:none; }
+  .jade-dark{
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.055) 0%, rgba(255,255,255,0) 20%),
+      radial-gradient(120% 62% at 12% 0%, rgba(126,196,182,.13) 0%, rgba(126,196,182,0) 62%),
+      radial-gradient(95% 55% at 85% 105%, rgba(95,168,160,.10) 0%, rgba(95,168,160,0) 58%),
+      #23292B; color:#E8E9E7;
+  }
+  .jade-light{
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,0) 24%),
+      radial-gradient(120% 60% at 10% 0%, rgba(184,214,206,.42) 0%, rgba(184,214,206,0) 60%),
+      radial-gradient(95% 55% at 88% 105%, rgba(196,222,216,.34) 0%, rgba(196,222,216,0) 58%),
+      #EFF2F0; color:#1B1D1C;
+  }
+  .ed-dark{ background:#1C1E1F; color:#E8E9E7; }
+  .ed-light{ background:#FCFCFB; color:#1B1D1C; }
+
+  .bar{ height:38px; display:flex; align-items:center; gap:8px; padding:0 12px; position:relative; z-index:1;
+        border-bottom:1px solid rgba(255,255,255,.055); }
+  .app--light .bar{ border-bottom-color:rgba(0,0,0,.065); }
+  .bar__drag{ flex:1; display:flex; align-items:center; gap:7px; min-width:0; padding-left:4px; }
+  .bar__name{ font-size:13px; color:inherit; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar__dot{ width:6px; height:6px; border-radius:50%; background:#5FA8A0; flex-shrink:0; }
+  .sep{ width:1px; height:18px; margin:0 4px; background:rgba(255,255,255,.055); }
+  .app--light .sep{ background:rgba(0,0,0,.065); }
+  .tbtn{ width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center;
+    border:0; border-radius:6px; background:transparent; color:#A3A7A5; cursor:pointer; }
+  .app--light .tbtn{ color:#575B5A; }
+  .tbtn.on{ color:#5FA8A0; background:rgba(95,168,160,.16); }
+  .app--light .tbtn.on{ color:#248077; background:rgba(36,128,119,.11); }
+  .seg{ display:flex; gap:2px; padding:2px; border-radius:6px; background:rgba(255,255,255,.055);
+    border:1px solid rgba(255,255,255,.07); }
+  .app--light .seg{ background:rgba(0,0,0,.045); border-color:rgba(0,0,0,.06); }
+  .seg span{ font-size:11px; padding:3px 10px; border-radius:4px; color:#8B908E; }
+  .app--light .seg span{ color:#6E7372; }
+  .seg .on{ background:#5FA8A0; color:#0E1013; font-weight:500; }
+  .app--light .seg .on{ background:#248077; color:#FCFCFB; }
+
+  .side{ width:212px; display:flex; flex-direction:column; position:relative; z-index:1;
+    border-right:1px solid rgba(255,255,255,.055); }
+  .app--light .side{ border-right-color:rgba(0,0,0,.065); }
+  .side__pad{ padding:12px; position:relative; z-index:1; }
+  .pick{ display:flex; align-items:center; justify-content:space-between; padding:7px 10px; border-radius:7px;
+    font-size:12px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.06); }
+  .app--light .pick{ background:rgba(255,255,255,.72); border-color:rgba(0,0,0,.06); }
+  .srch{ display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; border-radius:7px;
+    font-size:12px; opacity:.9; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.06); }
+  .app--light .srch{ background:rgba(255,255,255,.72); border-color:rgba(0,0,0,.06); }
+  .lbl{ font-size:11px; letter-spacing:.05em; opacity:.55; padding:2px 12px 6px; }
+  .tree{ padding:0 6px; position:relative; z-index:1; }
+  .tree div{ font-size:12.5px; padding:6px 10px; border-radius:6px; display:flex; align-items:center; gap:7px; }
+  .tree .folder{ opacity:.85; }
+  .tree .file{ padding-left:26px; opacity:.72; }
+  .tree .act{ background:rgba(95,168,160,.16); opacity:1; font-weight:500; }
+  .app--light .tree .act{ background:rgba(36,128,119,.11); }
+  .tri{ width:8px; height:8px; border-right:1.4px solid currentColor; border-bottom:1.4px solid currentColor;
+    transform:rotate(45deg); opacity:.5; display:inline-block; }
+  .side__foot{ height:30px; display:flex; align-items:center; padding:0 14px; font-size:11px; opacity:.55;
+    border-top:1px solid rgba(255,255,255,.055); margin-top:auto; position:relative; z-index:1; }
+  .app--light .side__foot{ border-top-color:rgba(0,0,0,.065); }
+
+  .crumb{ height:30px; display:flex; align-items:center; gap:6px; padding:0 22px; font-size:11px;
+    opacity:.55; border-bottom:1px solid rgba(255,255,255,.045); }
+  .app--light .crumb{ border-bottom-color:rgba(0,0,0,.055); }
+  .canvas{ flex:1; padding:24px 30px 45vh; padding-left:96px; overflow:hidden; }
+  .col{ max-width:520px; margin:0 auto; }
+  .h1{ font-size:24px; font-weight:500; line-height:1.35; margin:0 0 12px; }
+  .h2{ font-size:15px; font-weight:500; margin:20px 0 8px; }
+  .p{ font-size:13.5px; line-height:1.78; margin:0 0 14px; opacity:.86; }
+  .code{ border-radius:8px; overflow:hidden; margin:14px 0; background:rgba(255,255,255,.035);
+    border:1px solid rgba(255,255,255,.06); box-shadow:inset 0 1px 0 rgba(255,255,255,.055); }
+  .app--light .code{ background:#F3F5F3; border-color:rgba(0,0,0,.07); }
+  .code__bar{ height:26px; display:flex; align-items:center; padding:0 12px; font-size:11px; opacity:.5;
+    border-bottom:1px solid rgba(255,255,255,.05); }
+  .app--light .code__bar{ border-bottom-color:rgba(0,0,0,.05); }
+  .code pre{ margin:0; padding:11px 13px; font-family:var(--font-mono); font-size:12px; line-height:1.65; }
+  .k{ color:#8FB8D8; } .app--light .k{ color:#8250DF; }
+  .s{ color:#9BD4A4; } .app--light .s{ color:#0A7C5A; }
+  .f{ color:#A9C7E8; } .app--light .f{ color:#0550AE; }
+  .quote{ margin:16px 0; padding:2px 0 2px 14px; border-left:3px solid #5FA8A0; font-size:13px;
+    line-height:1.7; opacity:.66; }
+  .app--light .quote{ border-left-color:#248077; }
+
+  .status{ height:26px; display:flex; align-items:center; justify-content:space-between; padding:0 14px;
+    font-size:11px; opacity:.62; border-top:1px solid rgba(255,255,255,.055); position:relative; z-index:1; }
+  .app--light .status{ border-top-color:rgba(0,0,0,.065); }
+  .status .grp{ display:flex; gap:14px; align-items:center; }
+  .dot{ width:6px; height:6px; border-radius:50%; background:#4EC9A0; display:inline-block; margin-right:5px; }
+
+  /* ── 玻璃浮层 ── */
+  .glass-host{ position:relative; }
+  .glass{
+    position:absolute; top:34px; left:50%; transform:translateX(-50%);
+    width:430px; border-radius:12px; overflow:hidden;
+    background:rgba(245,248,246,.78);
+    backdrop-filter:blur(28px) saturate(160%);
+    -webkit-backdrop-filter:blur(28px) saturate(160%);
+    border:1px solid rgba(20,30,28,.10);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 18px 48px rgba(20,30,28,.18);
+  }
+  .glass--dark{ background:rgba(32,37,38,.66);
+    border:1px solid rgba(255,255,255,.09);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 18px 48px rgba(0,0,0,.38); }
+  .glass__in{ padding:9px 12px; font-size:14px; display:flex; align-items:center; gap:9px;
+    border-bottom:1px solid rgba(0,0,0,.06); color:#1B1D1C; }
+  .glass--dark .glass__in{ border-bottom-color:rgba(255,255,255,.07); color:#E8E9E7; }
+  .glass__caret{ width:2px; height:15px; background:#248077; border-radius:1px; }
+  .glass--dark .glass__caret{ background:#5FA8A0; }
+  .glass__row{ padding:8px 12px; font-size:12.5px; display:flex; align-items:center; gap:9px; color:#3D4341; }
+  .glass--dark .glass__row{ color:#C4C9C7; }
+  .glass__row.on{ background:rgba(36,128,119,.10); color:#1B1D1C; }
+  .glass--dark .glass__row.on{ background:rgba(95,168,160,.16); color:#E8E9E7; }
+  .glass__hint{ margin-left:auto; font-size:11px; opacity:.5; }
+  .glass__foot{ padding:7px 12px; font-size:11px; opacity:.5; border-top:1px solid rgba(0,0,0,.05);
+    display:flex; gap:12px; color:#1B1D1C; }
+  .glass--dark .glass__foot{ border-top-color:rgba(255,255,255,.06); color:#E8E9E7; }
+
+  /* ── 说明卡 ── */
+  .note{ border-radius:10px; padding:18px 20px; font-size:13px; line-height:1.85;
+    background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.07); color:#B9BFBD; }
+  .note b{ color:#E8E9E7; font-weight:500; }
+  .note code{ font-family:var(--font-mono); font-size:12px; color:#8FD0C6;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.07); border-radius:4px; padding:1px 5px; }
+  .note ul{ margin:10px 0 0; padding-left:18px; }
+  .note li{ margin-bottom:7px; }
+
+  /* ── 皮肤色板 ── */
+  .skin-row{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-top:16px; }
+  .skin{ border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,.10);
+    position:relative; height:118px; }
+  .skin .cap{ position:absolute; top:0; left:0; right:0; height:46%; }
+  .skin .nm{ position:absolute; left:0; right:0; bottom:10px; text-align:center; font-size:13px;
+    font-weight:600; color:#E8E9E7; letter-spacing:.04em;
+    text-shadow:0 1px 3px rgba(0,0,0,.45); }
+  .skin .hx{ position:absolute; left:0; right:0; bottom:-20px; text-align:center; font-size:10px;
+    font-family:var(--font-mono); color:#8B908E; }
+  .skin-meta{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-top:30px; }
+  .skin-meta .c{ font-size:11px; color:#9AA09E; }
+  .skin-meta .c b{ display:block; font-weight:500; color:#C4C9C7; margin-bottom:3px; font-size:12px; }
+
+  /* ── 表格示意 ── */
+  .tbl{ width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; border-radius:8px; overflow:hidden;
+    border:1px solid rgba(255,255,255,.07); }
+  .tbl th, .tbl td{ border:1px solid rgba(255,255,255,.07); padding:8px 12px; text-align:left; }
+  .tbl th{ background:rgba(95,168,160,.16); color:#5FA8A0; font-weight:500; }
+  .tbl tr:nth-child(even) td{ background:rgba(255,255,255,.035); }
+  .tbl .acc{ color:#8FD0C6; font-family:var(--font-mono); }
+
+  /* ── 块手柄示意 ── */
+  .handle-demo{ position:relative; margin-top:16px; border-radius:10px; padding:18px 20px 18px 60px;
+    background:#1C1E1F; border:1px solid rgba(255,255,255,.07); overflow:hidden; }
+  .handle{ position:absolute; left:18px; top:18px; display:flex; gap:2px; padding:3px; border-radius:6px;
+    background:#262c2e; border:1px solid rgba(255,255,255,.10); box-shadow:0 6px 20px rgba(0,0,0,.42); }
+  .handle i{ width:22px; height:22px; display:block; border-radius:5px; background:rgba(255,255,255,.06); }
+  .handle-demo p{ margin:0; font-size:13px; line-height:1.75; color:#E8E9E7; }
+  .handle-demo p .em{ color:#8FD0C6; }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="page-title">玉笺 Markdown 编辑器 · 第一版样式报告</h1>
+  <p class="page-sub">
+    本报告严格依据 <b>v1.0.0</b> 已落地的实现撰写——所有色值、尺寸、交互均来自
+    <code>src/styles/tokens.css</code>、<code>src/appearance.ts</code>、各组件与 <code>editor.css</code>，
+    而非设计稿。设计哲学延续「框架层玉质、浮层玻璃、内容层纯净实色」三层材质分层。
+  </p>
+  <span class="page-tag">YUJIAN · v1.0.0 · 基于真实代码生成</span>
+
+  <!-- 1. 设计哲学 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-no">01</span>
+      <span class="sec-title">设计哲学 · 三层材质分层</span>
+    </div>
+    <p class="sec-desc">
+      玉的关键不是绿，而是<b>温润</b>：光进入后被散射开，颜色不均匀、边缘略亮、内部有絮状层次。
+      我们把界面拆成三层，各用一种材质，互不污染：
+    </p>
+    <div class="note">
+      <b>① 框架层（标题栏 / 侧边栏 / 大纲 / 状态栏）= 玉质，静态预渲染。</b>
+      渐变 + <code>feTurbulence</code> 噪点（opacity .045）一次渲染成型，<b>零运行时开销</b>。
+      它模拟真实玉石的散射透光，是品牌识别的核心。<br>
+      <b>② 浮起层（所有菜单 / 命令面板 / 对话框）= 玻璃。</b>
+      仅在小面积浮层使用实时 <code>backdrop-filter: blur(28px) saturate(160~180%)</code>——玻璃需要"背后有东西可透"才有意义，
+      也才值得付性能代价。<br>
+      <b>③ 内容层（编辑区）= 纯净实色，绝对不加纹理。</b>
+      原因有三：长时间阅读疲劳、降对比度可能跌破 WCAG AA、以及<b>破坏"直取 DOM 导出"的所见即所得一致性</b>。
+    </div>
+  </section>
+
+  <!-- 2. 结构令牌 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-no">02</span>
+      <span class="sec-title">结构令牌 · 一眼可复现的骨架</span>
+    </div>
+    <p class="sec-desc">结构层与材质层令牌永不随皮肤改变；换皮肤只改色相层，因此整套界面可以"换色不换骨"。</p>
+    <div class="note">
+      <b>字号与行高</b>：正文 16px / 行高 1.75；标题 H1 28 · H2 22 · H3 18（均 weight 500）。<br>
+      <b>列宽与栅格</b>：内容列 <code>--w-column: 720px</code> 居中；侧栏 <code>224px</code>（可拖拽 180–360）、
+      大纲 <code>196px</code>；标题栏 <code>38px</code>、面包屑 <code>30px</code>、状态栏 <code>26px</code>。<br>
+      <b>圆角</b>：sm 4 / md 6 / lg 8；<b>动效</b>：fast 120 / base 180 / slow 280ms，缓动 <code>cubic-bezier(.2,0,.2,1)</code>。<br>
+      <b>字体栈</b>：UI 用系统中文栈；等宽栈<b>必须含 Sarasa Mono SC</b>，否则中文代码注释缩进会错乱。<br>
+      <b>无障碍</b>：<code>prefers-reduced-motion</code> 下所有动效归零（材质保留，因为它不是动效）。
+    </div>
+  </section>
+
+  <!-- 3. 五套皮肤 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-no">03</span>
+      <span class="sec-title">五套皮肤 · 中国传统窑色系</span>
+      <span class="sec-note">结构层/材质层解耦，换皮只改 --hue-* 色相变量</span>
+    </div>
+    <p class="sec-desc">
+      设置面板（外观）里以真实玉质材质缩略图呈现，选中环用外层描边避免覆盖材质；
+      每套皮肤都有<b>深 / 浅</b>两档，外加"跟随系统"。切换皮肤<b>不重建编辑器实例</b>
+      （Crepe 只读 CSS 变量），根节点挂 <code>data-skin</code> / <code>data-mode</code>，选择持久化到 localStorage。
+      默认：青瓷 + 深色。
+    </p>
+
+    <div class="skin-row">
+      <div class="skin jade jade-dark"><div class="cap" style="background:#5fa8a0"></div><span class="nm">青瓷</span><span class="hx">#5FA8A0</span></div>
+      <div class="skin jade jade-dark"><div class="cap" style="background:#5e9dbe"></div><span class="nm">天青</span><span class="hx">#5E9DBE</span></div>
+      <div class="skin jade jade-dark"><div class="cap" style="background:#93a7b4"></div><span class="nm">月白</span><span class="hx">#93A7B4</span></div>
+      <div class="skin jade jade-dark"><div class="cap" style="background:#8b7cb8"></div><span class="nm">黛</span><span class="hx">#8B7CB8</span></div>
+      <div class="skin jade jade-dark"><div class="cap" style="background:#c79a4e"></div><span class="nm">琥珀</span><span class="hx">#C79A4E</span></div>
+    </div>
+
+    <div class="skin-meta">
+      <div class="c"><b>青瓷 Celadon</b>默认。汝窑青灰，最沉稳的"玉"味。深 #5FA8A0 / 浅 #248077</div>
+      <div class="c"><b>天青 Sky</b>雨过天青，偏蓝冷调。深 #5E9DBE / 浅 #2B7BA8</div>
+      <div class="c"><b>月白 Moon</b>月白釉，极淡蓝白、低饱和。深 #93A7B4 / 浅 #5A7180</div>
+      <div class="c"><b>黛 Dai</b>墨青紫，唯一冷紫调。深 #8B7CB8 / 浅 #6A5A9E</div>
+      <div class="c"><b>琥珀 Amber</b>老蜜蜡，唯一暖调。深 #C79A4E / 浅 #9A6F24</div>
+    </div>
+  </section>
+
+  <!-- 4. 玻璃统一 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-no">04</span>
+      <span class="sec-title">玻璃统一 · 所有浮层同一套材质</span>
+      <span class="sec-note">单一事实来源，明暗双版，覆盖标题栏下拉 / 右键 / 帮助 / 编辑区浮层</span>
+    </div>
+    <p class="sec-desc">
+      第一版把此前"导出下拉、更多下拉、关于面板各自一套玻璃"的割裂彻底收敛：
+      <code>.glass</code> 改为<b>明暗双版的单一来源</b>，并统一覆盖到
+      <b>标题栏下拉（导出 / 更多）、右键菜单、帮助 / 偏好 / 外观面板，以及编辑区内 Crepe 的
+      slash 菜单、选取气泡工具条、链接预览 / 编辑浮层</b>。点外部或 Esc 关闭。
+    </p>
+
+    <div class="glass-host">
+      <div class="app app--light">
+        <div class="bar jade jade-light">
+          <div class="bar__drag"><span class="bar__name">electron-架构</span><span class="bar__dot"></span></div>
+          <div class="sep"></div>
+          <div class="seg"><span class="on">所见即所得</span><span>源码</span></div>
+          <span class="tbtn on">▤</span><span class="tbtn on">▥</span>
+          <span class="tbtn">⤓▾</span><span class="tbtn">◐</span><span class="tbtn">⋯</span><span class="tbtn">?</span>
+        </div>
+        <div class="app__body" style="height:280px">
+          <aside class="side jade jade-light">
+            <div class="side__pad">
+              <div class="pick"><span>我的笔记库</span><span class="tri" style="transform:rotate(-135deg)"></span></div>
+              <div class="srch"><span>搜索</span></div>
+            </div>
+            <div class="lbl">文件</div>
+            <div class="tree">
+              <div class="folder"><span class="tri"></span>技术笔记</div>
+              <div class="file act">electron-架构.md</div>
+              <div class="file">vite-版本锁定.md</div>
+            </div>
+            <div class="side__foot">128 篇文档</div>
+          </aside>
+          <main class="app__main ed-light">
+            <div class="crumb"><span>技术笔记</span><span>/</span><span>electron-架构.md</span></div>
+            <div class="canvas">
+              <div class="col">
+                <div class="h1">Electron 进程模型</div>
+                <p class="p">应用由主进程、预加载脚本与渲染进程三类构成。理解它们的权限边界，是设计 IPC 通道的前提。</p>
+                <div class="h2">主进程</div>
+                <p class="p">每个应用有且仅有一个主进程，拥有完整的 Node.js 权限。</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+      <div class="glass">
+        <div class="glass__in"><span class="glass__caret"></span>导出文档</div>
+        <div class="glass__row on"><span>导出为 HTML</span><span class="glass__hint">Ctrl E</span></div>
+        <div class="glass__row"><span>导出为 PDF</span><span class="glass__hint">Ctrl P</span></div>
+        <div class="glass__foot"><span>↑↓ 选择</span><span>Enter 执行</span><span>Esc 关闭</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 功能打磨 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-no">05</span>
+      <span class="sec-title">功能细节打磨</span>
+      <span class="sec-note">顶部栏重设计 · F1 帮助 · 块手柄 · 表格 · 代码块 · 进度条</span>
+    </div>
+
+    <h4 style="color:#C4C9C7;font-size:13px;margin:18px 0 6px">① 顶部栏重设计 —— 分组图标工具栏</h4>
+    <p class="sec-desc" style="margin-bottom:10px">
+      不再"加功能就硬塞文字按钮"。改为<b>三组语义图标</b>：文件 / 库（新建·切换库·打开）｜
+      视图 / 布局（所见即所得⇄源码分段·侧栏·大纲）｜分享 / 工具（导出⌄·外观·更多⌄·帮助?）。
+      分隔线表达分组边界；图标按钮 28×28 满足触控目标；激活态用强调色 + 玉质高亮底呼应分段控件的"开"。
+      整条标题栏可拖拽（<code>-webkit-app-region: drag</code>），自绘窗口按钮仅 Windows 渲染（macOS 用原生红绿灯并让位 78px）。
+    </p>
+
+    <h4 style="color:#C4C9C7;font-size:13px;margin:18px 0 6px">② F1 帮助面板 —— 快捷键 + 使用指南双页</h4>
+    <p class="sec-desc" style="margin-bottom:10px">
+      按 <code>F1</code> 直接唤起（已修复此前被按键守卫拦截的问题）。玻璃浮层内分「快捷键 / 使用指南」两标签页，
+      支持 ↑↓ 选择、Enter 执行、Esc 关闭；键位写死、描述本地化，中英双语。
+    </p>
+
+    <h4 style="color:#C4C9C7;font-size:13px;margin:18px 0 6px">③ 块操作手柄 —— Notion 式一致左轨，绝不压字</h4>
+    <div class="handle-demo">
+      <div class="handle"><i></i><i></i></div>
+      <p>保留 Crepe floating-ui 算出的<b>块自身左缘</b>，仅用 <code>translateX(-12px)</code> 向左挪出与正文的呼吸缝；
+      缩进块（如列表）的手柄随之右移，<span class="em">始终在块左缘左侧、永不遮字</span>。
+      编辑区左侧预留 <code>96px</code> 沟槽（约 64px 手柄 + 12px 位移 + 20px 余量），最窄窗口也不被裁切。</p>
+    </div>
+
+    <h4 style="color:#C4C9C7;font-size:13px;margin:18px 0 6px">④ 表格长串换行 —— 修掉叠字</h4>
+    <p class="sec-desc" style="margin-bottom:10px">
+      表格为 <code>table-layout:fixed</code>，此前加粗 / 强调等无空格长串会撑破单元格、与邻格叠字。
+      已加 <code>overflow-wrap:anywhere; word-break:break-word; white-space:normal</code>，
+      任何长串都在单元格内断行。表头用强调色填充、偶行浅底、发丝边单向网格、四角圆角。
+    </p>
+    <table class="tbl">
+      <tr><th>能力</th><th>长串 token 示例</th><th>状态</th></tr>
+      <tr><td>导出 HTML</td><td class="acc">directlyFromProseMirrorDOMWithoutReRenderingPipeline</td><td>已修复换行</td></tr>
+      <tr><td>导出 PDF</td><td class="acc">webContents.printToPDFWithCurrentLayout</td><td>已修复换行</td></tr>
+      <tr><td>图床密钥</td><td class="acc">safeStorageEncryptOnlyInMainProcess</td><td>已修复换行</td></tr>
+    </table>
+
+    <h4 style="color:#C4C9C7;font-size:13px;margin:18px 0 6px">⑤ 代码块 & 阅读进度条 —— 玉质细节</h4>
+    <p class="sec-desc" style="margin-bottom:0">
+      代码块改为<b>自适应内容高度</b>（不再撑满父容器），面板加内陷高光像"玉上一道凹槽"；
+      全局滚动条细、圆角、半透明、hover 仅微亮一档；编辑区原生滚动条隐藏，
+      改由<b>右侧玉质阅读进度条</b>统一指示（青瓷渐变填充 + 柔和辉光，悬停 / 拖拽才浮现圆头手柄，可点击跳转）。
+    </p>
+  </section>
+
+  <!-- 6. 技术约束 -->
+  <section class="sec">
+    <div class="sec-head">
+      <span class="sec-no">06</span>
+      <span class="sec-title">必须知道的三个技术约束</span>
+    </div>
+    <div class="note">
+      <b>1. 窗口级材质跨平台不一致。</b>
+      macOS 用 <code>vibrancy</code>、Windows 11 用 <code>backgroundMaterial:'mica'</code> 才能透出桌面壁纸；
+      <b>Windows 10 及以下不支持，会降级为实色</b>。选"玉"而非纯玻璃，正是因为它降级后依然成立。<br>
+      <b>2. 窗口内浮层用 <code>backdrop-filter</code> 即可</b>，但只能模糊 DOM 内元素，透不出桌面。<br>
+      <b>3. 性能</b>：<code>backdrop-filter</code> 在滚动 / 动画时开销明显。故侧边栏用<b>静态玉质</b>（预渲染零开销），
+      只有小面积浮层才用实时模糊——这是把两者分开的根本原因。
+    </div>
+  </section>
+
+  <section class="sec" style="margin-bottom:0">
+    <div class="note" style="color:#8B908E;background:transparent;border-style:dashed">
+      本报告由实现代码反向生成（非运行截图）：所有色值取自 <code>tokens.css</code> 的 <code>--hue-*</code> 与
+      <code>appearance.ts</code> 的五套皮肤定义；交互取自 <code>TitleBar.vue</code> / <code>HelpPanel.vue</code> /
+      <code>TitleMenu.vue</code>；编辑区细节取自 <code>editor.css</code>。如需像素级核对，可补充真实运行截图。
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
