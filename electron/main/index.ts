@@ -1,8 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import {
   IPC,
+  type ExportPayload,
+  type ExportResult,
   type SessionState,
   type VaultChange,
   type WindowState
@@ -175,6 +178,63 @@ function registerIpc(): void {
   ipcMain.handle(IPC.SESSION_PATCH, async (_event, patch: Partial<SessionState>) =>
     patchSession(patch)
   )
+
+  // ── 导出（HTML / PDF）──
+
+  ipcMain.handle(IPC.EXPORT_HTML, async (_event, payload: ExportPayload): Promise<ExportResult> => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: payload.defaultName,
+      filters: [{ name: 'HTML 网页', extensions: ['html', 'htm'] }]
+    })
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+    try {
+      await writeFile(result.filePath, payload.html, 'utf-8')
+      return { ok: true, path: result.filePath }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle(IPC.EXPORT_PDF, async (_event, payload: ExportPayload): Promise<ExportResult> => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: payload.defaultName,
+      filters: [{ name: 'PDF 文档', extensions: ['pdf'] }]
+    })
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+    // 用隐藏窗口渲染 HTML，再走系统打印管线生成 PDF（所见即所得导出）
+    const win = new BrowserWindow({
+      show: false,
+      width: 900,
+      height: 1200,
+      webPreferences: { sandbox: true }
+    })
+    // 落临时文件再 loadFile：避免超大文档超出 data: URL 长度上限
+    const tmp = join(tmpdir(), `.yujian-export-${Date.now()}.html`)
+    try {
+      await writeFile(tmp, payload.html, 'utf-8')
+      await win.loadFile(tmp)
+      // 等首屏与图表（mermaid）渲染完成再打印
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 600)
+        win.webContents.once('did-finish-load', () => {
+          clearTimeout(timer)
+          resolve()
+        })
+      })
+      const buf = await win.webContents.printToPDF({
+        printBackground: true,
+        landscape: false,
+        pageSize: 'A4'
+      })
+      await writeFile(result.filePath, buf)
+      return { ok: true, path: result.filePath }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    } finally {
+      win.destroy()
+      await unlink(tmp).catch(() => {})
+    }
+  })
 }
 
 void app.whenReady().then(() => {

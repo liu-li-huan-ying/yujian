@@ -31,7 +31,11 @@ export const IPC = {
   WIN_TOGGLE_MAXIMIZE: 'win:toggleMaximize',
   WIN_CLOSE: 'win:close',
   WIN_IS_MAXIMIZED: 'win:isMaximized',
-  WIN_STATE_CHANGE: 'win:stateChange'
+  WIN_STATE_CHANGE: 'win:stateChange',
+
+  // 导出（渲染模式所见即所得 → HTML / PDF）
+  EXPORT_HTML: 'export:html',
+  EXPORT_PDF: 'export:pdf'
 } as const
 
 export interface WindowState {
@@ -102,6 +106,26 @@ export const DEFAULT_SESSION: SessionState = {
   activePath: null,
   mode: 'wysiwyg',
   sidebarWidth: 224
+}
+
+/* ── 导出（HTML / PDF）────────────────────────── */
+
+/** 渲染进程组装好的完整文档 + 建议文件名 */
+export interface ExportPayload {
+  /** 完整 HTML 文档字符串（含 <!DOCTYPE> 与内联样式） */
+  html: string
+  /** 保存对话框的默认文件名（含扩展名） */
+  defaultName: string
+}
+
+export interface ExportResult {
+  ok: boolean
+  /** 用户取消保存对话框 */
+  canceled?: boolean
+  /** 成功时的最终保存路径 */
+  path?: string
+  /** 失败时的错误信息 */
+  error?: string
 }
 
 /** 侧边栏可调宽度范围，与 --w-sidebar 默认值呼应 */

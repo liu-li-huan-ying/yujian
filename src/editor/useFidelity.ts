@@ -24,10 +24,14 @@ export function useFidelity() {
     isDirty.value = false
   }
 
-  /** WYSIWYG 模式下内容变化：记录序列化结果并标记脏 */
+  /**
+   * WYSIWYG 模式下内容变化：记录序列化结果。
+   * 仅当序列化结果「确实不同于磁盘原文」时才标记为脏 —— 否则切模式、
+   * 导出前同步源码等「灌入相同文本」的操作会误触发未保存状态。
+   */
   function markEdited(markdown: string): void {
     docText.value = markdown
-    isDirty.value = true
+    isDirty.value = markdown !== rawText.value
   }
 
   /**

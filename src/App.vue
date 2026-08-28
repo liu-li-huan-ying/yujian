@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar.vue'
 import EditorHost from './editor/EditorHost.vue'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange } from '../electron/shared/ipc-channels'
+import { buildExportHtml } from './export/docTemplate'
 
 const filePath = ref<string | null>(null)
 const requestedMode = ref<EditorMode>('wysiwyg')
@@ -158,6 +159,54 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 
+/* ── 导出（HTML / PDF）── */
+
+const toast = ref<{ msg: string; type: 'ok' | 'err' | 'info' } | null>(null)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(msg: string, type: 'ok' | 'err' | 'info' = 'info'): void {
+  toast.value = { msg, type }
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = null), 2600)
+}
+
+function baseName(path: string): string {
+  return (path.split(/[\\/]/).pop() ?? 'document').replace(/\.(md|markdown)$/i, '')
+}
+
+async function doExport(kind: 'html' | 'pdf'): Promise<void> {
+  if (!filePath.value) {
+    showToast('请先打开一个文档', 'err')
+    return
+  }
+  showToast(kind === 'html' ? '正在生成 HTML…' : '正在生成 PDF…', 'info')
+
+  const body = await host.value?.getHTML()
+  if (!body) {
+    showToast('当前文档暂无内容', 'err')
+    return
+  }
+
+  const base = baseName(filePath.value)
+  const doc = buildExportHtml(body, base, { math: true, mermaid: true })
+  const payload = {
+    html: doc,
+    defaultName: base + (kind === 'html' ? '.html' : '.pdf')
+  }
+
+  const res = kind === 'html'
+    ? await window.api.exportHtml(payload)
+    : await window.api.exportPdf(payload)
+
+  if (res.ok && res.path) {
+    showToast(`已导出：${res.path}`, 'ok')
+  } else if (res.canceled) {
+    showToast('已取消导出', 'info')
+  } else {
+    showToast(`导出失败：${res.error ?? '未知错误'}`, 'err')
+  }
+}
+
 /* ── 会话持久化（崩溃恢复）── */
 
 let widthTimer: ReturnType<typeof setTimeout> | null = null
@@ -186,6 +235,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   if (treeTimer) clearTimeout(treeTimer)
   if (widthTimer) clearTimeout(widthTimer)
+  if (toastTimer) clearTimeout(toastTimer)
   void window.api.unwatchVault()
 })
 </script>
@@ -196,9 +246,12 @@ onBeforeUnmount(() => {
       :file-name="fileName"
       :mode="requestedMode"
       :dirty="host?.dirty ?? false"
+      :can-export="!!filePath"
       @open="openFile"
       @save="saveFile"
       @update:mode="requestedMode = $event"
+      @export-html="doExport('html')"
+      @export-pdf="doExport('pdf')"
     />
 
     <div class="body">
@@ -228,22 +281,29 @@ onBeforeUnmount(() => {
       </main>
     </div>
 
-    <footer class="statusbar jade">
-      <div class="statusbar__inner">
-        <div class="statusbar__grp">
-          <span>{{ filePath ?? '未选择文件' }}</span>
+      <footer class="statusbar jade">
+        <div class="statusbar__inner">
+          <div class="statusbar__grp">
+            <span>{{ filePath ?? '未选择文件' }}</span>
+          </div>
+          <div class="statusbar__grp">
+            <span v-if="host?.willNormalize" class="warn">保存时将规范化排版</span>
+            <span>
+              <i class="dot" :class="host?.dirty ? 'dot--dirty' : 'dot--saved'" />
+              {{ host?.dirty ? '未保存' : '已保存' }}
+            </span>
+            <span>{{ modeLabel }}</span>
+          </div>
         </div>
-        <div class="statusbar__grp">
-          <span v-if="host?.willNormalize" class="warn">保存时将规范化排版</span>
-          <span>
-            <i class="dot" :class="host?.dirty ? 'dot--dirty' : 'dot--saved'" />
-            {{ host?.dirty ? '未保存' : '已保存' }}
-          </span>
-          <span>{{ modeLabel }}</span>
-        </div>
+      </footer>
+    </div>
+
+    <!-- 导出结果轻提示：玻璃质感浮层，自动消失 -->
+    <Transition name="toast">
+      <div v-if="toast" class="toast" :class="`toast--${toast.type}`">
+        {{ toast.msg }}
       </div>
-    </footer>
-  </div>
+    </Transition>
 </template>
 
 <style scoped>
@@ -310,5 +370,47 @@ onBeforeUnmount(() => {
 
 .dot--dirty {
   background: var(--hue-accent);
+}
+
+/* ── 导出结果轻提示（玻璃浮层）── */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: min(80vw, 560px);
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--hue-text-1);
+  background: rgba(var(--hue-tint-1), 0.72);
+  border: 1px solid var(--hue-border-strong, var(--hue-border-subtle));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  word-break: break-all;
+  pointer-events: none;
+}
+
+.toast--ok {
+  border-color: rgba(var(--hue-success-rgb, 60, 180, 140), 0.6);
+}
+
+.toast--err {
+  border-color: rgba(224, 79, 69, 0.6);
+  color: #f3b4af;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity var(--dur-fast, 0.18s) var(--ease, ease),
+    transform var(--dur-fast, 0.18s) var(--ease, ease);
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 </style>

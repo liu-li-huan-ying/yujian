@@ -6,12 +6,16 @@ defineProps<{
   fileName: string
   mode: EditorMode
   dirty: boolean
+  /** 是否已有打开的文档，决定是否允许导出 */
+  canExport: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'open'): void
   (e: 'save'): void
   (e: 'update:mode', value: EditorMode): void
+  (e: 'export-html'): void
+  (e: 'export-pdf'): void
 }>()
 
 const maximized = ref(false)
@@ -47,6 +51,25 @@ onBeforeUnmount(() => {
     <div class="bar__actions">
       <button class="act" @click="emit('open')">打开</button>
       <button class="act" @click="emit('save')">保存</button>
+
+      <span class="divider" />
+
+      <button
+        class="act"
+        :disabled="!canExport"
+        title="导出为自包含 HTML 网页"
+        @click="emit('export-html')"
+      >
+        HTML
+      </button>
+      <button
+        class="act"
+        :disabled="!canExport"
+        title="导出为 PDF 文档"
+        @click="emit('export-pdf')"
+      >
+        PDF
+      </button>
 
       <div class="seg">
         <button
@@ -156,6 +179,18 @@ onBeforeUnmount(() => {
 .act {
   font-size: 11px;
   padding: 4px 10px;
+}
+
+.act:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  background: var(--hue-border-subtle);
+  margin: 0 2px;
 }
 
 .seg {

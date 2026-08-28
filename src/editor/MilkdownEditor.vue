@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { languages } from '@codemirror/language-data'
 import { Crepe } from '@milkdown/crepe'
+import { editorViewCtx } from '@milkdown/core'
 import { replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
@@ -83,21 +84,31 @@ onBeforeUnmount(() => {
   mounted = false
 })
 
-/** 供父组件在切回 WYSIWYG 时灌入源码文本 */
-function setMarkdown(markdown: string): void {
+/** 供父组件在切回 WYSIWYG 时灌入源码文本（异步：导出需等 DOM 刷新后再读） */
+async function setMarkdown(markdown: string): Promise<void> {
   if (!crepe) return
-  crepe.editor.action(replaceAll(markdown))
+  await crepe.editor.action(replaceAll(markdown))
 }
 
 function getMarkdown(): string {
   return crepe?.getMarkdown() ?? props.modelValue
 }
 
+/**
+ * 取「已渲染」的 HTML（所见即所得导出）：直接读 ProseMirror 视图 DOM。
+ * 比重新跑序列化管线更稳，且导出结果与屏幕所见一致。
+ */
+function getHTML(): string {
+  if (!crepe) return ''
+  const view = crepe.editor.action((ctx) => ctx.get(editorViewCtx))
+  return view.dom.innerHTML
+}
+
 function setReadonly(value: boolean): void {
   crepe?.setReadonly(value)
 }
 
-defineExpose({ setMarkdown, getMarkdown, setReadonly })
+defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly })
 </script>
 
 <template>

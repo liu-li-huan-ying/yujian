@@ -186,11 +186,24 @@ function revealLine(line: number): void {
   source.value?.revealLine(line)
 }
 
+/**
+ * 取当前文档的渲染 HTML（用于导出）。
+ * 源码模式下渲染器 DOM 落后于编辑，先灌入当前源码文本再读，
+ * 且不切换可见模式、不触发保存态变化（内容本就等于原文）。
+ */
+async function getHTML(): Promise<string> {
+  if (mode.value === 'source') {
+    await milkdown.value?.setMarkdown(fidelity.currentText.value)
+  }
+  return (await milkdown.value?.getHTML()) ?? ''
+}
+
 defineExpose({
   save,
   load,
   switchTo,
   revealLine,
+  getHTML,
   dirty,
   willNormalize,
   mode,

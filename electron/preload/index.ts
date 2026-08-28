@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
+  type ExportPayload,
+  type ExportResult,
   type FileNode,
   type SearchFileResult,
   type SessionState,
@@ -85,7 +87,15 @@ const api = {
 
   onWindowStateChange: (callback: (state: WindowState) => void): void => {
     ipcRenderer.on(IPC.WIN_STATE_CHANGE, (_event, state: WindowState) => callback(state))
-  }
+  },
+
+  // ── 导出（HTML / PDF）──
+
+  exportHtml: (payload: ExportPayload): Promise<ExportResult> =>
+    ipcRenderer.invoke(IPC.EXPORT_HTML, payload),
+
+  exportPdf: (payload: ExportPayload): Promise<ExportResult> =>
+    ipcRenderer.invoke(IPC.EXPORT_PDF, payload)
 }
 
 export type ElectronAPI = typeof api
