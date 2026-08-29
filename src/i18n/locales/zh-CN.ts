@@ -178,10 +178,10 @@ const zhCN = {
     writingGoal: '写作目标',
     writingGoalPlaceholder: '目标字数',
     goalProgress: '进度',
-    /* ── 状态栏统计单位（中英一致）── */
+    /* ── 状态栏统计单位（中文用汉字，英文用缩写）── */
     unitHan: '字',
     unitWord: '词',
-    unitMin: '′',
+    unitMin: '分',
     /* ── 左侧搜索全局替换（批次三）：复用上方 replace / replacePlaceholder / replaceAll ── */
     replaceConfirm: '将替换全部 {n} 处匹配（不可撤销），继续？',
     replaceDone: '已替换 {n} 处 / {files} 个文件',

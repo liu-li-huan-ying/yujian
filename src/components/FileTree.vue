@@ -30,6 +30,13 @@ function displayName(node: FileNode): string {
   return node.name.replace(/\.(md|markdown)$/i, '')
 }
 
+/** 目录是否包含当前活动文档（祖先链高亮，跨平台分隔符兼容） */
+function isActiveAncestor(node: FileNode): boolean {
+  if (node.type !== 'dir' || !props.activePath) return false
+  const sep = node.path.includes('\\') ? '\\' : '/'
+  return props.activePath.startsWith(node.path + sep)
+}
+
 function onContextMenu(node: FileNode, e: MouseEvent): void {
   emit('context-menu', { x: e.clientX, y: e.clientY, node })
 }
@@ -50,15 +57,18 @@ function fwdRenameConfirm(path: string, value: string): void {
 
 <template>
   <ul class="tree">
-    <li v-for="node in nodes" :key="node.path">
+    <li v-for="node in nodes" :key="node.path" :style="{ '--lv': level }">
       <button
         class="row"
         :class="{
           'row--dir': node.type === 'dir',
-          'row--active': node.type === 'file' && node.path === activePath
+          'row--active': node.type === 'file' && node.path === activePath,
+          'row--dir-active': isActiveAncestor(node)
         }"
         :style="{ paddingLeft: `${8 + level * 14}px` }"
         :title="node.name"
+        :aria-expanded="node.type === 'dir' ? expanded.has(node.path) : undefined"
+        :aria-current="node.type === 'file' && node.path === activePath ? 'page' : undefined"
         type="button"
         @click="node.type === 'dir' ? emit('toggle', node.path) : emit('select', node)"
         @contextmenu.prevent="onContextMenu(node, $event)"
@@ -85,7 +95,13 @@ function fwdRenameConfirm(path: string, value: string): void {
         <span v-else class="chev chev--spacer" aria-hidden="true" />
 
         <Icon
-          :name="node.type === 'dir' ? 'folder' : 'file'"
+          :name="
+            node.type === 'dir'
+              ? expanded.has(node.path)
+                ? 'folder-open'
+                : 'folder'
+              : 'file-text'
+          "
           :size="14"
           class="ico"
           :class="{ 'ico--open': node.type === 'dir' && expanded.has(node.path) }"
@@ -125,11 +141,39 @@ function fwdRenameConfirm(path: string, value: string): void {
   padding: 0;
 }
 
-/* 嵌套层级用极细的玉质分隔线表达「归属关系」，层次一目了然而不喧宾夺主 */
+/* 嵌套层级不再用 margin+整条边框：归属关系交给 li 引导线（对齐父行箭头列），
+   视觉更轻、且线与箭头严格对齐（几何：行内边距 = 8 + level*14，箭头中心 = 13 + level*14） */
 .tree .tree {
-  margin-left: 7px;
+  margin-left: 0;
   padding-left: 0;
-  border-left: 1px solid var(--hue-border-subtle);
+}
+
+.tree > li {
+  position: relative;
+}
+
+/* 垂直引导线：从父行箭头中心垂直贯穿整棵子树（展开且有子节点时 :has 命中） */
+.tree > li:has(> .tree)::before {
+  content: '';
+  position: absolute;
+  left: calc(13px + var(--lv, 0) * 14px);
+  top: calc(var(--h-row) / 2);
+  bottom: 0;
+  width: 1px;
+  background: var(--hue-border-subtle);
+  pointer-events: none;
+}
+
+/* 水平接片：子行从引导线连到本行内容（9px，正好接上箭头前的留白） */
+.tree .tree > li > .row::after {
+  content: '';
+  position: absolute;
+  left: calc(13px + (var(--lv, 0) - 1) * 14px);
+  top: 50%;
+  width: 9px;
+  height: 1px;
+  background: var(--hue-border-subtle);
+  pointer-events: none;
 }
 
 .row {
@@ -158,7 +202,7 @@ function fwdRenameConfirm(path: string, value: string): void {
   color: var(--hue-text-1);
 }
 
-/* 当前文档：玉质高亮底 + 强调色文字 + 左侧一道克制的高亮条，与整体语言一致 */
+/* 当前文档：玉质高亮底 + 强调色文字 + 左侧指示条 */
 .row--active {
   background: var(--hue-active);
   color: var(--hue-accent);
@@ -176,6 +220,11 @@ function fwdRenameConfirm(path: string, value: string): void {
   background: var(--hue-accent);
 }
 
+/* 嵌套行的指示条对齐本层引导线列，与树状引导线连成一条视觉轨道 */
+.tree .tree > li > .row--active::before {
+  left: calc(13px + (var(--lv, 0) - 1) * 14px);
+}
+
 .row:focus-visible {
   outline: 2px solid var(--hue-accent);
   outline-offset: -2px;
@@ -190,7 +239,9 @@ function fwdRenameConfirm(path: string, value: string): void {
 .chev {
   flex: 0 0 10px;
   color: var(--hue-text-3);
-  transition: transform var(--dur-fast) var(--ease);
+  transition:
+    transform var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 
 .chev--open {
@@ -204,13 +255,16 @@ function fwdRenameConfirm(path: string, value: string): void {
 .ico {
   flex: 0 0 14px;
   color: var(--hue-text-3);
+  transition: color var(--dur-fast) var(--ease);
 }
 
-/* 展开的目录用强调色点睛，收起则保持低调 */
-.row--dir .ico--open {
-  color: var(--hue-accent);
+/* 图标明度状态：收起目录低调、悬停微亮、展开/含活动文档/当前文档用强调色点睛 */
+.row--dir:hover .ico {
+  color: var(--hue-text-2);
 }
 
+.row--dir .ico--open,
+.row--dir-active .ico,
 .row--active .ico {
   color: var(--hue-accent);
 }

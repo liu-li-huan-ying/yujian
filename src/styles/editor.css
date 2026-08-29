@@ -518,10 +518,12 @@
 }
 
 /* ── 凝神 2.0（打字机 + 禅 融合）──
-   当前块青瓷微光底衬；其余块按「块距」五档衰减（.zen-dim-1..5）——前两跳掉得快、
-   远处趋同，余光不被文字墙拽走、抬眼即找回上下文。档位由 --fog-1..5 承载
-   （设置面板换档只改变量，见 editor/zen.ts 的 setZenPrefs），装饰由 ProseMirror
-   plugin 非破坏性注入（只加 class，不改文档），退出即还原。
+   当前文本块青瓷微光底衬；其余文本块按「文本块距」五档衰减（.zen-dim-1..5）——
+   列表项 / 引用 / 表格单元格内的嵌套文本块也逐块淡出（装饰按文档序遍历全部文本块，
+   见 editor/zen.ts 的 buildDecorations），长列表不会再「整棵全亮」。
+   容器类视觉元素（表格网格 / 引用竖线 / 列表圆点）保持满透明度——结构保留、文字退后。
+   档位由 --fog-1..5 承载（设置面板换档只改变量），装饰由 ProseMirror plugin
+   非破坏性注入（只加 class，不改文档），退出即还原。
    「雾感」只走 opacity（大文档逐块 blur 必掉帧）；上下羽化遮罩由 shell 级
    .editor::before/::after 承担（styles/zen.css）。 */
 .milkdown .ProseMirror .zen-dim-1 { opacity: var(--fog-1, 0.55); }
