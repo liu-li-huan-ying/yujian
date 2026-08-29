@@ -17,7 +17,7 @@ import {
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
-import { createDoc, createFolder, deleteItem, listTree, renameItem, searchVault, stopWatching, watchVault } from './vault'
+import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault } from './vault'
 import { patchSession, readSession } from './session'
 import { saveAsset } from './assets'
 import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
@@ -183,6 +183,12 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.VAULT_SEARCH, (_event, root: string, query: string) =>
     searchVault(root, query)
+  )
+
+  ipcMain.handle(
+    IPC.VAULT_REPLACE,
+    (_event, root: string, query: string, replacement: string, caseSensitive: boolean) =>
+      replaceInVault(root, query, replacement, caseSensitive)
   )
 
   // ── 会话持久化（崩溃恢复）──

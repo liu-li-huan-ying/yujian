@@ -39,6 +39,8 @@ const emit = defineEmits<{
   (e: 'deleted', path: string): void
   /** 全文搜索结果点击：让 App 打开文档并定位到命中行 */
   (e: 'open-result', payload: { path: string; line: number }): void
+  /** 全局替换完成：把被改写的文件列表抛给 App，便于重载正在编辑的文档 */
+  (e: 'replaced', paths: string[]): void
 }>()
 
 /** 目录默认折叠，展开状态提升到此处，方便会话恢复时自动展开祖先链 */
@@ -64,8 +66,8 @@ const isSearching = ref(false)
 const searchResults = ref<SearchFileResult[]>([])
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
-watch(searchQuery, (q) => {
-  const query = q.trim()
+function runSearch(): void {
+  const query = searchQuery.value.trim()
   if (!query) {
     searchResults.value = []
     isSearching.value = false
@@ -85,7 +87,48 @@ watch(searchQuery, (q) => {
       isSearching.value = false
     }
   }, 300)
-})
+}
+
+watch(searchQuery, runSearch)
+
+/* ── 全局替换（在搜索命中的文件范围内）── */
+const showReplace = ref(false)
+const replaceQuery = ref('')
+const confirming = ref<number | null>(null)
+const replacing = ref(false)
+
+const totalHits = computed(() => searchResults.value.reduce((n, f) => n + f.hits.length, 0))
+
+/** 点击「替换全部」：先确认（展示将影响的匹配数），避免误伤 */
+function askReplace(): void {
+  if (!replaceQuery.value || replacing.value) return
+  confirming.value = totalHits.value
+}
+
+/** 确认执行：在搜索命中文件范围内做字面量替换（不区分大小写，与搜索一致），写回磁盘 */
+async function doReplace(): Promise<void> {
+  const n = confirming.value
+  confirming.value = null
+  if (n == null || !props.vaultPath || !replaceQuery.value) return
+  replacing.value = true
+  try {
+    const res = await window.api.replaceInVault(
+      props.vaultPath,
+      searchQuery.value,
+      replaceQuery.value,
+      false
+    )
+    showToast(L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)))
+    emit('replaced', res.paths)
+    runSearch() // 刷新结果，反映替换后状态
+    replaceQuery.value = ''
+    showReplace.value = false
+  } catch {
+    showToast(L.replaceFail)
+  } finally {
+    replacing.value = false
+  }
+}
 
 function clearSearch(): void {
   searchQuery.value = ''
@@ -394,6 +437,45 @@ function startDrag(e: PointerEvent): void {
         >
           ×
         </button>
+      </div>
+
+      <!-- 全局替换：在「搜索命中的文件」范围内替换，融入现有搜索框 -->
+      <div v-if="searchQuery.trim() && searchResults.length" class="repl">
+        <button
+          class="repl__toggle"
+          type="button"
+          :class="{ 'repl__toggle--on': showReplace }"
+          @click="showReplace = !showReplace"
+        >
+          {{ L.replace }}
+        </button>
+
+        <div v-if="showReplace" class="repl__panel">
+          <input
+            v-model="replaceQuery"
+            class="repl__input"
+            type="text"
+            :placeholder="L.replacePlaceholder"
+            :disabled="replacing"
+            @keydown.enter="askReplace"
+          />
+          <button
+            class="repl__go"
+            type="button"
+            :disabled="replacing || !replaceQuery"
+            @click="askReplace"
+          >
+            {{ replacing ? '…' : L.replaceAll }}
+          </button>
+        </div>
+
+        <div v-if="confirming !== null" class="repl__confirm">
+          <span class="repl__confirm-text">{{ L.replaceConfirm.replace('{n}', String(confirming)) }}</span>
+          <button type="button" class="repl__ok" :disabled="replacing" @click="doReplace">确认</button>
+          <button type="button" class="repl__cancel" :disabled="replacing" @click="confirming = null">
+            取消
+          </button>
+        </div>
       </div>
 
       <!-- 搜索态：结果列表 / 进行中 / 无结果 -->
@@ -736,6 +818,129 @@ function startDrag(e: PointerEvent): void {
 }
 
 .search__clear:hover {
+  color: var(--hue-text-1);
+  background: var(--bg-hover);
+}
+
+/* 全局替换：与搜索框同源玉质风格，作为搜索框下方的次级操作区 */
+.repl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0 2px;
+}
+
+.repl__toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-2);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.repl__toggle:hover {
+  color: var(--hue-text-1);
+  background: var(--bg-hover);
+}
+
+.repl__toggle--on {
+  color: var(--hue-accent);
+  border-color: var(--hue-accent);
+  background: var(--hue-active);
+}
+
+.repl__panel {
+  display: flex;
+  gap: 6px;
+}
+
+.repl__input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--hue-text-1);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.repl__input:focus {
+  border-color: var(--hue-accent);
+}
+
+.repl__go {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.repl__go:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.repl__confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--hue-surmount, rgba(var(--hue-tint-2, 120, 180, 170), 0.12));
+  border: 1px solid var(--hue-border-subtle);
+}
+
+.repl__confirm-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--hue-text-2);
+}
+
+.repl__ok,
+.repl__cancel {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.repl__ok {
+  color: #fff;
+  background: var(--hue-accent);
+  border-color: var(--hue-accent);
+}
+
+.repl__cancel:hover {
   color: var(--hue-text-1);
   background: var(--bg-hover);
 }

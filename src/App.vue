@@ -159,6 +159,13 @@ async function onOpenResult(payload: { path: string; line: number }): Promise<vo
   host.value?.revealLine(payload.line)
 }
 
+/** 全局替换完成：若当前正在编辑的文档在改写范围内，从磁盘重载以反映新内容 */
+function onSearchReplaced(paths: string[]): void {
+  if (filePath.value && paths.includes(filePath.value)) {
+    void host.value?.load(filePath.value)
+  }
+}
+
 /* ── 多标签交互 ── */
 
 function activateTab(path: string): void {
@@ -382,6 +389,8 @@ const stats = computed<TextStats>(
   () => host.value?.stats ?? { han: 0, words: 0, chars: 0, charsNoSpace: 0, readingMinutes: 0 }
 )
 
+/* ⚠️ 快照功能：实现但未测试（implemented but NOT yet tested）。
+   以下恢复/删除/开关逻辑已落地但未做运行期人工验证，暂不体验，待后续专项审查补验收。 */
 /** 打开/关闭快照面板：打开时刷新当前文档快照列表 */
 function onToggleSnapshot(): void {
   snapshotOpen.value = !snapshotOpen.value
@@ -628,6 +637,7 @@ onBeforeUnmount(() => {
         @renamed="onRenamed"
         @deleted="onDeleted"
         @open-result="onOpenResult"
+        @replaced="onSearchReplaced"
       />
 
       <main class="editor">
@@ -703,8 +713,8 @@ onBeforeUnmount(() => {
           <span>{{ modeLabel }}</span>
           <span v-if="host?.selectionCount" class="sel">{{ U.selection }} {{ host.selectionCount }}</span>
           <button class="stat-chip" type="button" @click="onToggleStats" :title="U.stats">
-            {{ stats.han }}<i class="u">字</i> · {{ stats.words }}<i class="u">词</i> ·
-            {{ stats.readingMinutes }}<i class="u">′</i>
+            {{ stats.han }}<i class="u">{{ U.unitHan }}</i> · {{ stats.words }}<i class="u">{{ U.unitWord }}</i> ·
+            {{ stats.readingMinutes }}<i class="u">{{ U.unitMin }}</i>
           </button>
           <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
             {{ localeLabel }}

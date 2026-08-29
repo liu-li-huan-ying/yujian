@@ -179,6 +179,14 @@ const enUS = {
     writingGoal: 'Writing goal',
     writingGoalPlaceholder: 'Target count',
     goalProgress: 'Progress',
+    /* ── Status bar stat units (zh/en consistent) ── */
+    unitHan: 'chars',
+    unitWord: 'words',
+    unitMin: 'min',
+    /* ── Sidebar global replace (reuses replace/replacePlaceholder/replaceAll above) ── */
+    replaceConfirm: 'This replaces all {n} matches and cannot be undone. Continue?',
+    replaceDone: 'Replaced {n} matches in {files} files',
+    replaceFail: 'Replace failed',
     /* ── Focus mode (typewriter + zen, Batch 2) ── */
     focus: 'Focus',
     focusTitle: 'Focus mode: center current line + dim the rest'

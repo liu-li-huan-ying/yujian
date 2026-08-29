@@ -21,6 +21,8 @@ export const IPC = {
 
   // 笔记库：全文搜索
   VAULT_SEARCH: 'vault:search',
+  // 笔记库：全局替换（在搜索命中的文件范围内替换）
+  VAULT_REPLACE: 'vault:replace',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -107,6 +109,16 @@ export interface SearchFileResult {
   /** 文件名（含扩展名） */
   name: string
   hits: SearchLineHit[]
+}
+
+/** 全局替换结果：在搜索命中的文件范围内替换 */
+export interface ReplaceResult {
+  /** 替换发生的匹配总数 */
+  replaced: number
+  /** 被修改的文件数 */
+  files: number
+  /** 被改写的文件路径列表（供前端判断是否需要重载当前文档） */
+  paths: string[]
 }
 
 /* ── 会话状态（崩溃恢复）────────────────────── */
