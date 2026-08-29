@@ -467,6 +467,28 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 所见即所得：`src/editor/find-wysiwyg.ts` —— ProseMirror 原生 `TextSelection` 选中当前命中（编辑器天然高亮选区）+ `scrollIntoView`，**不注入任何 decoration plugin**，对文档结构零侵入。
 * 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`；玻璃浮层 `FindPanel.vue` 由标题栏 `search` 图标或 `Ctrl+F` 唤起。
 
+### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）
+
+**版本快照（本地唯一真源，与 `.mdeditor/` 分离）**
+
+* 存储：main 进程在 vault 根建 `.yujian-history/<path-hash>/<ISO8601>.md`（独立于 `.mdeditor/`，建议进 vault `.gitignore`）。`electron/main/snapshots.ts` 提供 `snapshotList` / `snapshotCreate`（写一份，可带备注）/ `snapshotRestore`（**只读返回内容**，不写磁盘）/ `snapshotDelete`。
+* IPC：通道 `snapshot:list` / `snapshot:create` / `snapshot:restore` / `snapshot:delete` 在 `electron/shared/ipc-channels.ts` 集中定义；preload 暴露 `window.api.snapshotList/Create/Restore/Delete`（类型自动派生）。
+* 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**）；玻璃 `SnapshotPanel.vue`（锚定 `.editor` 右上）：备注输入 + 保存、列表（时间 + 备注 + 字数差 `deltaChars`）、选中→`snapshotRestore` 只读返回→`diffLines`（`diff@^7.0.0`）摊平逐行 add/del/ctx 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
+* 行级 diff 库选型修正：原计划写 `jsdiff`，但 `jsdiff@1.1.1` 实为「JSON 对象 diff」库（装配错误）；正确库是 `diff@^7.0.0`（`diffLines`），已在 `package.json` 落地，`jsdiff` 已卸载；无类型的 `diff@7` 在 `src/types/diff.d.ts` 补了环境声明。
+* 自动快照策略（防抖保存 + 定时）已留接口；批次二先落地「手动留档 + 行级 diff 预览 + 回滚」闭环，自动策略在后续打磨中接入同一 `snapshotCreate`。
+
+**写作统计（纯函数，零依赖）**
+
+* `src/utils/text-stats.ts`：`computeStats(text)` 输出 `han`(CJK 字数) / `words`(英文词) / `chars`(含空白) / `charsNoSpace` / `readingMinutes`（中文 \~300 字/分 + 英文 \~200 词/分混合估算）。
+* 状态栏紧凑读数 `{{han}}字 · {{words}}词 · {{readingMinutes}}′`（点击唤起玻璃 `StatsPopover.vue`）；弹层含汉字/词/字符/不含空白/阅读时长 2 列网格 + 选区统计 + SVG 进度环（`R=26`，按 `han/goal` 比例）+ 写作目标 `number` 输入；目标经 `patchSession({ writingGoal })` 持久化。
+
+**凝神模式 = 打字机 + 禅 融合（零新增依赖）**
+
+* 用户决策：两体验融合为典雅的「**凝神**」模式（图标 `moon`，英文 `Focus`），标题栏一个开关统一控制。
+* 所见即所得：`src/editor/zen.ts` 用 ProseMirror **node Decoration**（`$prose(() => createZenPlugin())` 注册）——当前光标块加 `.zen-active`、其余块加 `.zen-dim`（opacity .26 + 降饱和）；CSS 做不到「按光标给除当前块外所有块加类」，故必须走 Decoration（非破坏性，不标 dirty）。当前行 `behavior:'smooth'` 垂直居中（偏上 1/3），rAF 节流、失焦暂停。
+* 源码模式：`SourceEditor` 用 `EditorView.scrollIntoView` 居中（同源 `isZenActive()` 模块级开关）。`setZen` 切换后 dispatch **空事务**触发 `apply` 重算装饰（空事务不改文档、不误标脏）。
+* 持久化：`SessionState` 新增 `focusMode?: boolean`，随会话恢复（`App.onMounted` 读 `focusMode` → 为真则 `setZen(true)`）；切 tab / 切模式前暂停居中，与 `captureScroll/restoreScroll`、多标签互不打架。
+
 ***
 
 ## 6. 技术写作场景专项设计
@@ -528,6 +550,8 @@ export interface SessionState {
   sidebarWidth: number        // 侧栏宽度（px）
   startupMode: StartupMode    // 启动偏好：恢复上次会话 / 全新页面
   openTabs?: string[]         // 多标签：当前打开的文档绝对路径列表（Phase 2 批次一）
+  focusMode?: boolean         // 凝神模式（打字机+禅融合）开关（Phase 2 批次二）
+  writingGoal?: number        // 写作目标（字数），0 = 未设（Phase 2 批次二）
 }
 ```
 
@@ -535,18 +559,18 @@ export interface SessionState {
 
 ## 8. 开发路线图
 
-| 阶段           | 目标                          | 产出验收标准                            |
-| ------------ | --------------------------- | --------------------------------- |
-| **0. 地基**    | 脚手架 + 窗口 + IPC 打通           | `npm run dev` 能弹出一个空白 Electron 窗口 |
-| **1. 编辑器核心** | Crepe 接入 + 双模式切换 + 打开/保存 md | 能打开一个 md 编辑并保存，Ctrl+/ 切换源码无内容丢失   |
-| **2. 笔记库**   | 文件树 + 自动保存 + 崩溃恢复           | 能打开整个文件夹，断电重启后内容不丢                |
-| **3. 写作套件**  | Mermaid + 公式核验 + 表格 + 代码块   | 一篇含图表的文章能正常编辑渲染                   |
-| **4. 图片**    | 粘贴落盘 + 图床配置                 | 截图粘贴即可插入，图床可配                     |
-| **5. 搜索**    | MiniSearch 索引 + 搜索面板        | 千篇笔记下搜索响应 < 100ms                 |
-| **6. 导出**    | HTML / PDF / 单 md           | 导出结果与编辑器内观感一致                     |
-| **7. 打磨**    | 主题、体积裁剪、快捷键、设置面板            | 安装包体积优化，可用                        |
-| **8. 分发**    | electron-builder 打包         | 产出 Windows 安装包，可安装运行              |
-| **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+打字机/禅模式+导出增强+写作辅助+断链检查 | 🔧 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二/三待排期（见 `docs/PHASE2-PLAN.md`） |
+| 阶段             | 目标                                          | 产出验收标准                                                          |
+| -------------- | ------------------------------------------- | --------------------------------------------------------------- |
+| **0. 地基**      | 脚手架 + 窗口 + IPC 打通                           | `npm run dev` 能弹出一个空白 Electron 窗口                               |
+| **1. 编辑器核心**   | Crepe 接入 + 双模式切换 + 打开/保存 md                 | 能打开一个 md 编辑并保存，Ctrl+/ 切换源码无内容丢失                                 |
+| **2. 笔记库**     | 文件树 + 自动保存 + 崩溃恢复                           | 能打开整个文件夹，断电重启后内容不丢                                              |
+| **3. 写作套件**    | Mermaid + 公式核验 + 表格 + 代码块                   | 一篇含图表的文章能正常编辑渲染                                                 |
+| **4. 图片**      | 粘贴落盘 + 图床配置                                 | 截图粘贴即可插入，图床可配                                                   |
+| **5. 搜索**      | MiniSearch 索引 + 搜索面板                        | 千篇笔记下搜索响应 < 100ms                                               |
+| **6. 导出**      | HTML / PDF / 单 md                           | 导出结果与编辑器内观感一致                                                   |
+| **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                            | 安装包体积优化，可用                                                      |
+| **8. 分发**      | electron-builder 打包                         | 产出 Windows 安装包，可安装运行                                            |
+| **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+凝神(打字机/禅)模式+导出增强+写作辅助+断链检查 | 🔧 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二已落地（版本快照·写作统计·凝神模式）；批次三待排期（见 `docs/PHASE2-PLAN.md`） |
 
 > 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
 

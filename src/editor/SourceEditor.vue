@@ -6,6 +6,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { findField } from './find-source'
+import { isZenActive } from './zen'
 
 const props = withDefaults(
   defineProps<{
@@ -108,8 +109,16 @@ onMounted(() => {
         findField,
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
-          if (!update.docChanged || applying) return
-          emit('update:modelValue', update.state.doc.toString())
+          if (update.docChanged && !applying) emit('update:modelValue', update.state.doc.toString())
+          // 凝神模式（打字机）：光标移动时把当前行居中（rAF 错开，避免在更新周期内 dispatch）
+          if (isZenActive() && update.selectionSet) {
+            const head = update.state.selection.main.head
+            requestAnimationFrame(() => {
+              if (!view) return
+              const line = view.state.doc.lineAt(head)
+              view.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: 'center' }) })
+            })
+          }
         }),
         // 粘贴 / 拖入图片：落盘到 .assets 并插入相对路径引用
         EditorView.domEventHandlers({
@@ -190,7 +199,14 @@ function getView(): EditorView | null {
   return view
 }
 
-defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, getView })
+/** 把当前光标所在行滚动到视口中央（凝神/打字机模式调用） */
+function centerActiveLine(): void {
+  if (!view) return
+  const line = view.state.doc.lineAt(view.state.selection.main.head)
+  view.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: 'center' }) })
+}
+
+defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, getView, centerActiveLine })
 </script>
 
 <template>

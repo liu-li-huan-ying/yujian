@@ -156,7 +156,32 @@ const enUS = {
     noMatch: 'No match',
     selection: 'Sel',
     tabPos: 'Current / total',
-    moreTabs: '{n} tabs'
+    moreTabs: '{n} tabs',
+    /* ── Version snapshots (Batch 2) ── */
+    snapshots: 'Snapshots',
+    snapshotSave: 'Save snapshot',
+    snapshotNote: 'Note',
+    snapshotNotePlaceholder: 'Note (optional, e.g. "before publish")',
+    snapshotEmpty: 'No snapshots yet. Save or click "Save snapshot" to keep one.',
+    snapshotRestore: 'Restore',
+    snapshotDelete: 'Delete',
+    snapshotCount: '{n} snapshots',
+    diffAdd: 'Added',
+    diffDel: 'Removed',
+    /* ── Writing stats (Batch 2) ── */
+    stats: 'Stats',
+    charCount: 'Han',
+    wordCount: 'Words',
+    totalChars: 'Chars',
+    totalCharsNoSpace: 'Chars (no space)',
+    readingTime: 'Read',
+    selectionStats: 'Selection',
+    writingGoal: 'Writing goal',
+    writingGoalPlaceholder: 'Target count',
+    goalProgress: 'Progress',
+    /* ── Focus mode (typewriter + zen, Batch 2) ── */
+    focus: 'Focus',
+    focusTitle: 'Focus mode: center current line + dim the rest'
   },
 
   /* ── Help panel: shortcuts + guide ── */

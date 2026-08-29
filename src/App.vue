@@ -10,6 +10,8 @@ import Outline from './components/Outline.vue'
 import HelpPanel from './components/HelpPanel.vue'
 import TabBar from './components/TabBar.vue'
 import FindPanel from './components/FindPanel.vue'
+import SnapshotPanel from './components/SnapshotPanel.vue'
+import StatsPopover from './components/StatsPopover.vue'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange, StartupMode } from '../electron/shared/ipc-channels'
@@ -17,6 +19,8 @@ import { buildExportHtml } from './export/docTemplate'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
 import { useTabsStore } from './store/tabs'
+import { useSnapshotsStore } from './store/snapshots'
+import type { TextStats } from './utils/text-stats'
 
 const { t: L, getLocale } = useI18n()
 const U = L.ui
@@ -101,6 +105,14 @@ watch(
     const path = pendingPath.value
     pendingPath.value = null
     void host.value?.load(path)
+  }
+)
+
+/** 编辑器就绪后若会话记录开启了凝神模式，则恢复（插件已注册，切开关即生效） */
+watch(
+  () => host.value?.ready,
+  (ready) => {
+    if (ready && focusMode.value) host.value?.setZen(true)
   }
 )
 
@@ -358,6 +370,67 @@ const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280
 const sidebarVisible = ref(true)
 const outlineVisible = ref(true)
 
+/* ── 批次二：快照面板 / 凝神模式 / 写作统计 ── */
+
+const snapshots = useSnapshotsStore()
+const snapshotOpen = ref(false)
+const statsOpen = ref(false)
+const focusMode = ref(false)
+/** 写作目标字数（会话级持久化；0 = 未设） */
+const writingGoal = ref(0)
+const stats = computed<TextStats>(
+  () => host.value?.stats ?? { han: 0, words: 0, chars: 0, charsNoSpace: 0, readingMinutes: 0 }
+)
+
+/** 打开/关闭快照面板：打开时刷新当前文档快照列表 */
+function onToggleSnapshot(): void {
+  snapshotOpen.value = !snapshotOpen.value
+  if (snapshotOpen.value) void snapshots.refresh(vaultPath.value, filePath.value)
+}
+
+/** 切换凝神模式：同步编辑器 + 持久化 */
+function onToggleFocus(): void {
+  focusMode.value = !focusMode.value
+  host.value?.setZen(focusMode.value)
+  void window.api.patchSession({ focusMode: focusMode.value })
+}
+
+/** 打开/关闭统计弹层 */
+function onToggleStats(): void {
+  statsOpen.value = !statsOpen.value
+}
+
+/** 恢复快照：读取内容灌入编辑器并标脏（主进程只读返回，不写盘，守保真红线） */
+async function onSnapshotRestore(id: string): Promise<void> {
+  try {
+    const content = await window.api.snapshotRestore(vaultPath.value!, filePath.value!, id)
+    if (content == null) return
+    host.value?.loadMarkdownExternal(content)
+    showToast('已恢复到该快照', 'ok')
+  } catch {
+    showToast('快照读取失败', 'err')
+  } finally {
+    snapshotOpen.value = false
+  }
+}
+
+/** 删除快照（主进程走系统回收站） */
+async function onSnapshotDelete(id: string): Promise<void> {
+  await snapshots.remove(vaultPath.value, filePath.value, id)
+  showToast('已删除快照', 'ok')
+}
+
+/** 更新写作目标并持久化 */
+function onGoalChange(value: number): void {
+  writingGoal.value = value
+  void window.api.patchSession({ writingGoal: value })
+}
+
+/** 切换文档时若面板开着则刷新列表 */
+watch(filePath, () => {
+  if (snapshotOpen.value) void snapshots.refresh(vaultPath.value, filePath.value)
+})
+
 /** 窄窗软收起：仅影响显示，不改持久偏好，加宽后恢复用户选择 */
 const sidebarShown = computed(() => sidebarVisible.value && windowWidth.value >= 460)
 const outlineShown = computed(() => outlineVisible.value && windowWidth.value >= 720)
@@ -474,6 +547,8 @@ onMounted(async () => {
   startupMode.value = session.startupMode
   sidebarVisible.value = session.sidebarVisible
   outlineVisible.value = session.outlineVisible
+  focusMode.value = session.focusMode === true
+  writingGoal.value = session.writingGoal ?? 0
 
   // 启动偏好为「全新页面」时不恢复上次笔记库/文档，打开即空白
   if (session.startupMode !== 'fresh') {
@@ -520,9 +595,13 @@ onBeforeUnmount(() => {
       @about="onHelp('guide')"
       :sidebar-visible="sidebarVisible"
       :outline-visible="outlineVisible"
+      :snapshot-active="snapshotOpen"
+      :focus-active="focusMode"
       @toggle-sidebar="onToggleSidebar"
       @toggle-outline="onToggleOutline"
       @find="openFind"
+      @toggle-snapshot="onToggleSnapshot"
+      @toggle-focus="onToggleFocus"
     />
 
     <TabBar
@@ -581,6 +660,25 @@ onBeforeUnmount(() => {
           @replace-all="findReplaceAll"
           @close="closeFind"
         />
+
+        <SnapshotPanel
+          v-if="snapshotOpen"
+          :file-path="filePath"
+          :vault-path="vaultPath"
+          :current-text="host?.getMarkdown() ?? ''"
+          @restore="onSnapshotRestore"
+          @delete="onSnapshotDelete"
+          @close="snapshotOpen = false"
+        />
+
+        <StatsPopover
+          v-if="statsOpen"
+          :stats="stats"
+          :selection-count="host?.selectionCount ?? 0"
+          :goal="writingGoal"
+          @update:goal="onGoalChange"
+          @close="statsOpen = false"
+        />
       </main>
 
       <Outline
@@ -602,11 +700,15 @@ onBeforeUnmount(() => {
               <i class="dot" :class="host?.dirty ? 'dot--dirty' : 'dot--saved'" />
               {{ host?.dirty ? U.statusUnsaved : U.statusSaved }}
             </span>
-            <span>{{ modeLabel }}</span>
-            <span v-if="host?.selectionCount" class="sel">{{ U.selection }} {{ host.selectionCount }}</span>
-            <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
-              {{ localeLabel }}
-            </button>
+          <span>{{ modeLabel }}</span>
+          <span v-if="host?.selectionCount" class="sel">{{ U.selection }} {{ host.selectionCount }}</span>
+          <button class="stat-chip" type="button" @click="onToggleStats" :title="U.stats">
+            {{ stats.han }}<i class="u">字</i> · {{ stats.words }}<i class="u">词</i> ·
+            {{ stats.readingMinutes }}<i class="u">′</i>
+          </button>
+          <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
+            {{ localeLabel }}
+          </button>
           </div>
         </div>
       </footer>
@@ -698,6 +800,33 @@ onBeforeUnmount(() => {
 
 .sel {
   color: var(--hue-text-2);
+}
+
+.stat-chip {
+  border: 1px solid var(--hue-border-subtle);
+  background: rgba(var(--hue-tint-1), 0.1);
+  color: var(--hue-text-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.3;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.stat-chip:hover {
+  color: var(--hue-accent);
+  border-color: var(--hue-accent);
+  background: rgba(var(--hue-tint-1), 0.2);
+}
+.stat-chip .u {
+  font-style: normal;
+  font-size: 10px;
+  opacity: 0.7;
+  margin-left: 1px;
 }
 
 .dot {

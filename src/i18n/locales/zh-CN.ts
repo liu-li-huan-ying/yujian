@@ -155,7 +155,32 @@ const zhCN = {
     noMatch: '无匹配',
     selection: '选区',
     tabPos: '当前 / 总数',
-    moreTabs: '{n} 个标签'
+    moreTabs: '{n} 个标签',
+    /* ── 版本快照（批次二）── */
+    snapshots: '快照',
+    snapshotSave: '保存快照',
+    snapshotNote: '备注',
+    snapshotNotePlaceholder: '备注（可选，如「发布前」）',
+    snapshotEmpty: '暂无快照，保存或点击「保存快照」留档',
+    snapshotRestore: '恢复',
+    snapshotDelete: '删除',
+    snapshotCount: '{n} 份',
+    diffAdd: '新增',
+    diffDel: '删除',
+    /* ── 写作统计（批次二）── */
+    stats: '统计',
+    charCount: '汉字',
+    wordCount: '词',
+    totalChars: '字符',
+    totalCharsNoSpace: '字符(不含空白)',
+    readingTime: '阅读',
+    selectionStats: '选区',
+    writingGoal: '写作目标',
+    writingGoalPlaceholder: '目标字数',
+    goalProgress: '进度',
+    /* ── 凝神模式（打字机 + 禅 融合，批次二）── */
+    focus: '凝神',
+    focusTitle: '凝神模式：当前行居中 + 沉浸淡化'
   },
 
   /* ── 帮助面板：快捷键 + 使用指南 ── */
