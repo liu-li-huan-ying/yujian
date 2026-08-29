@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import { useTabsStore } from '../store/tabs'
@@ -25,10 +25,15 @@ function baseName(path: string): string {
 const isActive = (path: string): boolean => path === tabs.activePath
 const showDot = (path: string): boolean => isActive(path) && props.dirty
 
-/* ── 溢出折叠：超出宽度的标签收进「更多」菜单 ── */
+/* ── 溢出折叠：以当前标签为中心的滑动窗口，超出部分收进「更多」 ──
+ * 设计要点（参考 VS Code / 浏览器标签条）：
+ *  - 始终保证 active 标签在可见窗口内，避免「切到哪个却看不见哪个」；
+ *  - 可见窗口长度 cap 由容器宽度贪心测得，窗口起点随 active 滑动；
+ *  - 折叠进「更多」的标签不入 DOM，50+ 标签时栏内节点仍是 ~cap 个，性能不退化。 */
 const scroller = ref<HTMLElement | null>(null)
 const tabEls = ref<(HTMLElement | null)[]>([])
-const overflowCount = ref(0)
+const windowStart = ref(0)
+const windowCount = ref(0)
 
 function setTabEl(el: unknown, i: number): void {
   tabEls.value[i] = (el as HTMLElement | null) ?? null
@@ -40,37 +45,65 @@ function recompute(): void {
   // 预留「更多」按钮宽度 + 右内边距
   const reserve = 50
   const avail = c.clientWidth - reserve
+  const len = tabs.tabs.length
+  // 贪心测得可容纳的标签数 cap（未挂载标签用 150px 估宽，差异可忽略）
   let used = 0
-  let visible = tabs.tabs.length
-  for (let i = 0; i < tabs.tabs.length; i++) {
+  let cap = len
+  for (let i = 0; i < len; i++) {
     const w = tabEls.value[i]?.offsetWidth ?? 150
     if (used + w > avail && i > 0) {
-      visible = i
+      cap = i
       break
     }
     used += w
   }
-  overflowCount.value = Math.max(0, tabs.tabs.length - visible)
+  cap = Math.max(1, cap)
+  // 以 active 为中心滑动窗口起点
+  const activeIdx = tabs.tabs.findIndex((t) => t.path === tabs.activePath)
+  let start = 0
+  if (activeIdx >= 0) {
+    if (activeIdx < cap) start = 0
+    else if (activeIdx > len - cap) start = len - cap
+    else start = Math.max(0, activeIdx - Math.floor((cap - 1) / 2))
+  }
+  windowStart.value = start
+  windowCount.value = cap
+}
+
+/* rAF 批处理：合并连续触发，避免切标签/缩放时的多次同步回流 */
+let rafId = 0
+function scheduleRecompute(): void {
+  if (rafId) cancelAnimationFrame(rafId)
+  rafId = requestAnimationFrame(() => {
+    rafId = 0
+    recompute()
+  })
 }
 
 let ro: ResizeObserver | null = null
 onMounted(() => {
-  recompute()
+  scheduleRecompute()
   if (typeof ResizeObserver !== 'undefined' && scroller.value) {
-    ro = new ResizeObserver(() => recompute())
+    ro = new ResizeObserver(() => scheduleRecompute())
     ro.observe(scroller.value)
   }
-  window.addEventListener('resize', recompute)
+  window.addEventListener('resize', scheduleRecompute)
 })
 onBeforeUnmount(() => {
+  if (rafId) cancelAnimationFrame(rafId)
   ro?.disconnect()
-  window.removeEventListener('resize', recompute)
+  window.removeEventListener('resize', scheduleRecompute)
 })
-watch(() => tabs.tabs.length, () => nextTick(recompute))
-watch(() => tabs.activePath, () => nextTick(recompute))
+watch(() => tabs.tabs.length, scheduleRecompute)
+watch(() => tabs.activePath, scheduleRecompute)
 
-const visibleTabs = computed(() => tabs.tabs.slice(0, tabs.tabs.length - overflowCount.value))
-const overflowTabs = computed(() => tabs.tabs.slice(tabs.tabs.length - overflowCount.value))
+const visibleTabs = computed(() =>
+  tabs.tabs.slice(windowStart.value, windowStart.value + windowCount.value)
+)
+const overflowTabs = computed(() =>
+  tabs.tabs.filter((_, i) => i < windowStart.value || i >= windowStart.value + windowCount.value)
+)
+const overflowCount = computed(() => Math.max(0, tabs.tabs.length - windowCount.value))
 
 /* ── 单标签右键菜单 ── */
 const menu = ref<{ x: number; y: number; path: string } | null>(null)
@@ -155,7 +188,7 @@ function onMoreSelect(action: string): void {
       v-if="moreMenu"
       :x="moreMenu.x"
       :y="moreMenu.y"
-      :items="overflowTabs.map((tb) => ({ action: tb.path, label: baseName(tb.path) }))"
+      :items="overflowTabs.map((tb) => ({ action: tb.path, label: baseName(tb.path), active: tb.path === tabs.activePath }))"
       @select="onMoreSelect"
       @close="moreMenu = null"
     />
