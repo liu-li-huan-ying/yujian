@@ -3,23 +3,23 @@
 > 范围：多文档标签 + 查找替换（计划 §2 批次一）
 > 配套权威文档：`docs/PHASE2-PLAN.md`（`PHASE2-BATCH1-UI-PLAN.md` 仅细化**组件落点与视觉规格**，不重复决策依据）
 > 适用设计系统：`docs/UI-DESIGN.md`（玉质 `.jade` 框架层 / 玻璃 `.glass` 浮起层 / 五套皮肤色相令牌）
-> 状态：**待主人确认**
+> 状态：**批次一已落地**（多标签 + 文件内查找替换 + 选区字数，含规模场景打磨，已推 `main`）
 
----
+***
 
 ## 0. 现状底座（已核实，直接复用，不重复造）
 
-| 能力 | 现状 | 本批次如何复用 |
-| --- | --- | --- |
-| 状态管理 | 已装 `pinia@4`，`main.ts` 已 `use(createPinia())` | 多标签 store 直接用 **Pinia**，与项目一致 |
-| 全局搜索 | `Sidebar.vue` 内搜索框 → `window.api.searchVault` → `SearchFileResult[]` | 全局查找**复用同一索引 / IPC**，新增玻璃浮层承载，结果 UI 复用 `SearchResults.vue` |
-| 结果展示 | `SearchResults.vue`（文件名 12.5px、命中 `mark` 用 accent、行号 mono 11px、玉质 hover） | 全局查找结果**零改直接嵌入** |
-| 玻璃浮层 | `TitleMenu.vue` / `ContextMenu.vue` / 命令面板 共用 `.glass` 单一事实来源 | 查找浮层、tab 右键、tab「▾更多」全部套 `.glass` |
-| 右键菜单 | `ContextMenu.vue`（玻璃、`x/y/items`、危险项样式） | tab 右键「关闭/关闭其他/关闭右侧/关闭全部」**直接传 items** |
-| 图标 | `Icon.vue`（Lucide 线性、`currentColor`、16 网格） | tab 的 `＋ / x / chevron-down / search` 全部走它 |
-| 单实例 EditorHost | 两 pane 常驻、`fidelity` 保真层、`captureScroll/restoreScroll` 已就绪 | 多标签切内容 = 单实例换 `setMarkdown`，**绝不每 tab 建实例**（守红线 2） |
+| 能力             | 现状                                                                       | 本批次如何复用                                                    |
+| -------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| 状态管理           | 已装 `pinia@4`，`main.ts` 已 `use(createPinia())`                            | 多标签 store 直接用 **Pinia**，与项目一致                              |
+| 全局搜索           | `Sidebar.vue` 内搜索框 → `window.api.searchVault` → `SearchFileResult[]`     | 全局查找**复用同一索引 / IPC**，新增玻璃浮层承载，结果 UI 复用 `SearchResults.vue` |
+| 结果展示           | `SearchResults.vue`（文件名 12.5px、命中 `mark` 用 accent、行号 mono 11px、玉质 hover） | 全局查找结果**零改直接嵌入**                                           |
+| 玻璃浮层           | `TitleMenu.vue` / `ContextMenu.vue` / 命令面板 共用 `.glass` 单一事实来源            | 查找浮层、tab 右键、tab「▾更多」全部套 `.glass`                           |
+| 右键菜单           | `ContextMenu.vue`（玻璃、`x/y/items`、危险项样式）                                  | tab 右键「关闭/关闭其他/关闭右侧/关闭全部」**直接传 items**                     |
+| 图标             | `Icon.vue`（Lucide 线性、`currentColor`、16 网格）                               | tab 的 `＋ / x / chevron-down / search` 全部走它                 |
+| 单实例 EditorHost | 两 pane 常驻、`fidelity` 保真层、`captureScroll/restoreScroll` 已就绪               | 多标签切内容 = 单实例换 `setMarkdown`，**绝不每 tab 建实例**（守红线 2）         |
 
----
+***
 
 ## 1. 布局落点（新增一条玉质 tab 条）
 
@@ -42,85 +42,109 @@
 ```
 
 **关键决策：tab 条独立成「标题栏下方一条」，不塞进标题栏。**
-- 理由：标题栏已是「文件/视图/工具」三组图标工具栏，再塞 tab 会拥挤且语义混淆（标题栏=窗口/模式维度，tab 条=文件维度）。独立一条符合 VS Code / Obsidian 的经典分层。
-- 高度预算：标题栏 38 + 标签条 34 + 状态栏 26 = 98px 框架，编辑区仍可专注。窗口 < 720px 时**标签条不软收起**（它是文档导航，优先级高于侧/大纲），仅横向滚动。
 
----
+* 理由：标题栏已是「文件/视图/工具」三组图标工具栏，再塞 tab 会拥挤且语义混淆（标题栏=窗口/模式维度，tab 条=文件维度）。独立一条符合 VS Code / Obsidian 的经典分层。
+* 高度预算：标题栏 38 + 标签条 34 + 状态栏 26 = 98px 框架，编辑区仍可专注。窗口 < 720px 时**标签条不软收起**（它是文档导航，优先级高于侧/大纲），仅横向滚动。
+
+***
 
 ## 2. 材质归属（风格一致性核心，必须严格执行）
 
-| 元素 | 材质 | 理由（对应 UI-DESIGN §10.2 分层） |
-| --- | --- | --- |
-| **标签条** | `.jade` 玉质 | 大面积常驻框架层，与标题栏/侧栏/状态栏同材质类；静态渲染零开销，Win10 降级后依然成立 |
-| **查找浮层** | `.glass` 玻璃 | 小面积浮起层，与 TitleMenu/ContextMenu/命令面板同一套 `.glass` |
-| **tab 右键菜单** | `.glass`（复用 `ContextMenu.vue`） | 浮层 |
-| **tab「▾更多」下拉** | `.glass`（复用 `ContextMenu.vue`） | 浮层 |
-| **查找结果列表** | 复用 `SearchResults.vue` 100% 视觉 | 已是玉质 hover + accent 高亮 |
-| **编辑区内查找高亮** | ProseMirror decoration（`mark`） | 属「文本高亮」非「背景纹理」，**不破坏 §10.3 编辑区纯净红线** |
-| ❌ 禁止 | tab 条用玻璃 / 查找条嵌进编辑区 DOM | 违反框架/浮起分层与编辑区纯净双红线 |
+| 元素             | 材质                             | 理由（对应 UI-DESIGN §10.2 分层）                       |
+| -------------- | ------------------------------ | ----------------------------------------------- |
+| **标签条**        | `.jade` 玉质                     | 大面积常驻框架层，与标题栏/侧栏/状态栏同材质类；静态渲染零开销，Win10 降级后依然成立  |
+| **查找浮层**       | `.glass` 玻璃                    | 小面积浮起层，与 TitleMenu/ContextMenu/命令面板同一套 `.glass` |
+| **tab 右键菜单**   | `.glass`（复用 `ContextMenu.vue`） | 浮层                                              |
+| **tab「▾更多」下拉** | `.glass`（复用 `ContextMenu.vue`） | 浮层                                              |
+| **查找结果列表**     | 复用 `SearchResults.vue` 100% 视觉 | 已是玉质 hover + accent 高亮                          |
+| **编辑区内查找高亮**   | ProseMirror decoration（`mark`） | 属「文本高亮」非「背景纹理」，**不破坏 §10.3 编辑区纯净红线**            |
+| ❌ 禁止           | tab 条用玻璃 / 查找条嵌进编辑区 DOM        | 违反框架/浮起分层与编辑区纯净双红线                              |
 
----
+***
 
 ## 3. 组件复用清单（本批次只新增 3 个文件）
 
-| 文件 | 类型 | 职责 | 复用 |
-| --- | --- | --- | --- |
-| `src/store/tabs.ts` | **新增** Pinia store | `openTabs / activeId` + `open/close/activate/markDirty/capture/restore` | 用 Pinia（已装） |
-| `src/components/TabBar.vue` | **新增** 玉质组件 | 渲染 tab 条、新建、过多折叠、右键委托 | 内部用 `Icon` + `ContextMenu` + `TitleMenu` |
-| `src/components/FindPanel.vue` | **新增** 玻璃组件 | 文件内查找高亮+替换 + 全局查找结果容器 | 内部嵌 `SearchResults.vue` |
-| `src/components/TitleBar.vue` | **改** | 新增「查找」入口（图标按钮或更多菜单项） | 现有 `.tbtn` / `TitleMenu` |
-| `src/App.vue` | **改** | 接入 tabs store；`openPath` 改走 tab；拖放 `.md`/图片；挂 `TabBar` + `FindPanel` | 现有 `openPath/save` |
-| `src/editor/EditorHost.vue` | **改（小）** | 切 tab 时 `captureScroll` + 回写该 tab 的 `fidelity.currentText` + `setMarkdown` + `restoreScroll` | 现有滚动保持 |
-| `src/styles/tokens.css` | **改（极小）** | 新增 `--h-tabbar: 34px` 一个结构令牌 | 与 `--h-titlebar` 同类 |
+| 文件                             | 类型                 | 职责                                                                                           | 复用                                       |
+| ------------------------------ | ------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `src/store/tabs.ts`            | **新增** Pinia store | `openTabs / activeId` + `open/close/activate/markDirty/capture/restore`                      | 用 Pinia（已装）                              |
+| `src/components/TabBar.vue`    | **新增** 玉质组件        | 渲染 tab 条、新建、过多折叠、右键委托                                                                        | 内部用 `Icon` + `ContextMenu` + `TitleMenu` |
+| `src/components/FindPanel.vue` | **新增** 玻璃组件        | 文件内查找高亮+替换 + 全局查找结果容器                                                                        | 内部嵌 `SearchResults.vue`                  |
+| `src/components/TitleBar.vue`  | **改**              | 新增「查找」入口（图标按钮或更多菜单项）                                                                         | 现有 `.tbtn` / `TitleMenu`                 |
+| `src/App.vue`                  | **改**              | 接入 tabs store；`openPath` 改走 tab；拖放 `.md`/图片；挂 `TabBar` + `FindPanel`                         | 现有 `openPath/save`                       |
+| `src/editor/EditorHost.vue`    | **改（小）**           | 切 tab 时 `captureScroll` + 回写该 tab 的 `fidelity.currentText` + `setMarkdown` + `restoreScroll` | 现有滚动保持                                   |
+| `src/styles/tokens.css`        | **改（极小）**          | 新增 `--h-tabbar: 34px` 一个结构令牌                                                                 | 与 `--h-titlebar` 同类                      |
 
 > 不新增任何 UI 基础组件：tab 按钮、dropdown、结果行、图标全部复用现有 `Icon / ContextMenu / TitleMenu / SearchResults` 与 `.tbtn / .seg` 视觉语言。
 
----
+***
 
 ## 4. 像素规格（全部引用现有令牌，新增 ≤ 2 个）
 
 ### 4.1 标签条 `TabBar.vue`（玉质）
-- 容器：`.jade`，高 `var(--h-tabbar)` = **34px**，上下 `border: 1px solid var(--hue-border-subtle)`（与标题栏 `border-bottom` 同语言），`user-select: none`。
-- tab 项：高 26px（上下内缩 4px），横向 `padding: 0 10px`，圆角 `--radius-sm`，字 12.5px `--hue-text-2`，`white-space: nowrap`。
-- **激活态**：文字 `--hue-text-1` + **底部 2px `--hue-accent` 下划线**（横向激活用下划线，呼应文件树「选中竖条」思路转为横向；不抢编辑区视觉权重）。
-- **未保存点**：6px `--hue-accent` 圆点（**复用 `.bar__dot` 规格**，tab 标题左侧）。
-- **关闭 ✕**：12px Lucide `x`，默认透明、hover tab 显示；色 `--hue-text-3` → hover `--hue-text-1`；危险 hover 可转 `--hue-danger`（可选）。
-- 新建 `＋` / 更多 `▾`：复用 `.tbtn` 28×28 视觉，置于条右侧常驻区，玉质 hover（`--bg-hover`）。
-- 横向溢出：`overflow-x: auto` + 套用 `scrollbar.css` 玉质细滚动条；末尾「▾ 更多」仅在溢出时出现，点击弹 `ContextMenu` 列出被折叠 tab（items 传 `激活/关闭`）。
+
+* 容器：`.jade`，高 `var(--h-tabbar)` = **34px**，上下 `border: 1px solid var(--hue-border-subtle)`（与标题栏 `border-bottom` 同语言），`user-select: none`。
+* tab 项：高 26px（上下内缩 4px），横向 `padding: 0 10px`，圆角 `--radius-sm`，字 12.5px `--hue-text-2`，`white-space: nowrap`。
+* **激活态**：文字 `--hue-text-1` + **底部 2px `--hue-accent` 下划线**（横向激活用下划线，呼应文件树「选中竖条」思路转为横向；不抢编辑区视觉权重）。
+* **未保存点**：6px `--hue-accent` 圆点（**复用 `.bar__dot` 规格**，tab 标题左侧）。
+* **关闭 ✕**：12px Lucide `x`，默认透明、hover tab 显示；色 `--hue-text-3` → hover `--hue-text-1`；危险 hover 可转 `--hue-danger`（可选）。
+* 新建 `＋` / 更多 `▾`：复用 `.tbtn` 28×28 视觉，置于条右侧常驻区，玉质 hover（`--bg-hover`）。
+* 横向溢出：`overflow-x: auto` + 套用 `scrollbar.css` 玉质细滚动条；末尾「▾ 更多」仅在溢出时出现，点击弹 `ContextMenu` 列出被折叠 tab（items 传 `激活/关闭`）。
+
+#### 规模场景（20 / 50 / 100+ 标签，已打磨落地）
+
+* **以当前标签为中心的滑动窗口**：`recompute` 不再「从头留前 N 个」，而是以 `activeIndex` 为中心保留 `cap` 个可见位（`floor((cap-1)/2)` 前后各半），保证当前文档始终可见；其余按原顺序收进「更多」。切到任意标签都不会让它落在折叠区看不见。
+* **`recompute` 走 rAF 批处理**：切标签 / 缩放窗口导致的连续触发合并到一帧，避免同步回流抖动。
+* **位置徽标「当前 / 总数」**：仅在发生折叠时出现（3 个标签不挂多余数字）；样式 `11px --hue-text-3` + `tabular-nums`（数字等宽不抖）+ 左侧发丝分隔线，安静不抢眼。
+* **「更多」按钮改纯图标 + tooltip**：隐藏数信息全部交给位置徽标，避免「隐藏 38」与「第 12 / 87」两个数字打架。
+* **「更多」菜单可滚动 + 高亮当前项**：`ContextMenu` 容器补 `max-height + overflow-y`，30+ 项仍可滚动点全；`MenuItem` 加 `active` 标记，溢出列表里当前文档用 accent 文字 + 半透底高亮。
+* **滚轮画廊式横滑**：标签条 `wheel` 在**仅溢出时**接管，取 `deltaX/deltaY` 大者 ±1 翻页（兼容触控板横滑）；无溢出时原样放行、绝不劫持页面滚动。键盘党走「更多」菜单点选，无障碍不丢。
+* **性能不退化**：编辑器单实例，tabs store 只存路径字符串；栏内 DOM 永远只渲染可见的那 ~10 来个，50 / 100+ 标签时重活不随标签数增长。
 
 ### 4.2 查找浮层 `FindPanel.vue`（玻璃）
-- 容器：`.glass`，**绝对定位在 `.editor` 容器内**（`top:12px; right:12px`，`position:absolute` 不进编辑区 DOM，守纯净红线），宽 **420px**（全局结果展开至 480）。
-- 输入区：高 30px，圆角 `--radius-md`，`background: var(--hue-editor)`（浮层内输入用编辑区实色，呼应 §5.2 侧栏搜索框），聚焦 `outline: 2px solid var(--hue-accent); outline-offset: -2px` + `0 0 0 3px rgba(var(--hue-tint-1),.1)` 焦点环（复用 §5.2）。
-- 三开关（区分大小写 / 全词 / 正则）：玉质文本 toggle，激活态 `--hue-accent` 文字 + `--hue-active` 底（复用 `.tbtn--on` 语言）。
-- 计数：`3 / 12` 11px `--hue-text-3`（复用 `.results__meta`）。
-- 替换区：折叠展开；输入 + 按钮「替换 / 替换全部 / 替换并查找下一个」——主按钮 `--hue-accent` 实底 + `--hue-on-accent` 白字（复用 §5.7 对话框按钮语言），次按钮透明描边。
-- 全局结果：直接嵌 `<SearchResults :results :query @open>`，键盘 **↑↓ 导航** + 范围筛选（当前文件夹 / 全部 vault，用两个 `.tbtn--on` 风格 chip）；点击 → 现有 `onOpenResult({path,line})`。
+
+* 容器：`.glass`，**绝对定位在 `.editor` 容器内**（`top:12px; right:12px`，`position:absolute` 不进编辑区 DOM，守纯净红线），宽 **420px**（全局结果展开至 480）。
+* 输入区：高 30px，圆角 `--radius-md`，`background: var(--hue-editor)`（浮层内输入用编辑区实色，呼应 §5.2 侧栏搜索框），聚焦 `outline: 2px solid var(--hue-accent); outline-offset: -2px` + `0 0 0 3px rgba(var(--hue-tint-1),.1)` 焦点环（复用 §5.2）。
+* 三开关（区分大小写 / 全词 / 正则）：玉质文本 toggle，激活态 `--hue-accent` 文字 + `--hue-active` 底（复用 `.tbtn--on` 语言）。
+* 计数：`3 / 12` 11px `--hue-text-3`（复用 `.results__meta`）。
+* 替换区：折叠展开；输入 + 按钮「替换 / 替换全部 / 替换并查找下一个」——主按钮 `--hue-accent` 实底 + `--hue-on-accent` 白字（复用 §5.7 对话框按钮语言），次按钮透明描边。
+* 全局结果：直接嵌 `<SearchResults :results :query @open>`，键盘 **↑↓ 导航** + 范围筛选（当前文件夹 / 全部 vault，用两个 `.tbtn--on` 风格 chip）；点击 → 现有 `onOpenResult({path,line})`。
 
 ### 4.3 状态栏（顺带增强）
-- 右侧追加 `选区 12`（仅选区非空时显示），11px `--hue-text-3`，格式与现有 `●已保存 · 行列` 同族。选区字数由 FindPanel / 编辑器选区变化实时喂入（计划 §3.2「选中统计喂给批次二」）。
 
----
+* 右侧追加 `选区 12`（仅选区非空时显示），11px `--hue-text-3`，格式与现有 `●已保存 · 行列` 同族。选区字数由 FindPanel / 编辑器选区变化实时喂入（计划 §3.2「选中统计喂给批次二」）。
+
+***
 
 ## 5. 数据流（守两条红线）
 
 1. **Milkdown 单实例**：`tabs.activate(id)` → App 先 `host.captureScroll()` + 把当前 tab 的 `fidelity.currentText` 写回该 tab → `host.setMarkdown(next.markdown)`（或 `openBlank` 走空）→ `onReady` 后 `rAF host.restoreScroll()`。
 2. **Markdown 往返保真**：查找高亮用**非破坏性 ProseMirror decoration**；替换走受控事务，仅改内存；保存时 `fidelity.currentText` 原样写回，未编辑文档一字不改。
 
----
+***
 
 ## 6. 待主人确认的决策点（请逐项拍板）
 
-| # | 决策点 | 我的推荐 | 备选 |
-| --- | --- | --- | --- |
+| # | 决策点        | 我的推荐                                 | 备选                            |
+| - | ---------- | ------------------------------------ | ----------------------------- |
 | 1 | **查找入口位置** | 标题栏「视图/布局」组末尾新增 `search` 图标按钮（高频、顺手） | 仅「⋯ 更多⌄ → 查找」（计划原文写法，入二级菜单偏深） |
-| 2 | **标签条高度** | 34px（与 38 标题栏协调） | 36px（按钮更宽松） |
-| 3 | **选区字数** | 批次一顺带做（状态栏加 `选区 N`，轻量且与查找联动） | 留到批次二统计 |
-| 4 | **全局查找形态** | 新增独立玻璃浮层（与文件内查找同一入口、统一体验）；侧栏搜索框保留 | 仅扩展侧栏搜索框，无独立浮层 |
+| 2 | **标签条高度**  | 34px（与 38 标题栏协调）                     | 36px（按钮更宽松）                   |
+| 3 | **选区字数**   | 批次一顺带做（状态栏加 `选区 N`，轻量且与查找联动）         | 留到批次二统计                       |
+| 4 | **全局查找形态** | 新增独立玻璃浮层（与文件内查找同一入口、统一体验）；侧栏搜索框保留    | 仅扩展侧栏搜索框，无独立浮层                |
 
----
+***
 
 ## 7. 验收（对应计划 §5 批次一）
-- 单窗口开 ≥3 篇并切换：未保存点 / 右键菜单 / 过多折叠正确；
-- 文件内查找高亮 + 替换 + 计数 + 循环生效；
-- 全局查找带上下文片段 + 键盘导航 + 范围筛选并定位；
-- 拖放 `.md` 可打开；切回原文一字不改（保真校验）。
+
+* 单窗口开 ≥3 篇并切换：未保存点 / 右键菜单 / 过多折叠正确；
+* 文件内查找高亮 + 替换 + 计数 + 循环生效；
+* 全局查找带上下文片段 + 键盘导航 + 范围筛选并定位；
+* 拖放 `.md` 可打开；切回原文一字不改（保真校验）。
+
+### 规模场景验收（20 / 50 / 100+ 标签）
+
+* 切到任意标签，当前文档始终在栏上可见（滑窗常驻 active，不被折进「更多」）；
+* 发生折叠时显示位置徽标「当前 / 总数」；「更多」按钮纯图标 + tooltip 提示隐藏数；
+* 「更多」菜单 30+ 项可滚动、且高亮当前文档；
+* 标签条滚轮在溢出时横向翻页、无溢出时不劫持页面滚动；
+* 栏内 DOM 节点数不随标签总数线性增长（始终只渲染可见数），切换无卡顿。
+
