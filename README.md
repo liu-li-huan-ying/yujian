@@ -3,20 +3,20 @@
 > 所见即所得的跨平台桌面 Markdown 编辑器，可一键切换源码模式。
 > 默认面向**技术写作**场景：代码高亮、Mermaid 图表、数学公式、表格与多格式导出。
 
-[![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vue.js&logoColor=white)](https://vuejs.org/)
+[![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron\&logoColor=white)](https://www.electronjs.org/)
+[![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vue.js\&logoColor=white)](https://vuejs.org/)
 [![Milkdown](https://img.shields.io/badge/Milkdown-Crepe%207.22-ff69b4)](https://milkdown.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#%E5%AE%89%E8%A3%85%E5%8C%85)
 [![Docs](https://img.shields.io/badge/Docs-%E8%8B%B1%E6%96%87%E7%89%88-blue)](./README_EN.md)
 
-> 🇬🇧 **English documentation**: [README_EN.md](./README_EN.md) ｜ 📐 第一版样式报告：[docs/preview/style-report-v1.html](./docs/preview/style-report-v1.html)
+> 🇬🇧 **English documentation**: [README\_EN.md](./README_EN.md) ｜ 📐 第一版样式报告：[docs/preview/style-report-v1.html](./docs/preview/style-report-v1.html)
 
 **玉笺**（yù jiān，意为"玉制的信笺"）是一款本地优先的 Markdown 写作工具：文件夹即笔记库，文档是普通的 `.md` 文件，数据永远可读、可 Git、可迁移。编辑器内核基于 [Milkdown Crepe](https://milkdown.dev/)，Markdown 是一等公民，未编辑的文档保存时一字不改写回原文。
 
 视觉上，玉笺以「玉质」为核心材质语言——框架层温润玉质、浮层玻璃透亮、内容层纯净实色，并提供五套中国传统窑色皮肤（青瓷 / 天青 / 月白 / 黛 / 琥珀）与深 / 浅 / 跟随系统三档明暗。
 
-![玉笺界面总览（青瓷 · 深）](./docs/assets/yujian-overview.svg)
+![1.00](./docs/assets/yujian-overview.svg)
 
 ***
 
@@ -81,7 +81,7 @@
 
 玉的关键不是绿，而是**温润**：光进入后被散射开，颜色不均匀、边缘略亮、内部有絮状层次。玉笺把界面拆成三层，各用一种材质，互不污染：
 
-![三层材质分层：框架玉质 / 浮层玻璃 / 内容实色](./docs/assets/yujian-material.svg)
+![1.00](./docs/assets/yujian-material.svg)
 
 1. **框架层（标题栏 / 侧边栏 / 大纲 / 状态栏）= 玉质，静态预渲染。** 渐变 + 极细噪点（`feTurbulence`，opacity .045）一次渲染成型，**零运行时开销**，模拟真实玉石的散射透光，是品牌识别核心。
 2. **浮起层（所有菜单 / 命令面板 / 对话框）= 玻璃。** 仅在小面积浮层使用实时 `backdrop-filter: blur(28px) saturate(160~180%)`——玻璃需"背后有东西可透"才有意义，也才值得付性能代价。
@@ -95,15 +95,15 @@
 
 设置面板（外观）里以真实玉质材质缩略图呈现，选中环用外层描边避免覆盖材质；每套皮肤都有**深 / 浅**两档，外加"跟随系统"。切换皮肤**不重建编辑器实例**（Crepe 只读 CSS 变量），根节点挂 `data-skin` / `data-mode`，选择持久化到 `localStorage`。默认：青瓷 + 深色。
 
-![玉笺五套皮肤色板](./docs/assets/yujian-skins.svg)
+![1.00](./docs/assets/yujian-skins.svg)
 
-| 皮肤 | 中文名 | 深档强调色 | 浅档强调色 | 气质 |
-| --- | --- | --- | --- | --- |
-| Celadon | 青瓷 | `#5FA8A0` | `#248077` | 汝窑青灰，最沉稳的"玉"味（默认） |
-| Sky | 天青 | `#5E9DBE` | `#2B7BA8` | 雨过天青，偏蓝冷调 |
-| Moon | 月白 | `#93A7B4` | `#5A7180` | 月白釉，极淡蓝白、低饱和 |
-| Dai | 黛 | `#8B7CB8` | `#6A5A9E` | 墨青紫，唯一冷紫调 |
-| Amber | 琥珀 | `#C79A4E` | `#9A6F24` | 老蜜蜡，唯一暖调 |
+| 皮肤      | 中文名 | 深档强调色     | 浅档强调色     | 气质                |
+| ------- | --- | --------- | --------- | ----------------- |
+| Celadon | 青瓷  | `#5FA8A0` | `#248077` | 汝窑青灰，最沉稳的"玉"味（默认） |
+| Sky     | 天青  | `#5E9DBE` | `#2B7BA8` | 雨过天青，偏蓝冷调         |
+| Moon    | 月白  | `#93A7B4` | `#5A7180` | 月白釉，极淡蓝白、低饱和      |
+| Dai     | 黛   | `#8B7CB8` | `#6A5A9E` | 墨青紫，唯一冷紫调         |
+| Amber   | 琥珀  | `#C79A4E` | `#9A6F24` | 老蜜蜡，唯一暖调          |
 
 **结构层 / 材质层与色相层解耦**——换皮肤只改 `--hue-*` 色相变量，整套界面"换色不换骨"；字号、栅格、圆角、动效令牌永不随皮肤改变。
 
@@ -113,46 +113,51 @@
 
 第一版把此前"导出下拉、更多下拉、关于面板各自一套玻璃"的割裂彻底收敛：`.glass` 改为**明暗双版的单一事实来源**，并统一覆盖到标题栏下拉（导出 / 更多）、右键菜单、帮助 / 偏好 / 外观面板，以及编辑区内 Crepe 的 slash 菜单、选取气泡工具条、链接预览 / 编辑浮层。点外部或 `Esc` 关闭。
 
-![玻璃浮层示意（亮色：羊脂玉半透）](./docs/assets/yujian-glass.svg)
+![1.00](./docs/assets/yujian-glass.svg)
 
 ***
 
 ## 🔧 功能细节打磨
 
 ### ① 顶部栏重设计 —— 分组图标工具栏
+
 不再"加功能就硬塞文字按钮"。改为**三组语义图标**：文件 / 库（新建 · 切换库 · 打开）｜视图 / 布局（所见即所得⇄源码分段 · 侧栏 · 大纲）｜分享 / 工具（导出⌄ · 外观 · 更多⌄ · 帮助?）。分隔线表达分组边界；图标按钮 28×28 满足触控目标；激活态用强调色 + 玉质高亮底呼应分段控件的"开"。整条标题栏可拖拽（`-webkit-app-region: drag`），自绘窗口按钮仅 Windows 渲染（macOS 用原生红绿灯并让位 78px）。
 
 ### ② F1 帮助面板 —— 快捷键 + 使用指南双页
+
 按 `F1` 直接唤起（已修复此前被按键守卫拦截的问题）。玻璃浮层内分「快捷键 / 使用指南」两标签页，支持 ↑↓ 选择、Enter 执行、Esc 关闭；键位写死、描述本地化，中英双语。
 
 ### ③ 块操作手柄 —— Notion 式一致左轨，绝不压字
+
 保留 Crepe floating-ui 算出的**块自身左缘**，仅用 `translateX(-12px)` 向左挪出与正文的呼吸缝；缩进块（如列表）的手柄随之右移，始终在块左缘左侧、永不遮字。编辑区左侧预留 `96px` 沟槽（约 64px 手柄 + 12px 位移 + 20px 余量），最窄窗口也不被裁切。
 
-![块操作手柄一致左轨](./docs/assets/yujian-handle.svg)
+![1.00](./docs/assets/yujian-handle.svg)
 
 ### ④ 表格长串换行 —— 修掉叠字
+
 表格为 `table-layout: fixed`，此前加粗 / 强调等无空格长串会撑破单元格、与邻格叠字。已加 `overflow-wrap: anywhere; word-break: break-word; white-space: normal`，任何长串都在单元格内断行。表头用强调色填充、偶行浅底、发丝边单向网格、四角圆角。
 
-![表格长串在单元格内换行](./docs/assets/yujian-table.svg)
+![1.00](./docs/assets/yujian-table.svg)
 
 ### ⑤ 代码块 & 阅读进度条 —— 玉质细节
+
 代码块改为**自适应内容高度**（不再撑满父容器），面板加内陷高光像"玉上一道凹槽"；全局滚动条细、圆角、半透明、hover 仅微亮一档；编辑区原生滚动条隐藏，改由**右侧玉质阅读进度条**统一指示。
 
 ***
 
 ## 🧱 技术栈
 
-| 层 | 选型 | 说明 |
-| --- | --- | --- |
-| 运行时 | Electron 44 | 官方预编译二进制，不依赖任何 C++ 工具链 |
-| 构建 | electron-vite 5 + vite ~7.3.6 | vite 不可升 8（electron-vite 的 peer 限制） |
-| 前端 | Vue 3.5 + TypeScript ~5.9.3 | `<script setup>` + 组合式 API |
-| 编辑内核 | @milkdown/crepe 7.22.1 | 基于 ProseMirror + remark，Markdown 往返一致性最好 |
-| 源码模式 | CodeMirror 6 | 与 WYSIWYG 共享同一份 Markdown 文本 |
-| 图表 | Mermaid 11 / KaTeX 0.18 | 图表与公式渲染 |
-| 搜索 | MiniSearch 7 | 纯 JS 倒排索引，零原生编译 |
-| 监听 | chokidar 4 | 笔记库文件变化监听（单例 watcher） |
-| 状态 | pinia 4 | 跨组件状态（已验证与 Vue 3.5 兼容） |
+| 层    | 选型                             | 说明                                       |
+| ---- | ------------------------------ | ---------------------------------------- |
+| 运行时  | Electron 44                    | 官方预编译二进制，不依赖任何 C++ 工具链                   |
+| 构建   | electron-vite 5 + vite \~7.3.6 | vite 不可升 8（electron-vite 的 peer 限制）      |
+| 前端   | Vue 3.5 + TypeScript \~5.9.3   | `<script setup>` + 组合式 API               |
+| 编辑内核 | @milkdown/crepe 7.22.1         | 基于 ProseMirror + remark，Markdown 往返一致性最好 |
+| 源码模式 | CodeMirror 6                   | 与 WYSIWYG 共享同一份 Markdown 文本              |
+| 图表   | Mermaid 11 / KaTeX 0.18        | 图表与公式渲染                                  |
+| 搜索   | MiniSearch 7                   | 纯 JS 倒排索引，零原生编译                          |
+| 监听   | chokidar 4                     | 笔记库文件变化监听（单例 watcher）                    |
+| 状态   | pinia 4                        | 跨组件状态（已验证与 Vue 3.5 兼容）                   |
 
 > 依赖选型受本机约束驱动：无 MSVC / 无 WebView2，Tauri 不可行，故选 Electron；同时避免一切需 node-gyp 编译的依赖（better-sqlite3 / sharp / resvg 等），优先纯 JS 或 WASM 实现。
 
@@ -254,19 +259,22 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 
 ## 🗺️ 开发路线图
 
-| 阶段 | 目标 | 状态 |
-| --- | --- | --- |
-| 0. 地基 | 脚手架 + 窗口 + IPC 打通 | ✅ 已完成 |
-| 1. 编辑器核心 | Crepe 接入 + 双模式 + 打开 / 保存 | ✅ 已完成 |
-| 2. 笔记库 | 文件树 + 自动保存 + 崩溃恢复 | ✅ 已完成 |
-| 3. 写作套件 | Mermaid + 公式 + 表格 + 代码块 | ✅ 已完成 |
-| 4. 图片 | 粘贴落盘 + 图床配置 | ✅ 已完成 |
-| 5. 搜索 | MiniSearch 索引 + 搜索面板 | ✅ 已完成 |
-| 6. 导出 | HTML / PDF / 单 md | ✅ 已完成 |
-| 7. 打磨 | 主题 / 皮肤、快捷键提示、设置面板、标题栏重设计 | ✅ 已完成（皮肤 + 偏好 / 外观面板 + 图标工具栏 + 帮助 / 快捷键面板 + 统一玻璃材质） |
-| 8. 分发 | electron-builder 打包 + **三平台 CI** | ✅ 已完成（v1.0.0；GitHub Actions 自动构建 Win/macOS/Linux 安装包） |
+| 阶段       | 目标                               | 状态                                                    |
+| -------- | -------------------------------- | ----------------------------------------------------- |
+| 0. 地基    | 脚手架 + 窗口 + IPC 打通                | ✅ 已完成                                                 |
+| 1. 编辑器核心 | Crepe 接入 + 双模式 + 打开 / 保存         | ✅ 已完成                                                 |
+| 2. 笔记库   | 文件树 + 自动保存 + 崩溃恢复                | ✅ 已完成                                                 |
+| 3. 写作套件  | Mermaid + 公式 + 表格 + 代码块          | ✅ 已完成                                                 |
+| 4. 图片    | 粘贴落盘 + 图床配置                      | ✅ 已完成                                                 |
+| 5. 搜索    | MiniSearch 索引 + 搜索面板             | ✅ 已完成                                                 |
+| 6. 导出    | HTML / PDF / 单 md                | ✅ 已完成                                                 |
+| 7. 打磨    | 主题 / 皮肤、快捷键提示、设置面板、标题栏重设计        | ✅ 已完成（皮肤 + 偏好 / 外观面板 + 图标工具栏 + 帮助 / 快捷键面板 + 统一玻璃材质）   |
+| 8. 分发    | electron-builder 打包 + **三平台 CI** | ✅ 已完成（v1.0.0；GitHub Actions 自动构建 Win/macOS/Linux 安装包） |
+| 9. Phase 2 | 多标签+查找替换+版本快照+写作统计+打字机/禅模式+导出增强+写作辅助+断链检查 | 📋 计划中（见 [`docs/PHASE2-PLAN.md`](./docs/PHASE2-PLAN.md)） |
 
 **已实现路线图之外的增强**：中英双语 i18n、切换工作文件夹、启动偏好设置、五套皮肤 + 明暗 / 跟随系统、应用图标（玉笺）、独立面板显隐、玉质滚动条、代码块自适应高度、右侧阅读进度条、标题栏图标工具栏重设计、帮助与快捷键面板（F1）、块操作手柄一致左轨重做、统一玻璃材质（所有浮层随明暗切换）、表格长串自动换行、体积裁剪（asar 归档 + 最大压缩 + 仅保留中英 locale）。
+
+**Phase 2 计划**：见 [`docs/PHASE2-PLAN.md`](./docs/PHASE2-PLAN.md)（多文档标签 / 查找替换 / 版本快照 / 写作统计 / 打字机·禅模式 / 导出增强 docx·ePub·LaTeX·PDF / 写作辅助包 / 断链健康检查）。
 
 ***
 
@@ -284,11 +292,11 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 
 推送 `v*` 标签即触发 [`.github/workflows/release.yml`](./.github/workflows/release.yml)：先在 Ubuntu 上创建 **draft release**，再于 **windows-latest / macos-latest / ubuntu-latest** 三个 runner 上并行构建并上传安装包到同一 release。
 
-| 平台 | 产物 | 目标 |
-| --- | --- | --- |
-| Windows | `yujian-{version}-setup.exe` | NSIS 安装包 |
-| macOS | `玉笺-{version}.dmg` | DMG 磁盘镜像 |
-| Linux | `yujian-{version}.AppImage` | AppImage 便携包 |
+| 平台      | 产物                           | 目标           |
+| ------- | ---------------------------- | ------------ |
+| Windows | `yujian-{version}-setup.exe` | NSIS 安装包     |
+| macOS   | `玉笺-{version}.dmg`           | DMG 磁盘镜像     |
+| Linux   | `yujian-{version}.AppImage`  | AppImage 便携包 |
 
 > **代码签名（可选）**：未配置证书时产物为未签名（Windows 会弹 SmartScreen 警告、macOS 需右键「打开」并授权）。在仓库 **Settings → Secrets** 中配置 `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`（Windows Authenticode）与 `CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID`（macOS 签名 + 公证）后，CI 会自动签名。CI 默认使用官方镜像源（不受本地 `.npmrc` 的 npmmirror 影响）。
 
