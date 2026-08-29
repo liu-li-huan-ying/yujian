@@ -154,7 +154,8 @@ const enUS = {
     replaceOne: 'Replace',
     replaceAll: 'Replace All',
     noMatch: 'No match',
-    selection: 'Sel'
+    selection: 'Sel',
+    tabPos: 'Current / total'
   },
 
   /* ── Help panel: shortcuts + guide ── */

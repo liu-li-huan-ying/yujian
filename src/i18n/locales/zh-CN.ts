@@ -153,7 +153,8 @@ const zhCN = {
     replaceOne: '替换',
     replaceAll: '全部替换',
     noMatch: '无匹配',
-    selection: '选区'
+    selection: '选区',
+    tabPos: '当前 / 总数'
   },
 
   /* ── 帮助面板：快捷键 + 使用指南 ── */
