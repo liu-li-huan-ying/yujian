@@ -13,6 +13,7 @@ import {
   type SaveAssetPayload,
   type SavedAsset,
   type SessionState,
+  type SnapshotInfo,
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
@@ -20,6 +21,7 @@ import { createDoc, createFolder, deleteItem, listTree, renameItem, searchVault,
 import { patchSession, readSession } from './session'
 import { saveAsset } from './assets'
 import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
+import { listSnapshots, createSnapshot, restoreSnapshot, deleteSnapshot } from './snapshots'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -211,6 +213,37 @@ function registerIpc(): void {
     IPC.IMGHOST_PUBLISH,
     async (_event, markdown: string, docPath: string | null): Promise<PublishResult> =>
       publishImages(markdown, docPath)
+  )
+
+  // ── 版本快照（Phase 2 批次二）──
+
+  ipcMain.handle(
+    IPC.SNAPSHOT_LIST,
+    async (_event, vaultPath: string, filePath: string): Promise<SnapshotInfo[]> =>
+      listSnapshots(vaultPath, filePath)
+  )
+
+  ipcMain.handle(
+    IPC.SNAPSHOT_CREATE,
+    async (
+      _event,
+      vaultPath: string,
+      filePath: string,
+      content: string,
+      note?: string
+    ): Promise<SnapshotInfo> => createSnapshot(vaultPath, filePath, content, note)
+  )
+
+  ipcMain.handle(
+    IPC.SNAPSHOT_RESTORE,
+    async (_event, vaultPath: string, filePath: string, id: string): Promise<string> =>
+      restoreSnapshot(vaultPath, filePath, id)
+  )
+
+  ipcMain.handle(
+    IPC.SNAPSHOT_DELETE,
+    async (_event, vaultPath: string, filePath: string, id: string): Promise<void> =>
+      deleteSnapshot(vaultPath, filePath, id)
   )
 
   ipcMain.handle(IPC.EXPORT_HTML, async (_event, payload: ExportPayload): Promise<ExportResult> => {

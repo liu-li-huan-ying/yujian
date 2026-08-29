@@ -40,7 +40,12 @@ function sanitize(raw: unknown): SessionState {
         : DEFAULT_SESSION.sidebarWidth,
     startupMode: (p.startupMode === 'fresh' ? 'fresh' : 'restore') as StartupMode,
     sidebarVisible: p.sidebarVisible !== false,
-    outlineVisible: p.outlineVisible !== false
+    outlineVisible: p.outlineVisible !== false,
+    focusMode: p.focusMode === true,
+    writingGoal:
+      typeof p.writingGoal === 'number' && Number.isFinite(p.writingGoal) && p.writingGoal > 0
+        ? Math.floor(p.writingGoal)
+        : 0
   }
 }
 

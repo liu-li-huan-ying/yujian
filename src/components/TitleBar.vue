@@ -15,6 +15,10 @@ const props = defineProps<{
   sidebarVisible: boolean
   /** 右侧大纲面板是否可见（控制开关按钮激活态） */
   outlineVisible: boolean
+  /** 快照面板是否打开（控制开关按钮激活态） */
+  snapshotActive: boolean
+  /** 凝神模式是否开启（控制开关按钮激活态） */
+  focusActive: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +38,8 @@ const emit = defineEmits<{
   (e: 'toggle-sidebar'): void
   (e: 'toggle-outline'): void
   (e: 'find'): void
+  (e: 'toggle-snapshot'): void
+  (e: 'toggle-focus'): void
 }>()
 
 const L = i18n.ui
@@ -161,6 +167,26 @@ onMounted(() => {
 
     <button class="tbtn" type="button" :title="L.find" @click="emit('find')">
       <Icon name="search" />
+    </button>
+
+    <!-- 批次二：快照 / 凝神（融合打字机+禅的沉浸模式） -->
+    <button
+      class="tbtn"
+      type="button"
+      :class="{ 'tbtn--on': snapshotActive }"
+      :title="L.snapshots"
+      @click="emit('toggle-snapshot')"
+    >
+      <Icon name="history" />
+    </button>
+    <button
+      class="tbtn"
+      type="button"
+      :class="{ 'tbtn--on': focusActive }"
+      :title="L.focusTitle"
+      @click="emit('toggle-focus')"
+    >
+      <Icon name="moon" />
     </button>
   </div>
 

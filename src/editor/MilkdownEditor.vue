@@ -4,12 +4,13 @@ import { languages } from '@codemirror/language-data'
 import { Crepe } from '@milkdown/crepe'
 import { editorViewCtx } from '@milkdown/core'
 import type { EditorView } from '@milkdown/prose/view'
-import { replaceAll } from '@milkdown/utils'
+import { $prose, replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
 import { i18n } from '../i18n'
+import { createZenPlugin } from './zen'
 
 const props = withDefaults(
   defineProps<{
@@ -191,6 +192,9 @@ async function init(defaultValue?: string): Promise<void> {
       emit('update:modelValue', markdown)
     })
   })
+
+  // 凝神模式装饰插件：开关由 EditorHost 经模块级状态控制，空事务触发重算，零侵入。
+  crepe.editor.use($prose(() => createZenPlugin()))
 
   await crepe.create()
   crepe.setReadonly(props.readonly)

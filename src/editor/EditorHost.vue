@@ -21,6 +21,9 @@ import {
   replaceAllInDoc,
   type WysiwygMatch
 } from './find-wysiwyg'
+import { setZenActive, centerZenLine } from './zen'
+import { computeStats } from '../utils/text-stats'
+import type { TextStats } from '../utils/text-stats'
 
 export type EditorMode = 'wysiwyg' | 'source'
 
@@ -93,6 +96,48 @@ let timer: ReturnType<typeof setTimeout> | null = null
 
 const dirty = computed(() => fidelity.isDirty.value)
 const willNormalize = computed(() => fidelity.willNormalize.value)
+
+/* ── 写作统计（批次二）────────────────────────── */
+
+/** 实时统计当前文档：汉字 / 词 / 字符 / 阅读时长，状态栏与弹层共用 */
+const stats = computed<TextStats>(() => computeStats(fidelity.currentText.value))
+
+/* ── 凝神模式（打字机 + 禅 融合，批次二）────────── */
+
+const zenActive = ref(false)
+
+/**
+ * 切换凝神模式。开关写入模块级状态后，向 PM 视图 dispatch 一个空事务触发
+ * decoration 重算（apply 读模块标志重建 .zen-active/.zen-dim）；开启时立即居中当前行。
+ * 空事务不改文档内容，不会触发 markdownUpdated → 不会误标脏/误存。
+ */
+function setZen(value: boolean): void {
+  if (zenActive.value === value) return
+  zenActive.value = value
+  setZenActive(value)
+  const v = milkdownView()
+  if (v) {
+    v.dispatch(v.state.tr)
+    if (value) centerZenLine(v)
+  }
+  // 源码模式下同时居中当前行（淡化仅在所见即所得生效）
+  if (value && mode.value === 'source') source.value?.centerActiveLine()
+}
+
+/** 取当前文档 Markdown 文本（快照创建 / diff 预览用） */
+function getMarkdown(): string {
+  return fidelity.currentText.value
+}
+
+/**
+ * 把外部文本灌入编辑器并标脏（快照恢复用）。所见即所得重渲染；源码模式下靠
+ * modelValue 绑定自动同步。随后自动保存把原文写回磁盘（内容本就来自快照原文，保真不丢失）。
+ */
+function loadMarkdownExternal(text: string): void {
+  fidelity.applyExternal(text)
+  if (mode.value === 'wysiwyg') milkdown.value?.setMarkdown(text)
+  scheduleSave()
+}
 
 /* ── 文档大纲 ─────────────────────────────── */
 
@@ -540,6 +585,13 @@ defineExpose({
   mode,
   ready,
   loadStatus,
+  // ── 写作统计（批次二）──
+  stats,
+  // ── 凝神模式（批次二）──
+  setZen,
+  zenActive,
+  getMarkdown,
+  loadMarkdownExternal,
   // ── 文件内查找 / 替换（批次一）──
   find,
   findNext,

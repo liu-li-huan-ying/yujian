@@ -46,7 +46,13 @@ export const IPC = {
   // 图床：上传文档内本地图片，返回远程 URL（密钥不离开主进程）
   IMGHOST_UPLOAD: 'imghost:upload',
   // 图床：上传文档内全部本地图片并把 Markdown 引用改写为远程 URL
-  IMGHOST_PUBLISH: 'imghost:publish'
+  IMGHOST_PUBLISH: 'imghost:publish',
+
+  // 版本快照（Phase 2 批次二）：写盘 / 列目录 / 读内容 / 删除（走回收站）
+  SNAPSHOT_LIST: 'snapshot:list',
+  SNAPSHOT_CREATE: 'snapshot:create',
+  SNAPSHOT_RESTORE: 'snapshot:restore',
+  SNAPSHOT_DELETE: 'snapshot:delete'
 } as const
 
 export interface WindowState {
@@ -121,6 +127,10 @@ export interface SessionState {
   sidebarVisible: boolean
   /** 右侧大纲面板是否可见（默认显示） */
   outlineVisible: boolean
+  /** 凝神模式（打字机居中 + 沉浸淡化）是否开启 */
+  focusMode?: boolean
+  /** 写作目标字数（0 表示未设目标），持久化于会话，跨文档共享 */
+  writingGoal?: number
 }
 
 export const DEFAULT_SESSION: SessionState = {
@@ -131,7 +141,9 @@ export const DEFAULT_SESSION: SessionState = {
   sidebarWidth: 224,
   startupMode: 'restore',
   sidebarVisible: true,
-  outlineVisible: true
+  outlineVisible: true,
+  focusMode: false,
+  writingGoal: 0
 }
 
 /* ── 导出（HTML / PDF）────────────────────────── */
@@ -218,6 +230,21 @@ export interface PublishResult {
   error?: string
 }
 
+
+/* ── 版本快照（Phase 2 批次二）────────────────────── */
+
+export interface SnapshotInfo {
+  /** 快照唯一标识（文件名去扩展名，含 ISO 时间戳，可排序） */
+  id: string
+  /** 创建时间（epoch ms） */
+  createdAt: number
+  /** 可选备注（如「发布前」） */
+  note?: string
+  /** 快照字符数（用于与当前文档比较显示字数差） */
+  charCount: number
+  /** 磁盘字节数 */
+  size: number
+}
 
 /** 侧边栏可调宽度范围，与 --w-sidebar 默认值呼应 */
 export const SIDEBAR_MIN = 180

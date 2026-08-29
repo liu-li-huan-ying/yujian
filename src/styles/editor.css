@@ -516,3 +516,21 @@
   border-radius: 2px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
+
+/* ── 凝神模式（打字机 + 禅 融合，批次二）──
+   当前块高亮、其余块淡化，营造沉浸写作场。装饰由 ProseMirror plugin 非破坏性注入
+   （只加 class，不改文档），退出即还原。过渡让淡化/聚焦柔和过渡，不突兀。 */
+.milkdown .ProseMirror .zen-dim {
+  opacity: 0.26;
+  filter: saturate(0.65);
+  transition:
+    opacity var(--dur-med) var(--ease),
+    filter var(--dur-med) var(--ease);
+}
+.milkdown .ProseMirror .zen-active {
+  opacity: 1;
+  filter: none;
+  transition:
+    opacity var(--dur-med) var(--ease),
+    filter var(--dur-med) var(--ease);
+}

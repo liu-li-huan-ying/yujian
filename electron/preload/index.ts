@@ -12,6 +12,7 @@ import {
   type SavedAsset,
   type SearchFileResult,
   type SessionState,
+  type SnapshotInfo,
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
@@ -125,7 +126,30 @@ const api = {
 
   /** 上传文档内本地图片到图床，并把 Markdown 中的本地引用改写为远程 URL（密钥只在主进程） */
   publishImages: (markdown: string, docPath: string | null): Promise<PublishResult> =>
-    ipcRenderer.invoke(IPC.IMGHOST_PUBLISH, markdown, docPath)
+    ipcRenderer.invoke(IPC.IMGHOST_PUBLISH, markdown, docPath),
+
+  // ── 版本快照（Phase 2 批次二）──
+
+  /** 列出某文档的全部快照（按时间倒序） */
+  snapshotList: (vaultPath: string, filePath: string): Promise<SnapshotInfo[]> =>
+    ipcRenderer.invoke(IPC.SNAPSHOT_LIST, vaultPath, filePath),
+
+  /** 保存一份快照（note 可选）；内容与最新一份相同时自动去重 */
+  snapshotCreate: (
+    vaultPath: string,
+    filePath: string,
+    content: string,
+    note?: string
+  ): Promise<SnapshotInfo> =>
+    ipcRenderer.invoke(IPC.SNAPSHOT_CREATE, vaultPath, filePath, content, note),
+
+  /** 读取某快照内容（用于回滚） */
+  snapshotRestore: (vaultPath: string, filePath: string, id: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.SNAPSHOT_RESTORE, vaultPath, filePath, id),
+
+  /** 删除某快照（走系统回收站） */
+  snapshotDelete: (vaultPath: string, filePath: string, id: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.SNAPSHOT_DELETE, vaultPath, filePath, id)
 }
 
 export type ElectronAPI = typeof api

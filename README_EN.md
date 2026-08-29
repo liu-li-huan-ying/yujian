@@ -3,8 +3,8 @@
 > A cross-platform, what-you-see-is-what-you-get desktop Markdown editor with a one-click source-mode toggle.
 > Built for **technical writing** by default: code highlighting, Mermaid diagrams, math, tables, and multi-format export.
 
-[![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vue.js&logoColor=white)](https://vuejs.org/)
+[![Electron](https://img.shields.io/badge/Electron-44-47848f?logo=electron\&logoColor=white)](https://www.electronjs.org/)
+[![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vue.js\&logoColor=white)](https://vuejs.org/)
 [![Milkdown](https://img.shields.io/badge/Milkdown-Crepe%207.22-ff69b4)](https://milkdown.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#installers)
@@ -16,7 +16,7 @@
 
 Visually, YuJian speaks the language of **jade** — a jade-textured framework, glassy floating layers, and a clean solid-color content surface — and ships with five traditional Chinese kiln-inspired skins (Celadon / Sky / Moon / Dai / Amber) plus dark / light / system modes.
 
-![YuJian interface overview (Celadon · Dark)](./docs/assets/yujian-overview.svg)
+![1.00](./docs/assets/yujian-overview.svg)
 
 ***
 
@@ -50,6 +50,12 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 * **Switch working folder** — the title-bar folder icon switches to another directory **without restarting**; current doc auto-saved first.
 * **Full-text search** — MiniSearch inverted index; click a result to jump to the hit line (auto-switches to source for precise jumps).
 
+### Version snapshots & writing aids
+
+* **Version snapshots** — `.yujian-history/` in the vault (separate from the `.mdeditor/` cache, suggested to your `.gitignore`); the title-bar "history" icon opens a glass panel where you can manually save a snapshot with a **note** (e.g. "before publish"); the list shows time + note + char delta, and selecting one renders a **line-level diff** (`diff@7`, add / remove / context) — rollback loads the snapshot into the editor and marks it dirty, **without overwriting the original on disk** (Markdown round-trip fidelity).
+* **Writing stats** — the status bar shows "hanzi · words · reading minutes"; click it for a glass popover with hanzi / words / chars (with/without spaces) / reading time breakdown + current **selection stats** + an SVG progress ring for your **writing goal** (persisted with the session).
+* **Focus mode** — the title-bar "moon" icon enters a merged typewriter + zen experience: the current line is vertically centered (upper 1/3, smooth scroll, paused on blur) while the active block is **highlighted** and the rest **dimmed** (non-destructive ProseMirror decoration, never touches the document); state restores with the session.
+
 ### Images & image host
 
 * **Paste to disk** — pasted images land in a sibling `.assets` folder with relative paths; local is the single source of truth.
@@ -81,7 +87,7 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 
 Jade is not about being green — it is about being **warm and lustrous**: light scatters inside, color is uneven, edges glow, and there is a cloudy interior. YuJian splits the UI into three layers, each with one material:
 
-![Three material layers: jade framework / glass overlay / solid content](./docs/assets/yujian-material.svg)
+![1.00](./docs/assets/yujian-material.svg)
 
 1. **Framework layer (title bar / sidebar / outline / status bar) = jade, statically pre-rendered.** Gradient + fine noise (`feTurbulence`, opacity .045) rendered once — **zero runtime cost** — mimicking jade's scattered translucency; the brand core.
 2. **Floating layer (all menus / command palette / dialogs) = glass.** Real-time `backdrop-filter: blur(28px) saturate(160~180%)` only on small overlays — glass only makes sense when there is something behind it to blur, and only then is the cost worth it.
@@ -95,15 +101,15 @@ Jade is not about being green — it is about being **warm and lustrous**: light
 
 The appearance panel shows real jade-material thumbnails; the selection ring uses an outer stroke so it never covers the material. Each skin has **dark / light** plus "follow system". Switching skin **does not rebuild the editor instance** (Crepe only reads CSS variables); the root node carries `data-skin` / `data-mode`, persisted to `localStorage`. Default: Celadon + Dark.
 
-![YuJian five skins palette](./docs/assets/yujian-skins.svg)
+![1.00](./docs/assets/yujian-skins.svg)
 
-| Skin | 中文 | Dark accent | Light accent | Character |
-| --- | --- | --- | --- | --- |
-| Celadon | 青瓷 | `#5FA8A0` | `#248077` | Ru-ware blue-green, the most "jade"-like (default) |
-| Sky | 天青 | `#5E9DBE` | `#2B7BA8` | "sky after rain", cool blue |
-| Moon | 月白 | `#93A7B4` | `#5A7180` | moon-white glaze, very pale blue-white, low saturation |
-| Dai | 黛 | `#8B7CB8` | `#6A5A9E` | ink-violet, the only cool-purple skin |
-| Amber | 琥珀 | `#C79A4E` | `#9A6F24` | old amber, the only warm skin |
+| Skin    | 中文 | Dark accent | Light accent | Character                                              |
+| ------- | -- | ----------- | ------------ | ------------------------------------------------------ |
+| Celadon | 青瓷 | `#5FA8A0`   | `#248077`    | Ru-ware blue-green, the most "jade"-like (default)     |
+| Sky     | 天青 | `#5E9DBE`   | `#2B7BA8`    | "sky after rain", cool blue                            |
+| Moon    | 月白 | `#93A7B4`   | `#5A7180`    | moon-white glaze, very pale blue-white, low saturation |
+| Dai     | 黛  | `#8B7CB8`   | `#6A5A9E`    | ink-violet, the only cool-purple skin                  |
+| Amber   | 琥珀 | `#C79A4E`   | `#9A6F24`    | old amber, the only warm skin                          |
 
 **Structure/material layers are decoupled from the hue layer** — switching skin only changes `--hue-*` hue variables; typography, grid, radius, and motion tokens never change.
 
@@ -113,46 +119,51 @@ The appearance panel shows real jade-material thumbnails; the selection ring use
 
 v1 collapses the earlier fragmentation (export dropdown, more dropdown, and about panel each had their own glass) into a **single source of truth with dark/light variants**, covering title-bar dropdowns (export / more), context menus, help / preferences / appearance panels, and the in-editor Crepe slash menu, selection bubble, and link preview / editor. Click outside or `Esc` to close.
 
-![Glass overlay (light: mutton-fat-jade translucency)](./docs/assets/yujian-glass.svg)
+![1.00](./docs/assets/yujian-glass.svg)
 
 ***
 
 ## 🔧 Detail polish
 
 ### ① Title bar redesign — grouped icon toolbar
+
 No more "shove a text button wherever". Three semantic icon groups: File / Vault ｜ View / Layout ｜ Share / Tools. Dividers mark group boundaries; 28×28 icon targets meet touch; active state uses accent + jade highlight echoing the segmented control's "on". The whole bar is draggable (`-webkit-app-region: drag`); self-drawn window buttons render on Windows only (macOS yields 78px to native lights).
 
 ### ② F1 help panel — shortcuts + guide
+
 `F1` opens it directly (a prior key-guard bug that swallowed F1 is fixed). Glass panel with Shortcuts / Guide tabs; ↑↓ to choose, Enter to run, Esc to close; keys fixed, descriptions localized, bilingual.
 
 ### ③ Block handles — consistent left rail, never covers text
+
 Keeps Crepe floating-ui's **block-left-edge**, nudged only `translateX(-12px)` for breathing room; indented blocks shift right, always left of the block edge, never covering text. A `96px` gutter (≈64px handle + 12px shift + 20px margin) prevents clipping even at the narrowest window.
 
-![Block handle consistent left rail](./docs/assets/yujian-handle.svg)
+![1.00](./docs/assets/yujian-handle.svg)
 
 ### ④ Long-token table wrapping — no more overlap
+
 Tables use `table-layout: fixed`; previously bold/emphasized unbreakable tokens burst the cell and overlapped neighbors. Now `overflow-wrap: anywhere; word-break: break-word; white-space: normal` wraps any token inside the cell. Accent-filled header, zebra rows, hairline grid, rounded corners.
 
-![Long token wraps inside the cell](./docs/assets/yujian-table.svg)
+![1.00](./docs/assets/yujian-table.svg)
 
 ### ⑤ Code blocks & reading progress — jade details
+
 Code blocks get **adaptive height** (no longer fill the parent) with an inset highlight like "a groove on jade"; global scrollbars are thin, rounded, translucent, brightening only one notch on hover; the editor's native scrollbar is hidden in favor of the **right-side jade reading progress bar**.
 
 ***
 
 ## 🧱 Tech stack
 
-| Layer | Choice | Notes |
-| --- | --- | --- |
-| Runtime | Electron 44 | official prebuilt binary, no C++ toolchain |
-| Build | electron-vite 5 + vite ~7.3.6 | vite must stay < 8 (electron-vite peer limit) |
-| Frontend | Vue 3.5 + TypeScript ~5.9.3 | `<script setup>` + composition API |
-| Editor core | @milkdown/crepe 7.22.1 | ProseMirror + remark, best Markdown round-trip |
-| Source mode | CodeMirror 6 | shares the same Markdown text with WYSIWYG |
-| Diagrams | Mermaid 11 / KaTeX 0.18 | diagrams & math |
-| Search | MiniSearch 7 | pure-JS inverted index, no native compile |
-| Watch | chokidar 4 | vault file watching (single watcher) |
-| State | pinia 4 | cross-component state (verified with Vue 3.5) |
+| Layer       | Choice                         | Notes                                          |
+| ----------- | ------------------------------ | ---------------------------------------------- |
+| Runtime     | Electron 44                    | official prebuilt binary, no C++ toolchain     |
+| Build       | electron-vite 5 + vite \~7.3.6 | vite must stay < 8 (electron-vite peer limit)  |
+| Frontend    | Vue 3.5 + TypeScript \~5.9.3   | `<script setup>` + composition API             |
+| Editor core | @milkdown/crepe 7.22.1         | ProseMirror + remark, best Markdown round-trip |
+| Source mode | CodeMirror 6                   | shares the same Markdown text with WYSIWYG     |
+| Diagrams    | Mermaid 11 / KaTeX 0.18        | diagrams & math                                |
+| Search      | MiniSearch 7                   | pure-JS inverted index, no native compile      |
+| Watch       | chokidar 4                     | vault file watching (single watcher)           |
+| State       | pinia 4                        | cross-component state (verified with Vue 3.5)  |
 
 > Dependency choices are driven by local constraints: no MSVC / no WebView2, so Tauri is out; we also avoid anything needing node-gyp (better-sqlite3 / sharp / resvg), preferring pure JS or WASM.
 
@@ -254,17 +265,18 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 
 ## 🗺️ Roadmap
 
-| Phase | Goal | Status |
-| --- | --- | --- |
-| 0. Foundation | scaffold + window + IPC | ✅ done |
-| 1. Editor core | Crepe + dual mode + open/save | ✅ done |
-| 2. Vault | file tree + auto-save + crash recovery | ✅ done |
-| 3. Writing suite | Mermaid + math + tables + code | ✅ done |
-| 4. Images | paste-to-disk + image host | ✅ done |
-| 5. Search | MiniSearch index + search panel | ✅ done |
-| 6. Export | HTML / PDF / single md | ✅ done |
-| 7. Polish | themes/skins, shortcut hints, settings, title-bar redesign | ✅ done (skins + preferences/appearance + icon toolbar + help/shortcuts + unified glass) |
-| 8. Distribution | electron-builder + **3-platform CI** | ✅ done (v1.0.0; GitHub Actions builds Win/macOS/Linux installers) |
+| Phase            | Goal                                                       | Status                                                                                  |
+| ---------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 0. Foundation    | scaffold + window + IPC                                    | ✅ done                                                                                  |
+| 1. Editor core   | Crepe + dual mode + open/save                              | ✅ done                                                                                  |
+| 2. Vault         | file tree + auto-save + crash recovery                     | ✅ done                                                                                  |
+| 3. Writing suite | Mermaid + math + tables + code                             | ✅ done                                                                                  |
+| 4. Images        | paste-to-disk + image host                                 | ✅ done                                                                                  |
+| 5. Search        | MiniSearch index + search panel                            | ✅ done                                                                                  |
+| 6. Export        | HTML / PDF / single md                                     | ✅ done                                                                                  |
+| 7. Polish        | themes/skins, shortcut hints, settings, title-bar redesign | ✅ done (skins + preferences/appearance + icon toolbar + help/shortcuts + unified glass) |
+| 8. Distribution  | electron-builder + **3-platform CI**                       | ✅ done (v1.0.0; GitHub Actions builds Win/macOS/Linux installers)                       |
+| 9. Phase 2       | multi-doc tabs + find/replace + version snapshots + writing stats + Focus (typewriter/zen) mode + export enh. + writing aids + link check | 🔧 batch 1 done (multi-doc tabs · in-file find/replace · selection count); batch 2 done (version snapshots · writing stats · Focus mode); batch 3 pending (see [`docs/PHASE2-PLAN.md`](./docs/PHASE2-PLAN.md)) |
 
 **Beyond the roadmap**: bilingual i18n, switch working folder, startup preferences, five skins + dark/light/system, app icon (YuJian), independent panel toggle, jade scrollbars, adaptive code height, right-side reading progress, title-bar icon toolbar redesign, help & shortcut panel (F1), consistent left-rail block handles, unified glass (all overlays follow mode), long-token table wrapping, size trimming (asar + max compression + zh/en locales only).
 
@@ -275,7 +287,7 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 ### Local build (v1.0.0)
 
 * **Build**: `npm run dist` (then `electron-vite build` + `electron-builder --win`); publish to GitHub Release with `npm run release` (tag `v*` first).
-* **Windows**: `release/yujian-1.0.0-setup.exe` (NSIS, ~140MB) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
+* **Windows**: `release/yujian-1.0.0-setup.exe` (NSIS, \~140MB) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
 * **Cross-platform**: macOS `dmg`, Linux `AppImage` targets configured; **must build on the target OS** (see below).
 * **Size strategy**: `asar` + max compression + zh/en locales only; removed unused `@codemirror/theme-one-dark`.
 * **Size note**: the package is dominated by the Electron runtime and the Mermaid engine; Mermaid is lazy-loaded (only on render) and works offline. Switch to CDN loading for further trimming.
@@ -284,11 +296,11 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 
 Pushing a `v*` tag triggers [`.github/workflows/release.yml`](./.github/workflows/release.yml): it creates a **draft release** on Ubuntu, then builds and uploads installers to that same release in parallel on **windows-latest / macos-latest / ubuntu-latest**.
 
-| Platform | Artifact | Target |
-| --- | --- | --- |
-| Windows | `yujian-{version}-setup.exe` | NSIS installer |
-| macOS | `玉笺-{version}.dmg` | DMG disk image |
-| Linux | `yujian-{version}.AppImage` | AppImage portable |
+| Platform | Artifact                     | Target            |
+| -------- | ---------------------------- | ----------------- |
+| Windows  | `yujian-{version}-setup.exe` | NSIS installer    |
+| macOS    | `玉笺-{version}.dmg`           | DMG disk image    |
+| Linux    | `yujian-{version}.AppImage`  | AppImage portable |
 
 > **Code signing (optional)**: unsigned builds warn (Windows SmartScreen; macOS needs right-click "Open" + allow). Configure `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` (Windows Authenticode) and `CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` (macOS sign + notarize) in **Settings → Secrets** and CI signs automatically. CI uses official mirrors by default (unaffected by the local `.npmrc` npmmirror).
 
