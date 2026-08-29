@@ -668,6 +668,7 @@ onBeforeUnmount(() => {
       @appearance="onAppearance"
       @img-host="onImgHost"
       @preferences="onPreferences"
+      @zen-settings="onZenSettings"
       @save="saveFile"
       @save-as="saveFileAs"
       @help="onHelp('shortcuts')"

@@ -31,6 +31,7 @@ const emit = defineEmits<{
   (e: 'appearance'): void
   (e: 'img-host'): void
   (e: 'preferences'): void
+  (e: 'zen-settings'): void
   (e: 'save'): void
   (e: 'save-as'): void
   (e: 'help'): void
@@ -69,6 +70,7 @@ function onExportSelect(action: string): void {
 const moreItems = (): MenuEntry[] => [
   { action: 'img-host', label: L.imgHost, icon: 'image' },
   { action: 'preferences', label: L.preferences, icon: 'sliders' },
+  { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
   { separator: true },
   { action: 'save', label: L.save, icon: 'file', hint: 'Ctrl S' },
   { action: 'save-as', label: L.saveAs, icon: 'file' },
@@ -83,6 +85,9 @@ function onMoreSelect(action: string): void {
       break
     case 'preferences':
       emit('preferences')
+      break
+    case 'zen-settings':
+      emit('zen-settings')
       break
     case 'save':
       emit('save')

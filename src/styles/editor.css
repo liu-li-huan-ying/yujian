@@ -5,6 +5,7 @@
 
 .milkdown {
   height: 100%;
+  width: 100%;
   /* 让 Crepe 根成为真正的滚动容器：否则长文档无法滚动，右侧进度条也找不到滚动目标 */
   overflow-y: auto;
   overflow-x: hidden;
@@ -48,6 +49,8 @@
      后仍有约 20px 余量，最窄窗口下手柄也不会被内容区左缘裁切；宽窗时正文仍居中于内容列。 */
   padding-left: 96px;
   min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
   outline: none;
   caret-color: var(--hue-accent);
 }

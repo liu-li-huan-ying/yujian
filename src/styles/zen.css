@@ -102,6 +102,16 @@
   transition: opacity 120ms var(--ease-zen) 280ms;
 }
 
+/* ── 凝神：源码模式也走居中列 ────────────────────────
+   CodeMirror 默认整屏贴左，宽窗下右半边全空 → 视觉「非常偏左」。
+   对称内边距把「行号 gutter + 代码」整体收进 --w-column-zen 宽的居中列
+   （行号随代码一起移动，与所见即所得同根列宽 640px）；
+   max() 保证窄窗（< 列宽）不产生负内边距，退回贴边布局。 */
+.shell[data-zen] .source-host > .cm-editor .cm-scroller {
+  padding-left: max(0px, calc(50% - var(--w-column-zen) / 2));
+  padding-right: max(0px, calc(50% - var(--w-column-zen) / 2));
+}
+
 /* ── 无障碍：尊重系统减弱动效偏好 → 状态直接切换，无位移无淡出 ── */
 @media (prefers-reduced-motion: reduce) {
   .shell,

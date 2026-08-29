@@ -33,12 +33,20 @@ const groups = computed(() => [
     ]
   },
   {
+    title: H.scEdit,
+    items: [{ keys: ['Ctrl', 'F'], desc: H.scFind }]
+  },
+  {
     title: H.scView,
     items: [
       { keys: ['Ctrl', '\\'], desc: H.scSidebar },
       { keys: ['Ctrl', 'Shift', '\\'], desc: H.scOutline },
       { keys: ['Ctrl', '/'], desc: H.scMode }
     ]
+  },
+  {
+    title: H.scFocus,
+    items: [{ keys: ['Esc'], desc: H.scFocusEsc }]
   },
   {
     title: H.scGeneral,
