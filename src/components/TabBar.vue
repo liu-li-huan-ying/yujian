@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import { useTabsStore } from '../store/tabs'
@@ -25,92 +25,58 @@ function baseName(path: string): string {
 const isActive = (path: string): boolean => path === tabs.activePath
 const showDot = (path: string): boolean => isActive(path) && props.dirty
 
-/* ── 溢出折叠：以当前标签为中心的滑动窗口，超出部分收进「更多」 ──
- * 设计要点（参考 VS Code / 浏览器标签条）：
- *  - 始终保证 active 标签在可见窗口内，避免「切到哪个却看不见哪个」；
- *  - 可见窗口长度由容器宽度贪心测得，窗口起点随 active 滑动；
- *  - 折叠进「更多」的标签不入 DOM，50+ 标签时栏内节点仍是 ~cap 个，性能不退化。
- *
- * 稳定性（修复「同一状态忽而 5 个、忽而 6 个」）：
- *  - 位置徽标 / 「更多」按钮常驻占位（仅切 visibility），scroller.clientWidth 恒定 → 可用宽度取实测值，不再额外预留；
- *  - 挂载时先一次性渲染全部标签测量真实宽度（50 个 div 无压力），cap 直接由真实宽度贪心得出，杜绝估算偏差引起的少算；
- *  - 窗口实际渲染数再由「从窗口起点重新贪心」校准，避免窗口落在较宽标签区时末项被裁。
- *
- * 滚轮画廊（带阻尼 / 惯性）：仅在溢出时接管滚轮，把 delta 累积为速度，用摩擦衰减做惯性滑行，
- * 不会一下飞太远（限速 + 摩擦）。滚轮浏览期间不把窗口拽回 active，点选标签才复位。 */
+/* ── 占满式标签布局（采纳主人的修正：不固定可见数）──
+ * 算法：
+ *  1. 用「默认卡片宽度」估算可见区能放下几个标签 → cap；
+ *  2. 这 cap 个可见标签用 flex:1 均匀分摊可见区宽度，**永远占满、不留空位**；
+ *  3. 窗口缩放时 cap 跟着变，可见标签数自动增减、始终填满 —— 根除「固定 N 个」带来的空位与抖动；
+ *  4. 超出 cap 的收进「更多」，滚轮以阻尼 / 惯性横向浏览（浏览中不拽回 active，点选才复位）。
+ * 性能：仅渲染可见的 ~cap 个标签，50+ 标签时栏内 DOM 不随总数增长。 */
 const scroller = ref<HTMLElement | null>(null)
 const windowStart = ref(0)
 const windowCount = ref(1)
-const measuring = ref(false) // 首帧测量：临时渲染全部标签以拿到真实宽度
 const browsing = ref(false) // 用户正在滚轮浏览，compute 不再居中到 active
+
+const DEFAULT_TAB_W = 168 // 默认卡片宽度：仅用于估算「能放几个」
+const MIN_TAB_W = 96 // 单卡最小宽度下限，过窄则减少可见数
 
 /** 滚轮画廊动画状态（标签单位，浮点） */
 let animStart = 0
 let velocity = 0
 let wheelRAF = 0
 
-/** path → 实测宽度（px）。渲染过的标签记住真实宽度，窗口滑动后无需重新估算。 */
-const widthCache = new Map<string, number>()
+/** 到头回弹反馈 */
+const bounceDir = ref(0) // -1 左到头 / 1 右到头 / 0 无
+let bounceTimer = 0
+function triggerBounce(dir: number): void {
+  bounceDir.value = dir
+  if (bounceTimer) clearTimeout(bounceTimer)
+  bounceTimer = window.setTimeout(() => {
+    bounceDir.value = 0
+  }, 240)
+}
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v
-}
-
-/** 扫描当前已渲染的标签，把真实宽度回填进缓存 */
-function scanWidths(): void {
-  const c = scroller.value
-  if (!c) return
-  c.querySelectorAll<HTMLElement>('[data-tab-path]').forEach((el) => {
-    const p = el.dataset.tabPath
-    if (!p) return
-    const w = el.offsetWidth
-    if (w > 0) widthCache.set(p, w)
-  })
-}
-
-/** 已知宽度的平均值，作为未渲染标签的宽度估算 */
-function avgWidth(): number {
-  let sum = 0
-  let n = 0
-  for (const w of widthCache.values()) {
-    sum += w
-    n++
-  }
-  return n > 0 ? sum / n : 110
-}
-
-/** 从 start 起，用最佳已知宽度贪心计算在 avail 内最多能放几个标签（不超出） */
-function packFrom(start: number, avail: number): number {
-  const len = tabs.tabs.length
-  const est = avgWidth()
-  let used = 0
-  for (let i = start; i < len; i++) {
-    const w = widthCache.get(tabs.tabs[i].path) ?? est
-    if (used + w > avail && i > start) return i - start
-    used += w
-  }
-  return len - start
 }
 
 function compute(): void {
   const c = scroller.value
   if (!c) return
   const len = tabs.tabs.length
-  // 清掉已关闭标签的缓存，避免陈旧宽度与无限增长
-  if (widthCache.size > len * 2) {
-    const alive = new Set(tabs.tabs.map((tb) => tb.path))
-    for (const p of widthCache.keys()) if (!alive.has(p)) widthCache.delete(p)
-  }
   if (len === 0) {
     windowStart.value = 0
     windowCount.value = 0
     return
   }
 
+  // 1) 默认宽度估算可见数
   const avail = c.clientWidth
-  const cap = Math.max(1, Math.min(packFrom(0, avail), len))
+  let cap = Math.max(1, Math.floor(avail / DEFAULT_TAB_W))
+  while (cap > 1 && avail / cap < MIN_TAB_W) cap-- // 太窄则减，避免卡片被压垮
+  cap = Math.min(cap, len)
 
-  // 窗口起点：滚轮浏览时锁定在动画位置；否则让 active 始终可见（不强制居中，避免与浏览打架）
+  // 2) 窗口起点：浏览中锁动画位置；否则让 active 始终可见（不强制居中，避免与浏览打架）
   let start: number
   if (browsing.value) {
     start = clamp(Math.round(animStart), 0, Math.max(0, len - cap))
@@ -119,52 +85,38 @@ function compute(): void {
     let s = windowStart.value
     if (a < 0) s = 0
     else if (a < s) s = a
-    else if (a > s + windowCount.value - 1) s = a - cap + 1
+    else if (a >= s + cap) s = a - cap + 1
     else s = clamp(s, 0, Math.max(0, len - cap))
     start = clamp(s, 0, Math.max(0, len - cap))
   }
   windowStart.value = start
-
-  // 从窗口起点重新贪心，确保当前窗口内的标签真正放得下（不会因窗口落在较宽区而溢出裁切）
-  const fit = packFrom(start, avail)
-  windowCount.value = Math.max(1, Math.min(fit, len - start))
+  windowCount.value = cap
 }
 
-/* rAF 批处理 + 渲染后收敛：合并连续触发，并让真实宽度被回填后 cap 稳定下来 */
+/* rAF 批处理：合并连续触发，避免切标签 / 缩放时的多次同步回流 */
 let rafId = 0
 function scheduleRecompute(): void {
   if (rafId) cancelAnimationFrame(rafId)
   rafId = requestAnimationFrame(() => {
     rafId = 0
-    settle(2)
+    compute()
   })
 }
-function settle(passLeft: number): void {
-  scanWidths()
-  const before = `${windowStart.value}:${windowCount.value}`
-  compute()
-  if (`${windowStart.value}:${windowCount.value}` !== before && passLeft > 0) {
-    // 等 Vue 渲染出新窗口后再测一轮，回填新标签的真实宽度
-    void nextTick(() => settle(passLeft - 1))
-  }
-}
+
+/* ── 渐隐提示边：左 / 右是否还有更多可滚内容 ── */
+const showFadeL = computed(() => windowStart.value > 0)
+const showFadeR = computed(() => windowStart.value + windowCount.value < tabs.tabs.length)
 
 let ro: ResizeObserver | null = null
 onMounted(() => {
-  // 首帧测量：临时渲染全部标签拿到真实宽度，cap 由真实宽度贪心得出，根除估算少算
-  measuring.value = true
-  void nextTick(() => {
-    scanWidths()
-    measuring.value = false
-    compute()
-    scheduleRecompute()
-  })
+  compute()
+  scheduleRecompute()
   if (typeof ResizeObserver !== 'undefined' && scroller.value) {
     ro = new ResizeObserver(() => scheduleRecompute())
     ro.observe(scroller.value)
   }
   window.addEventListener('resize', scheduleRecompute)
-  // 字体加载完成后标签宽度会变，重算一次，避免缓存了 fallback 字体下的宽度
+  // 字体加载完成后标签宽度会变，重算一次
   if (typeof document !== 'undefined' && 'fonts' in document) {
     void document.fonts.ready.then(() => scheduleRecompute())
   }
@@ -172,6 +124,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId)
   if (wheelRAF) cancelAnimationFrame(wheelRAF)
+  if (bounceTimer) clearTimeout(bounceTimer)
   ro?.disconnect()
   window.removeEventListener('resize', scheduleRecompute)
 })
@@ -181,8 +134,6 @@ watch(() => tabs.activePath, scheduleRecompute)
 const visibleTabs = computed(() =>
   tabs.tabs.slice(windowStart.value, windowStart.value + windowCount.value)
 )
-// 测量阶段临时渲染全部标签
-const renderedTabs = computed(() => (measuring.value ? tabs.tabs : visibleTabs.value))
 const overflowTabs = computed(() =>
   tabs.tabs.filter((_, i) => i < windowStart.value || i >= windowStart.value + windowCount.value)
 )
@@ -226,6 +177,13 @@ function onWheel(e: WheelEvent): void {
   const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
   if (d === 0) return
   e.preventDefault()
+  const dir = d > 0 ? 1 : -1
+  const maxStart = Math.max(0, tabs.tabs.length - windowCount.value)
+  // 已到边界再往同方向滚 → 回弹反馈，不再移动
+  if ((dir > 0 && windowStart.value >= maxStart) || (dir < 0 && windowStart.value <= 0)) {
+    triggerBounce(dir)
+    return
+  }
   browsing.value = true
   // 阻尼：单帧速度增量有上限、总速度限速，避免一下子飞太远；每次滚轮约滑 1 个标签并惯性收尾
   const add = clamp(d, -120, 120) * 0.0016
@@ -275,11 +233,15 @@ function onMoreSelect(action: string): void {
 
 <template>
   <div class="tabbar jade">
-    <div ref="scroller" class="tabbar__scroll" @wheel="onWheel">
+    <div
+      ref="scroller"
+      class="tabbar__scroll"
+      :class="{ 'is-bounce-l': bounceDir === -1, 'is-bounce-r': bounceDir === 1 }"
+      @wheel="onWheel"
+    >
       <div
-        v-for="tab in renderedTabs"
+        v-for="tab in visibleTabs"
         :key="tab.path"
-        :data-tab-path="tab.path"
         class="tab"
         :class="{ 'tab--active': isActive(tab.path) }"
         :title="tab.path"
@@ -297,18 +259,20 @@ function onMoreSelect(action: string): void {
           <Icon name="x" :size="12" />
         </button>
       </div>
+
+      <!-- 渐隐提示边：左右还有更多可滚内容时浮现 -->
+      <div class="tabbar__fade tabbar__fade--l" :class="{ 'is-on': showFadeL }" />
+      <div class="tabbar__fade tabbar__fade--r" :class="{ 'is-on': showFadeR }" />
     </div>
 
     <!-- 常驻占位：显隐只切 visibility，保证 scroller 可用宽度恒定不抖动 -->
-    <span
-      class="tabbar__pos"
-      :class="{ 'is-hidden': overflowCount <= 0 || measuring }"
-      :title="L.tabPos"
-    >{{ posLabel }}</span>
+    <span class="tabbar__pos" :class="{ 'is-hidden': overflowCount <= 0 }" :title="L.tabPos">{{
+      posLabel
+    }}</span>
 
     <button
       class="tabbar__more"
-      :class="{ 'is-hidden': overflowCount <= 0 || measuring }"
+      :class="{ 'is-hidden': overflowCount <= 0 }"
       type="button"
       :title="moreTitle"
       @click="onMoreClick"
@@ -348,6 +312,7 @@ function onMoreSelect(action: string): void {
 }
 
 .tabbar__scroll {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -355,11 +320,66 @@ function onMoreSelect(action: string): void {
   overflow: hidden;
 }
 
+/* 到头回弹反馈 */
+@keyframes tab-bounce-l {
+  0% {
+    transform: translateX(0);
+  }
+  35% {
+    transform: translateX(-5px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes tab-bounce-r {
+  0% {
+    transform: translateX(0);
+  }
+  35% {
+    transform: translateX(5px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+.tabbar__scroll.is-bounce-l {
+  animation: tab-bounce-l 0.24s var(--ease);
+}
+.tabbar__scroll.is-bounce-r {
+  animation: tab-bounce-r 0.24s var(--ease);
+}
+
+/* 渐隐提示边：左 / 右还有更多可滚内容 */
+.tabbar__fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+  z-index: 2;
+}
+.tabbar__fade.is-on {
+  opacity: 1;
+}
+.tabbar__fade--l {
+  left: 0;
+  background: linear-gradient(to right, var(--hue-base), transparent);
+}
+.tabbar__fade--r {
+  right: 0;
+  background: linear-gradient(to left, var(--hue-base), transparent);
+}
+
+/* 可见标签：flex:1 均匀占满可见区，永远不留空位 */
 .tab {
+  flex: 1 1 0;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 200px;
   padding: 0 8px 0 12px;
   border-right: 1px solid var(--hue-border-subtle);
   color: var(--hue-text-2);
@@ -390,6 +410,8 @@ function onMoreSelect(action: string): void {
 }
 
 .tab__name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
