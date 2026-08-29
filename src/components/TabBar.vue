@@ -28,20 +28,33 @@ const showDot = (path: string): boolean => isActive(path) && props.dirty
 /* ── 溢出折叠：以当前标签为中心的滑动窗口，超出部分收进「更多」 ──
  * 设计要点（参考 VS Code / 浏览器标签条）：
  *  - 始终保证 active 标签在可见窗口内，避免「切到哪个却看不见哪个」；
- *  - 可见窗口长度 cap 由容器宽度贪心测得，窗口起点随 active 滑动；
+ *  - 可见窗口长度由容器宽度贪心测得，窗口起点随 active 滑动；
  *  - 折叠进「更多」的标签不入 DOM，50+ 标签时栏内节点仍是 ~cap 个，性能不退化。
  *
- * 稳定性三条（修复「同一状态忽而 5 个、忽而 6 个」的抖动）：
- *  1. 位置徽标与「更多」按钮**常驻占位**（用 visibility 切换显隐），scroller.clientWidth 因此恒定，
- *     可用宽度直接取实测值、不再额外预留 —— 根除「双重扣减」与「徽标显隐反馈振荡」；
- *  2. 标签宽度按 path 缓存实测值，未渲染过的用已知宽度的平均值估算（优于硬编码 150）；
- *  3. 渲染后回填真实宽度并再收敛至多 2 轮，让 cap 稳定在不动点。 */
+ * 稳定性（修复「同一状态忽而 5 个、忽而 6 个」）：
+ *  - 位置徽标 / 「更多」按钮常驻占位（仅切 visibility），scroller.clientWidth 恒定 → 可用宽度取实测值，不再额外预留；
+ *  - 挂载时先一次性渲染全部标签测量真实宽度（50 个 div 无压力），cap 直接由真实宽度贪心得出，杜绝估算偏差引起的少算；
+ *  - 窗口实际渲染数再由「从窗口起点重新贪心」校准，避免窗口落在较宽标签区时末项被裁。
+ *
+ * 滚轮画廊（带阻尼 / 惯性）：仅在溢出时接管滚轮，把 delta 累积为速度，用摩擦衰减做惯性滑行，
+ * 不会一下飞太远（限速 + 摩擦）。滚轮浏览期间不把窗口拽回 active，点选标签才复位。 */
 const scroller = ref<HTMLElement | null>(null)
 const windowStart = ref(0)
 const windowCount = ref(1)
+const measuring = ref(false) // 首帧测量：临时渲染全部标签以拿到真实宽度
+const browsing = ref(false) // 用户正在滚轮浏览，compute 不再居中到 active
+
+/** 滚轮画廊动画状态（标签单位，浮点） */
+let animStart = 0
+let velocity = 0
+let wheelRAF = 0
 
 /** path → 实测宽度（px）。渲染过的标签记住真实宽度，窗口滑动后无需重新估算。 */
 const widthCache = new Map<string, number>()
+
+function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v
+}
 
 /** 扫描当前已渲染的标签，把真实宽度回填进缓存 */
 function scanWidths(): void {
@@ -55,12 +68,36 @@ function scanWidths(): void {
   })
 }
 
+/** 已知宽度的平均值，作为未渲染标签的宽度估算 */
+function avgWidth(): number {
+  let sum = 0
+  let n = 0
+  for (const w of widthCache.values()) {
+    sum += w
+    n++
+  }
+  return n > 0 ? sum / n : 110
+}
+
+/** 从 start 起，用最佳已知宽度贪心计算在 avail 内最多能放几个标签（不超出） */
+function packFrom(start: number, avail: number): number {
+  const len = tabs.tabs.length
+  const est = avgWidth()
+  let used = 0
+  for (let i = start; i < len; i++) {
+    const w = widthCache.get(tabs.tabs[i].path) ?? est
+    if (used + w > avail && i > start) return i - start
+    used += w
+  }
+  return len - start
+}
+
 function compute(): void {
   const c = scroller.value
   if (!c) return
   const len = tabs.tabs.length
   // 清掉已关闭标签的缓存，避免陈旧宽度与无限增长
-  if (widthCache.size > len) {
+  if (widthCache.size > len * 2) {
     const alive = new Set(tabs.tabs.map((tb) => tb.path))
     for (const p of widthCache.keys()) if (!alive.has(p)) widthCache.delete(p)
   }
@@ -70,54 +107,30 @@ function compute(): void {
     return
   }
 
-  // 未渲染过的标签用「已知宽度的平均值」估算，比硬编码更贴近实际
-  let sum = 0
-  let n = 0
-  for (const tb of tabs.tabs) {
-    const w = widthCache.get(tb.path)
-    if (w) {
-      sum += w
-      n++
-    }
-  }
-  const est = n > 0 ? Math.ceil(sum / n) : 130
-
-  // 可用宽度直接取容器实测宽度：徽标 / 更多按钮已常驻占位，无需再预留
   const avail = c.clientWidth
-  let used = 0
-  let cap = len
-  for (let i = 0; i < len; i++) {
-    const w = widthCache.get(tabs.tabs[i].path) ?? est
-    if (used + w > avail && i > 0) {
-      cap = i
-      break
-    }
-    used += w
-  }
-  cap = Math.max(1, Math.min(cap, len))
+  const cap = Math.max(1, Math.min(packFrom(0, avail), len))
 
-  // 以 active 为中心滑动窗口起点。
-  // 但若用户正在用滚轮浏览（active 不在当前窗口内），保留窗口位置、仅贴边修正：
-  // 不把窗口拽回 active（否则滚轮浏览失效），同时让 cap 适应新窗口的实际宽度，避免末项被裁切。
-  const activeIdx = tabs.tabs.findIndex((tb) => tb.path === tabs.activePath)
+  // 窗口起点：滚轮浏览时锁定在动画位置；否则让 active 始终可见（不强制居中，避免与浏览打架）
   let start: number
-  if (activeIdx < 0) {
-    start = 0
-  } else if (activeIdx < cap) {
-    start = 0
-  } else if (activeIdx > len - cap) {
-    start = len - cap
+  if (browsing.value) {
+    start = clamp(Math.round(animStart), 0, Math.max(0, len - cap))
   } else {
-    const centered = activeIdx - Math.floor((cap - 1) / 2)
-    const browsing =
-      activeIdx < windowStart.value || activeIdx >= windowStart.value + windowCount.value
-    start = browsing ? Math.min(windowStart.value, len - cap) : centered
+    const a = tabs.tabs.findIndex((tb) => tb.path === tabs.activePath)
+    let s = windowStart.value
+    if (a < 0) s = 0
+    else if (a < s) s = a
+    else if (a > s + windowCount.value - 1) s = a - cap + 1
+    else s = clamp(s, 0, Math.max(0, len - cap))
+    start = clamp(s, 0, Math.max(0, len - cap))
   }
   windowStart.value = start
-  windowCount.value = cap
+
+  // 从窗口起点重新贪心，确保当前窗口内的标签真正放得下（不会因窗口落在较宽区而溢出裁切）
+  const fit = packFrom(start, avail)
+  windowCount.value = Math.max(1, Math.min(fit, len - start))
 }
 
-/* rAF 批处理 + 渲染后收敛：合并连续触发，并让估算宽度被实测值替换后 cap 稳定下来 */
+/* rAF 批处理 + 渲染后收敛：合并连续触发，并让真实宽度被回填后 cap 稳定下来 */
 let rafId = 0
 function scheduleRecompute(): void {
   if (rafId) cancelAnimationFrame(rafId)
@@ -138,9 +151,14 @@ function settle(passLeft: number): void {
 
 let ro: ResizeObserver | null = null
 onMounted(() => {
-  // 同步首算：挂载后 clientWidth 已可读，避免首帧只渲染 1 个标签造成闪烁
-  compute()
-  scheduleRecompute() // 渲染后回填真实宽度并收敛
+  // 首帧测量：临时渲染全部标签拿到真实宽度，cap 由真实宽度贪心得出，根除估算少算
+  measuring.value = true
+  void nextTick(() => {
+    scanWidths()
+    measuring.value = false
+    compute()
+    scheduleRecompute()
+  })
   if (typeof ResizeObserver !== 'undefined' && scroller.value) {
     ro = new ResizeObserver(() => scheduleRecompute())
     ro.observe(scroller.value)
@@ -153,6 +171,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId)
+  if (wheelRAF) cancelAnimationFrame(wheelRAF)
   ro?.disconnect()
   window.removeEventListener('resize', scheduleRecompute)
 })
@@ -162,6 +181,8 @@ watch(() => tabs.activePath, scheduleRecompute)
 const visibleTabs = computed(() =>
   tabs.tabs.slice(windowStart.value, windowStart.value + windowCount.value)
 )
+// 测量阶段临时渲染全部标签
+const renderedTabs = computed(() => (measuring.value ? tabs.tabs : visibleTabs.value))
 const overflowTabs = computed(() =>
   tabs.tabs.filter((_, i) => i < windowStart.value || i >= windowStart.value + windowCount.value)
 )
@@ -172,25 +193,49 @@ const posLabel = computed(() =>
 )
 const moreTitle = computed(() => L.moreTabs.replace('{n}', String(overflowCount.value)))
 
-/* 滚轮在标签条上横向浏览（画廊式翻页）：仅在有溢出时接管滚轮，
- * 把滑动窗口沿标签序列 ±1 翻页；无溢出时原样放行，不劫持页面滚动。 */
-function shiftWindow(delta: number): void {
-  const len = tabs.tabs.length
-  const cap = windowCount.value
-  if (cap >= len) return
-  const next = Math.min(Math.max(0, windowStart.value + delta), len - cap)
-  if (next !== windowStart.value) {
-    windowStart.value = next
-    // 重算让 cap 适应新窗口内标签的实际宽度，避免最后一个标签被裁掉半截
-    scheduleRecompute()
+/* ── 滚轮画廊：带阻尼 / 惯性 ── */
+function tick(): void {
+  animStart += velocity
+  velocity *= 0.85 // 摩擦阻尼
+  const maxStart = Math.max(0, tabs.tabs.length - windowCount.value)
+  if (animStart < 0) {
+    animStart = 0
+    velocity = 0
   }
+  if (animStart > maxStart) {
+    animStart = maxStart
+    velocity = 0
+  }
+  const target = Math.round(animStart)
+  windowStart.value = clamp(target, 0, maxStart)
+  if (Math.abs(velocity) < 0.0015 && Math.abs(animStart - target) < 0.0015) {
+    animStart = target
+    windowStart.value = target
+    velocity = 0
+    wheelRAF = 0
+    return
+  }
+  wheelRAF = requestAnimationFrame(tick)
 }
+function ensureTick(): void {
+  if (!wheelRAF) wheelRAF = requestAnimationFrame(tick)
+}
+
 function onWheel(e: WheelEvent): void {
-  if (overflowCount.value <= 0) return
+  if (overflowCount.value <= 0) return // 无溢出不劫持页面滚动
   const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
   if (d === 0) return
   e.preventDefault()
-  shiftWindow(d > 0 ? 1 : -1)
+  browsing.value = true
+  // 阻尼：单帧速度增量有上限、总速度限速，避免一下子飞太远；每次滚轮约滑 1 个标签并惯性收尾
+  const add = clamp(d, -120, 120) * 0.0016
+  velocity = clamp(velocity + add, -0.5, 0.5)
+  ensureTick()
+}
+
+function onTabClick(path: string): void {
+  browsing.value = false // 点选标签复位到「跟随 active」
+  emit('activate', path)
 }
 
 /* ── 单标签右键菜单 ── */
@@ -223,6 +268,7 @@ function onMoreClick(e: MouseEvent): void {
 }
 function onMoreSelect(action: string): void {
   moreMenu.value = null
+  browsing.value = false // 点选标签复位到「跟随 active」
   emit('activate', action)
 }
 </script>
@@ -231,13 +277,13 @@ function onMoreSelect(action: string): void {
   <div class="tabbar jade">
     <div ref="scroller" class="tabbar__scroll" @wheel="onWheel">
       <div
-        v-for="tab in visibleTabs"
+        v-for="tab in renderedTabs"
         :key="tab.path"
         :data-tab-path="tab.path"
         class="tab"
         :class="{ 'tab--active': isActive(tab.path) }"
         :title="tab.path"
-        @click="emit('activate', tab.path)"
+        @click="onTabClick(tab.path)"
         @contextmenu="onContextMenu($event, tab.path)"
       >
         <span class="tab__name">{{ baseName(tab.path) }}</span>
@@ -256,13 +302,13 @@ function onMoreSelect(action: string): void {
     <!-- 常驻占位：显隐只切 visibility，保证 scroller 可用宽度恒定不抖动 -->
     <span
       class="tabbar__pos"
-      :class="{ 'is-hidden': overflowCount <= 0 }"
+      :class="{ 'is-hidden': overflowCount <= 0 || measuring }"
       :title="L.tabPos"
     >{{ posLabel }}</span>
 
     <button
       class="tabbar__more"
-      :class="{ 'is-hidden': overflowCount <= 0 }"
+      :class="{ 'is-hidden': overflowCount <= 0 || measuring }"
       type="button"
       :title="moreTitle"
       @click="onMoreClick"
