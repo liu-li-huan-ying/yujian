@@ -189,7 +189,36 @@ const enUS = {
     replaceFail: 'Replace failed',
     /* ── Focus mode (typewriter + zen, Batch 2) ── */
     focus: 'Focus',
-    focusTitle: 'Focus mode: center current line + dim the rest'
+    focusTitle: 'Focus mode: center current line + dim the rest',
+    /* ── Focus 2.0: retreat bar + settings panel ── */
+    zenSettings: 'Focus settings',
+    zenSettingsSub: 'Changes apply instantly and persist with the session · no save needed',
+    zenExit: 'Exit focus',
+    zenSwitchDoc: 'Switch document',
+    zenSavedPrefix: 'Saved',
+    zenSavedJustNow: 'just now',
+    zenSavedMinAgo: '{n} min ago',
+    zenSavedHourAgo: '{n} h ago',
+    zenAnchor: 'Anchor position',
+    zenAnchorHint: 'Where the current line is pinned in the viewport',
+    zenAnchorThird: 'Upper 1/3',
+    zenAnchorGolden: 'Golden ratio',
+    zenAnchorCenter: 'Center',
+    zenFog: 'Fog falloff',
+    zenFogHint: 'Fast drop nearby, converged afar',
+    zenFogFast: 'Fast',
+    zenFogMid: 'Mid',
+    zenFogSlow: 'Slow',
+    zenScroll: 'Scroll smoothness',
+    zenScrollHint: 'Tension of the paper scroll',
+    zenScrollSnappy: 'Snappy',
+    zenScrollSmooth: 'Smooth',
+    zenScrollSilky: 'Silky',
+    zenFullscreen: 'Auto fullscreen on enter',
+    zenFullscreenHint: 'Enter fullscreen with focus mode, restore on exit',
+    zenRetreatBar: 'Retreat info bar',
+    zenRetreatBarHint: 'Press Esc in focus to peek, press again to hide',
+    zenDone: 'Done'
   },
 
   /* ── Help panel: shortcuts + guide ── */

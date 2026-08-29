@@ -3,10 +3,12 @@ import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import {
   DEFAULT_SESSION,
+  DEFAULT_ZEN_PREFS,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
   type SessionState,
-  type StartupMode
+  type StartupMode,
+  type ZenPrefs
 } from '../shared/ipc-channels'
 
 /**
@@ -20,6 +22,29 @@ const FILE_NAME = 'session.json'
 
 function sessionPath(): string {
   return join(app.getPath('userData'), FILE_NAME)
+}
+
+/** 逐字段校验凝神偏好：手改坏的历史值一律回退默认，不让非法值进入运行时 */
+function sanitizeZenPrefs(p: Record<string, unknown>): ZenPrefs {
+  const raw = (p.zenPrefs ?? {}) as Record<string, unknown>
+  const anchor = raw.anchor
+  const scroll = raw.scroll
+  return {
+    anchor:
+      typeof anchor === 'number' && Number.isFinite(anchor) && anchor > 0.1 && anchor < 0.9
+        ? anchor
+        : DEFAULT_ZEN_PREFS.anchor,
+    fog:
+      raw.fog === 'fast' || raw.fog === 'mid' || raw.fog === 'slow'
+        ? raw.fog
+        : DEFAULT_ZEN_PREFS.fog,
+    scroll:
+      typeof scroll === 'number' && Number.isFinite(scroll) && scroll > 0.01 && scroll <= 1
+        ? scroll
+        : DEFAULT_ZEN_PREFS.scroll,
+    fullscreen: raw.fullscreen === true,
+    retreatBar: raw.retreatBar !== false
+  }
 }
 
 /** 逐字段校验：历史版本或被手改坏的 session 都不能污染运行时 */
@@ -45,7 +70,8 @@ function sanitize(raw: unknown): SessionState {
     writingGoal:
       typeof p.writingGoal === 'number' && Number.isFinite(p.writingGoal) && p.writingGoal > 0
         ? Math.floor(p.writingGoal)
-        : 0
+        : 0,
+    zenPrefs: sanitizeZenPrefs(p)
   }
 }
 

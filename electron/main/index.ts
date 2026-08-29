@@ -108,6 +108,11 @@ function registerWindowIpc(win: BrowserWindow): void {
 
   ipcMain.handle(IPC.WIN_IS_MAXIMIZED, () => win.isMaximized())
 
+  // 凝神 2.0：进入时自动全屏（偏好开关，默认关）
+  ipcMain.on(IPC.WIN_SET_FULLSCREEN, (_event, flag: unknown) => {
+    win.setFullScreen(flag === true)
+  })
+
   const notify = (): void => {
     const state: WindowState = { maximized: win.isMaximized() }
     win.webContents.send(IPC.WIN_STATE_CHANGE, state)

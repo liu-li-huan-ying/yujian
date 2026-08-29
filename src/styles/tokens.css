@@ -19,6 +19,8 @@
   --w-sidebar: 224px;
   --w-outline: 196px;
   --w-column: 720px;
+  /* 凝神 2.0：纸卷微收后的列宽（经 @property 注册可过渡，见 styles/zen.css） */
+  --w-column-zen: 640px;
   --h-row: 28px;
 
   /* ── 结构层：圆角与动效 ─────────────────────── */
@@ -27,6 +29,8 @@
   --radius-lg: 8px;
 
   --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  /* 凝神 2.0 进退场专用：呼吸感更强的缓出曲线（幕间重叠时序见 styles/zen.css） */
+  --ease-zen: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --dur-slow: 280ms;

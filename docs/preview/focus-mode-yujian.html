@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>凝神 2.0 · 交互预览 — 玉笺</title>
+<style>
+  /* ══════════ 设计令牌（对齐 docs/UI-DESIGN.md 玉质/玻璃体系） ══════════ */
+  :root{
+    --colw: 720px;            /* 正文列宽 */
+    --colw-zen: 640px;        /* 凝神列宽（纸卷微收 80px） */
+    --tb-h: 38px;             /* 标题栏 */
+    --sb-h: 26px;             /* 状态栏 */
+    --sbw: 224px;             /* 侧栏 */
+    --olw: 196px;             /* 大纲 */
+    --ease-jade: cubic-bezier(.22, 1, .36, 1);   /* 玉质呼吸曲线 */
+    /* 雾化五档（中档默认，JS 按设置面板换档） */
+    --fog1:.55; --fog2:.38; --fog3:.28; --fog4:.22; --fog5:.18;
+    --anchor:.333;            /* 锚点：偏上 1/3 */
+  }
+  html[data-mode="dark"]{
+    --frame-a:#262C2E; --frame-b:#202527; --frame-line:rgba(126,196,182,.10);
+    --content:#1C1E1F; --text:#D9DFDD; --text-dim:#98A5A1; --text-faint:#5E6B68;
+    --accent:#5FA8A0; --accent-soft:rgba(95,168,160,.12);
+    --glass-bg:rgba(30,34,35,.68); --glass-line:rgba(126,196,182,.16);
+    --glass-hi:rgba(255,255,255,.07); --scrim:rgba(10,12,12,.45);
+  }
+  html[data-mode="light"]{
+    --frame-a:#F2F5F3; --frame-b:#EAEEEC; --frame-line:rgba(36,128,119,.12);
+    --content:#FCFCFB; --text:#2A3431; --text-dim:#5F6E6A; --text-faint:#9AA8A4;
+    --accent:#248077; --accent-soft:rgba(36,128,119,.10);
+    --glass-bg:rgba(252,252,251,.74); --glass-line:rgba(36,128,119,.18);
+    --glass-hi:rgba(255,255,255,.65); --scrim:rgba(40,50,48,.28);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,"Segoe UI","Sarasa Mono SC","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--content); color:var(--text); overflow:hidden; font-size:14px;
+  }
+  html.rm *{transition-duration:60ms !important; transition-delay:0ms !important}
+
+  /* ══════════ 应用骨架 ══════════ */
+  .app{height:100vh; display:flex; flex-direction:column; position:relative}
+  .main{flex:1; display:flex; min-height:0}
+
+  /* ── 标题栏 / 状态栏（玉质框架层）── */
+  .titlebar{
+    height:var(--tb-h); flex:none; display:flex; align-items:center; padding:0 12px; gap:10px;
+    background:linear-gradient(180deg,var(--frame-a),var(--frame-b));
+    border-bottom:1px solid var(--frame-line);
+    transition:height .12s var(--ease-jade) .06s, opacity .1s ease .06s; /* 退场：从边缘长回 */
+  }
+  .statusbar{
+    height:var(--sb-h); flex:none; display:flex; align-items:center; padding:0 12px; gap:14px;
+    background:linear-gradient(0deg,var(--frame-a),var(--frame-b));
+    border-top:1px solid var(--frame-line); font-size:11.5px; color:var(--text-dim);
+    transition:height .12s var(--ease-jade) .06s, opacity .1s ease .06s;
+  }
+  .app.zen .titlebar,.app.zen .statusbar{height:0; opacity:0; overflow:hidden;
+    transition:height .12s var(--ease-jade) .08s, opacity .12s ease .08s} /* 进场：幕二 · 框架收幕 */
+  .brand{font-weight:600; letter-spacing:.5px; font-size:13px}
+  .brand em{font-style:normal; color:var(--accent); font-size:11px; margin-left:6px; opacity:.85}
+  .tspacer{flex:1}
+  .tbtn{
+    border:none; background:transparent; color:var(--text-dim); cursor:pointer;
+    height:26px; padding:0 9px; border-radius:7px; font-size:12px; display:flex; align-items:center; gap:5px;
+    transition:background .15s ease, color .15s ease;
+  }
+  .tbtn:hover{background:var(--accent-soft); color:var(--text)}
+  .tbtn.on{color:var(--accent); background:var(--accent-soft)}
+
+  /* ── 侧栏 / 大纲（幕一 · 退入雾中）── */
+  .sidebar,.outline{
+    flex:none; width:var(--sbw); overflow:hidden; background:linear-gradient(180deg,var(--frame-a),var(--frame-b));
+    transition:width .14s var(--ease-jade) .08s, opacity .14s ease .08s; /* 退场：两翼归位 */
+  }
+  .outline{width:var(--olw); border-left:1px solid var(--frame-line)}
+  .sidebar{border-right:1px solid var(--frame-line)}
+  .sidebar-in{width:var(--sbw); padding:14px 10px}
+  .outline-in{width:var(--olw); padding:14px 12px}
+  .app.zen .sidebar,.app.zen .outline{width:0; opacity:0;
+    transition:width .1s var(--ease-jade) 0s, opacity .1s ease 0s}
+  .ft-title{font-size:10.5px; letter-spacing:1.5px; color:var(--text-faint); margin:2px 8px 8px}
+  .ft{display:flex; align-items:center; gap:7px; padding:5px 8px; border-radius:7px; color:var(--text-dim); font-size:12.5px; cursor:default}
+  .ft .ic{width:13px; text-align:center; opacity:.7; font-size:11px}
+  .ft.dir{color:var(--text); font-weight:500}
+  .ft.act{color:var(--accent); background:var(--accent-soft); position:relative}
+  .ft.act::before{content:""; position:absolute; left:0; top:6px; bottom:6px; width:2px; border-radius:2px; background:var(--accent)}
+  .ft.sub{margin-left:14px}
+  .ol-item{padding:4px 8px 4px calc(8px + var(--lv,0)*12px); color:var(--text-dim); font-size:12px; border-radius:6px; cursor:default; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .ol-item.h1{color:var(--text); font-weight:500}
+  .ol-item.cur{color:var(--accent)}
+
+  /* ── 编辑舞台 ── */
+  .stage{flex:1; position:relative; min-width:0; background:var(--content)}
+  .editor-wrap{position:absolute; inset:0; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--frame-line) transparent}
+  .col{
+    width:var(--colw); margin:0 auto; padding:56px 0 45vh;
+    transition:width .1s ease 0s; /* 退场：列松开 */
+  }
+  .app.zen .col{width:var(--colw-zen); transition:width .12s var(--ease-jade) .18s} /* 进场：幕三 · 纸卷微收 */
+
+  /* 上下羽化遮罩（幕四 · 雾起，容器级单元素，零逐块开销） */
+  .mask{position:absolute; left:0; right:0; height:48px; pointer-events:none; opacity:0; z-index:3;
+    transition:opacity .1s ease 0s}
+  .mask.t{top:0; background:linear-gradient(180deg,var(--content),transparent)}
+  .mask.b{bottom:0; background:linear-gradient(0deg,var(--content),transparent)}
+  .app.zen .mask{opacity:1; transition:opacity .12s ease .28s}
+
+  /* ══════════ 正文行与雾化五档 ══════════ */
+  .ln{
+    font-size:15.5px; line-height:1.85; color:var(--text); padding:1px 10px; border-radius:6px;
+    transition:opacity .12s ease; margin:2px 0;
+  }
+  .ln.h{font-size:20px; font-weight:650; line-height:1.5; margin:14px 0 8px; padding-left:10px}
+  .ln.h2{font-size:17px; margin:10px 0 6px}
+  .app.zen .ln.z1{opacity:var(--fog1)}
+  .app.zen .ln.z2{opacity:var(--fog2)}
+  .app.zen .ln.z3{opacity:var(--fog3)}
+  .app.zen .ln.z4{opacity:var(--fog4)}
+  .app.zen .ln.z5{opacity:var(--fog5)}
+  .app.zen .ln.z0{opacity:1; background:linear-gradient(90deg,var(--accent-soft),transparent 72%)}
+  .caret{display:inline-block; width:2px; height:1.05em; background:var(--accent); vertical-align:-0.18em; margin-left:1px;
+    animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ══════════ 轻退栏（玻璃胶囊，32px）══════════ */
+  .retreat{
+    position:fixed; top:10px; left:50%; z-index:30; height:32px;
+    display:flex; align-items:center; gap:9px; padding:0 8px 0 14px; border-radius:10px;
+    background:var(--glass-bg); border:1px solid var(--glass-line);
+    backdrop-filter:blur(28px) saturate(170%); -webkit-backdrop-filter:blur(28px) saturate(170%);
+    box-shadow:inset 0 1px 0 var(--glass-hi), 0 10px 32px rgba(0,0,0,.32);
+    transform:translateX(-50%) translateY(-160%); opacity:0;
+    transition:transform .16s var(--ease-jade), opacity .16s ease; width:max-content; max-width:80vw;
+    font-size:12px; color:var(--text-dim);
+  }
+  .retreat.on{transform:translateX(-50%) translateY(0); opacity:1}
+  .retreat .fname{color:var(--text); max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .retreat .dot{opacity:.4}
+  .retreat .grow{flex:1}
+  .rbtn{border:none; background:transparent; color:var(--text-dim); cursor:pointer; height:24px; padding:0 8px; border-radius:6px; font-size:11.5px}
+  .rbtn:hover{background:var(--accent-soft); color:var(--text)}
+  .rbtn.exit{color:var(--accent)}
+
+  /* ══════════ 设置面板（玻璃模态）══════════ */
+  .scrim{position:fixed; inset:0; z-index:40; background:var(--scrim); display:none; align-items:center; justify-content:center;
+    backdrop-filter:blur(4px)}
+  .scrim.on{display:flex}
+  .modal{
+    width:480px; max-width:92vw; border-radius:16px; padding:20px 22px 16px;
+    background:var(--glass-bg); border:1px solid var(--glass-line);
+    backdrop-filter:blur(28px) saturate(170%); -webkit-backdrop-filter:blur(28px) saturate(170%);
+    box-shadow:inset 0 1px 0 var(--glass-hi), 0 24px 64px rgba(0,0,0,.4);
+    animation:pop .18s var(--ease-jade);
+  }
+  @keyframes pop{from{transform:translateY(10px) scale(.98); opacity:0}}
+  .modal h3{font-size:14px; margin-bottom:4px}
+  .modal .sub{font-size:11.5px; color:var(--text-faint); margin-bottom:14px}
+  .set-row{display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--frame-line)}
+  .set-row:last-of-type{border-bottom:none}
+  .set-row .lab{font-size:13px}
+  .set-row .hint{font-size:11px; color:var(--text-faint); margin-top:2px}
+  .seg{display:flex; background:var(--accent-soft); border-radius:8px; padding:2px; gap:2px}
+  .seg button{border:none; background:transparent; color:var(--text-dim); font-size:11.5px; padding:4px 10px; border-radius:6px; cursor:pointer}
+  .seg button.on{background:var(--glass-bg); color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,.18)}
+  .switch{width:34px; height:19px; border-radius:10px; background:var(--frame-line); position:relative; cursor:pointer; border:none; transition:background .15s}
+  .switch::after{content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:var(--text-dim); transition:left .15s, background .15s}
+  .switch.on{background:var(--accent)}
+  .switch.on::after{left:17px; background:#fff}
+  .modal .done{margin-top:14px; width:100%; height:32px; border:none; border-radius:9px; background:var(--accent); color:#fff; font-size:13px; cursor:pointer}
+  .modal .done:hover{filter:brightness(1.08)}
+
+  /* ══════════ 演示辅助（不属于产品）══════════ */
+  .hud{position:fixed; right:14px; bottom:40px; z-index:30; display:flex; flex-direction:column; gap:7px}
+  .hud button{border:1px solid var(--glass-line); background:var(--glass-bg); color:var(--text-dim);
+    backdrop-filter:blur(20px); border-radius:9px; padding:7px 12px; font-size:11.5px; cursor:pointer}
+  .hud button:hover{color:var(--text); border-color:var(--accent)}
+  .hud button.on{color:var(--accent); border-color:var(--accent)}
+  .act-cap{position:fixed; left:18px; bottom:40px; z-index:25; font-size:11.5px; color:var(--accent);
+    letter-spacing:1px; opacity:0; transition:opacity .3s ease; pointer-events:none}
+  .act-cap.show{opacity:.9}
+  .toast{position:fixed; bottom:44px; left:50%; transform:translateX(-50%) translateY(8px); z-index:50;
+    background:var(--glass-bg); border:1px solid var(--glass-line); backdrop-filter:blur(20px);
+    color:var(--text); font-size:12px; padding:8px 16px; border-radius:10px; opacity:0; pointer-events:none;
+    transition:opacity .2s, transform .2s}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .kbd{display:inline-block; border:1px solid var(--frame-line); border-bottom-width:2px; border-radius:4px; padding:0 5px; font-size:10.5px; margin:0 2px; color:var(--text-dim)}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- 标题栏（幕二收幕） -->
+  <header class="titlebar">
+    <span class="brand">玉笺<em>凝神 2.0 · 交互预览</em></span>
+    <span class="tspacer"></span>
+    <button class="tbtn" id="btnHelp" title="预览说明">？ 说明</button>
+    <button class="tbtn" id="btnTheme" title="明暗切换">◐ 明暗</button>
+    <button class="tbtn" id="btnZen" title="进入凝神 (Z)">☾ 凝神</button>
+  </header>
+
+  <div class="main">
+    <!-- 侧栏（幕一左退） -->
+    <aside class="sidebar"><div class="sidebar-in">
+      <div class="ft-title">南 山 集</div>
+      <div class="ft dir"><span class="ic">▾</span>卷三 · 湖上</div>
+      <div class="ft sub act"><span class="ic">◈</span>夜航书.md</div>
+      <div class="ft sub"><span class="ic">◈</span>雨后经堤.md</div>
+      <div class="ft sub"><span class="ic">◈</span>灯笼记.md</div>
+      <div class="ft dir" style="margin-top:6px"><span class="ic">▸</span>卷四 · 山中</div>
+      <div class="ft dir"><span class="ic">▸</span>附录</div>
+      <div class="ft" style="margin-top:10px; opacity:.55; font-size:11px">全文搜索…</div>
+      <div class="ft" style="opacity:.4; font-size:11px">⌕ 命中 12 处 · 全局替换</div>
+    </div></aside>
+
+    <!-- 编辑舞台 -->
+    <div class="stage" id="stage">
+      <div class="editor-wrap" id="wrap"><div class="col" id="col"><div id="lines"></div></div></div>
+      <div class="mask t"></div><div class="mask b"></div>
+    </div>
+
+    <!-- 大纲（幕一右退） -->
+    <aside class="outline"><div class="outline-in">
+      <div class="ft-title">大 纲</div>
+      <div class="ol-item h1" style="--lv:0">夜航书</div>
+      <div class="ol-item" style="--lv:1">一 · 启程</div>
+      <div class="ol-item cur" style="--lv:1">二 · 湖心</div>
+      <div class="ol-item" style="--lv:1">三 · 灯火</div>
+      <div class="ol-item h1" style="--lv:0">又记</div>
+      <div class="ol-item" style="--lv:1">船家的话</div>
+    </div></aside>
+  </div>
+
+  <!-- 状态栏（幕二收幕） -->
+  <footer class="statusbar">
+    <span id="stSaved">● 已保存 · 2 分钟前</span>
+    <span id="stCount">1,024 字 · 3′</span>
+    <span class="tspacer"></span>
+    <span id="stZen" style="color:var(--accent)">标准模式</span>
+  </footer>
+</div>
+
+<!-- 轻退栏（Esc 一次；玻璃胶囊 32px） -->
+<div class="retreat" id="retreat">
+  <span class="fname">夜航书.md</span><span class="dot">·</span>
+  <span id="rCount">1,024 字</span><span class="dot">·</span>
+  <span>已保存 2 分钟前</span>
+  <span class="grow"></span>
+  <button class="rbtn" id="rSettings">⚙ 凝神设置</button>
+  <button class="rbtn" id="rDocs">切换文档 ▾</button>
+  <button class="rbtn exit" id="rExit">退出凝神</button>
+</div>
+
+<!-- 设置面板（玻璃模态，改即生效） -->
+<div class="scrim" id="scrim"><div class="modal">
+  <h3>凝神设置</h3>
+  <div class="sub">改动即时生效并随会话持久化 · 无需保存</div>
+  <div class="set-row"><div><div class="lab">锚点位置</div><div class="hint">当前行钉在视口的位置</div></div>
+    <div class="seg" id="segAnchor"><button data-v="0.333" class="on">偏上 1/3</button><button data-v="0.382">黄金分割</button><button data-v="0.5">正中</button></div></div>
+  <div class="set-row"><div><div class="lab">雾化衰减</div><div class="hint">前两跳掉得快，远处趋同</div></div>
+    <div class="seg" id="segFog"><button data-v="fast">快</button><button data-v="mid" class="on">中</button><button data-v="slow">慢</button></div></div>
+  <div class="set-row"><div><div class="lab">滚动平滑度</div><div class="hint">纸卷的松紧</div></div>
+    <div class="seg" id="segScroll"><button data-v="0.16" class="on">跟手</button><button data-v="0.10">平滑</button><button data-v="0.06">极平滑</button></div></div>
+  <div class="set-row"><div><div class="lab">进入时自动全屏</div><div class="hint">演示页不执行窗口全屏</div></div>
+    <button class="switch" id="swFull"></button></div>
+  <div class="set-row"><div><div class="lab">轻退信息栏</div><div class="hint">Esc 掀帘看一眼</div></div>
+    <button class="switch on" id="swRetreat"></button></div>
+  <button class="done" id="mDone">完 成</button>
+</div></div>
+
+<!-- 演示辅助 -->
+<div class="hud">
+  <button id="hType">▶ 自动打字演示</button>
+  <button id="hRm">减动效（reduced-motion）</button>
+</div>
+<div class="act-cap" id="actCap"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════ 正文数据 ══════════ */
+const P = [
+  ['h','夜航书'],
+  ['','乌篷船离岸的时候，湖面上还浮着一层未散的薄雾。船家不说话，橹声很轻，像是怕惊动了水底沉着的旧事。'],
+  ['h2','一 · 启程'],
+  ['','我带的书不多，一本字典，一册残缺的县志。灯挂在船头，风一过就晃，光影在纸上写它自己的注脚。'],
+  ['','县志里说，此湖旧名镜湖，取「水静如镜」之意。后来的名字丢了，「镜」字也没人再提，仿佛一件事被忘记两次，就等于从未发生。'],
+  ['','船家只在换橹的时候抬一抬下巴，示意我看远处的山。山是青的，青得很旧，像一件被水洗了太多年的衣裳。'],
+  ['h2','二 · 湖心'],
+  ['','到了湖心，雾反而薄了。水把天色原样接住，一时分不清哪一边更接近真实。我把手伸进水里，凉意顺着指缝上来，很轻，但很确定。'],
+  ['','所谓夜航，大约就是这样一种状态：你知道自己在走，却看不清走到了哪里；你信任船家，如同信任一句没有出处的话。'],
+  ['','灯芯结了花，火光矮下去。船家从舱底摸出一把炒豆，分我一半。豆是咸的，嚼起来有旧年月的味道。'],
+  ['','他说这湖里从前有镇水的铁牛，后来铁牛没了，水就学会了假装平静。我笑他讲得好听，他也笑，说好听的话都是水里捞出来的。'],
+  ['h2','三 · 灯火'],
+  ['','快靠岸时，对面来了另一条夜航的船。两船交错的一瞬，彼此的灯都在对方的水痕里晃了一下，像是认了亲，又像是道了别。'],
+  ['','上岸以后回头，湖又合拢成一面旧镜子。我的脚印留在湿泥里，很快也会被雾收走。'],
+  ['h','又记'],
+  ['h2','船家的话'],
+  ['','「夜里行船，不要数星星。数着数着，就觉得慢了。」'],
+  ['','我把这句话记在县志的空白页上。书是旧的，这句话是新的，它们挤在同一页里，谁也不觉得拥挤。'],
+];
+const FILL = '雾从水面上起来，先是一缕，然后连成一片，把远山淡成一枚剪影。橹声在雾里变得很近，又很轻，仿佛船不是在水上走，而是在纸上走。'.replace(/。/g,'。');
+
+const linesEl = document.getElementById('lines');
+let lines = [];            // {el, text}
+let active = 8;            // 当前行索引
+let zen = false, settled = false, retreatOn = false, typing = false, modalOpen = false;
+let anchor = 0.333, scrollK = 0.16, retreatEnabled = true;
+
+function makeLine(cls, text){
+  const p = document.createElement('p');
+  p.className = 'ln' + (cls ? ' ' + cls : '');
+  p.textContent = text;
+  return p;
+}
+P.forEach(([cls, text]) => {
+  const el = makeLine(cls, text);
+  linesEl.appendChild(el);
+  lines.push({ el, text });
+});
+const caret = document.createElement('span'); caret.className = 'caret';
+lines[active].el.appendChild(caret);
+
+/* ══════════ 雾化五档：按块距赋类 ══════════ */
+function assignFog(){
+  lines.forEach((l, i) => {
+    const d = Math.abs(i - active);
+    l.el.classList.remove('z0','z1','z2','z3','z4','z5');
+    if (zen && settled) l.el.classList.add(d === 0 ? 'z0' : d >= 5 ? 'z5' : 'z' + d);
+  });
+}
+function clearFog(){ lines.forEach(l => l.el.classList.remove('z0','z1','z2','z3','z4','z5')); }
+
+/* ══════════ 幕字幕条（演示用） ══════════ */
+const cap = document.getElementById('actCap');
+let capTimers = [];
+function showCaps(){
+  const acts = [[0,'幕一 · 退入雾中'],[100,'幕二 · 框架收幕'],[200,'幕三 · 纸卷微收'],[300,'幕四 · 雾起锚定'],[1100,'']];
+  capTimers.forEach(clearTimeout); capTimers = [];
+  acts.forEach(([t, s]) => capTimers.push(setTimeout(() => { cap.textContent = s; cap.classList.toggle('show', !!s); }, t)));
+}
+
+/* ══════════ 进 / 退场 ══════════ */
+const app = document.getElementById('app'), wrap = document.getElementById('wrap'), btnZen = document.getElementById('btnZen');
+function enterZen(){
+  if (zen) return;
+  zen = true; app.classList.add('zen'); btnZen.classList.add('on');
+  document.getElementById('stZen').textContent = '凝神模式 · Esc 轻退';
+  showCaps();
+  setTimeout(() => { settled = true; assignFog(); }, 300);   // 幕四：雾起锚定
+  requestAnimationFrame(tick);
+}
+function exitZen(){
+  if (!zen) return;
+  zen = false; settled = false;
+  app.classList.remove('zen'); app.classList.remove('settled');
+  btnZen.classList.remove('on'); hideRetreat();
+  clearFog();
+  document.getElementById('stZen').textContent = '标准模式';
+}
+
+/* ══════════ 打字滚动：rAF lerp「纸卷」 ══════════ */
+let cur = 0;
+function targetTop(){
+  const el = lines[active].el;
+  return el.offsetTop - wrap.clientHeight * anchor + el.offsetHeight * 0.4;
+}
+function tick(){
+  if (!zen) return;
+  const t = targetTop();
+  let delta = t - cur;
+  if (Math.abs(delta) > 120) delta = 120 * Math.sign(delta);   // 粘贴大段：单帧限幅，匀速补偿
+  cur += delta * scrollK;
+  if (Math.abs(t - cur) < 0.5) cur = t;
+  wrap.scrollTop = cur;
+  requestAnimationFrame(tick);
+}
+
+/* ══════════ 自动打字演示 ══════════ */
+const btnType = document.getElementById('hType');
+let fi = 0, typeTimer = 0;
+function charCount(){ return lines.reduce((n, l) => n + l.text.replace(/\s/g,'').length, 0); }
+function fmt(n){ return n.toLocaleString('en-US'); }
+function refreshCount(){
+  const n = charCount();
+  document.getElementById('stCount').textContent = fmt(n) + ' 字 · ' + Math.max(1, Math.round(n/300)) + '′';
+  document.getElementById('rCount').textContent = fmt(n) + ' 字';
+}
+refreshCount();
+function typeStep(){
+  const L = lines[active];
+  L.text += FILL[fi++ % FILL.length];
+  L.el.childNodes[0].textContent = L.text;
+  L.el.appendChild(caret);
+  if (L.text.length > 64){                                    // 换行 → 文档上卷
+    const el = makeLine('', '');
+    L.el.after(el);
+    lines.splice(active + 1, 0, { el, text: '' });
+    active++;
+  }
+  refreshCount();
+  if (zen) assignFog();
+}
+btnType.onclick = () => {
+  typing = !typing; btnType.classList.toggle('on', typing);
+  btnType.textContent = typing ? '⏸ 停止打字演示' : '▶ 自动打字演示';
+  if (typing) typeTimer = setInterval(typeStep, 130); else clearInterval(typeTimer);
+};
+
+/* ══════════ 轻退栏 ══════════ */
+const retreat = document.getElementById('retreat');
+function showRetreat(){
+  if (!zen) return;
+  if (!retreatEnabled) { toast('轻退信息栏已在设置中关闭'); return; }
+  retreatOn = true; retreat.classList.add('on');
+}
+function hideRetreat(){ retreatOn = false; retreat.classList.remove('on'); }
+
+/* ══════════ 设置面板 ══════════ */
+const scrim = document.getElementById('scrim');
+function openModal(){ modalOpen = true; scrim.classList.add('on'); }
+function closeModal(){ modalOpen = false; scrim.classList.remove('on'); }
+const FOG = {
+  fast:[.45,.28,.20,.17,.16], mid:[.55,.38,.28,.22,.18], slow:[.66,.50,.40,.32,.26]
+};
+function seg(id, fn){
+  const el = document.getElementById(id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    el.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); fn(b.dataset.v);
+  });
+}
+seg('segAnchor', v => { anchor = parseFloat(v); });
+seg('segFog', v => {
+  const f = FOG[v];
+  f.forEach((o, i) => document.documentElement.style.setProperty('--fog' + (i + 1), o));
+});
+seg('segScroll', v => { scrollK = parseFloat(v); });
+document.getElementById('swFull').onclick = e => { e.target.classList.toggle('on'); toast('演示页不执行窗口全屏'); };
+document.getElementById('swRetreat').onclick = e => {
+  e.target.classList.toggle('on');
+  retreatEnabled = e.target.classList.contains('on');
+  if (!retreatEnabled) hideRetreat();
+};
+document.getElementById('mDone').onclick = closeModal;
+document.getElementById('rSettings').onclick = openModal;
+document.getElementById('rExit').onclick = () => { hideRetreat(); exitZen(); };
+document.getElementById('rDocs').onclick = () => toast('演示页不含标签列表（产品实现复用「更多」下拉）');
+
+/* ══════════ 交互：Esc 状态机 / 点击 / 快捷键 ══════════ */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){
+    if (modalOpen) { closeModal(); return; }
+    if (zen) { retreatOn ? hideRetreat() : showRetreat(); }
+  }
+  if ((e.key === 'z' || e.key === 'Z') && !modalOpen) { zen ? exitZen() : enterZen(); }
+});
+wrap.addEventListener('click', () => { if (retreatOn) hideRetreat(); });   // 点编辑区收帘
+btnZen.onclick = () => zen ? exitZen() : enterZen();
+document.getElementById('btnTheme').onclick = () => {
+  const h = document.documentElement;
+  h.dataset.mode = h.dataset.mode === 'dark' ? 'light' : 'dark';
+};
+document.getElementById('hRm').onclick = e => {
+  document.documentElement.classList.toggle('rm');
+  e.target.classList.toggle('on');
+};
+document.getElementById('btnHelp').onclick = () => toast('按 Z 进入/退出凝神 · 凝神中按 Esc 掀起轻退栏 · 点编辑区收起 · 右下角可开自动打字');
+
+/* ══════════ toast ══════════ */
+const toastEl = document.getElementById('toast'); let toastT = 0;
+function toast(msg){
+  toastEl.textContent = msg; toastEl.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+
+/* 初始定位：把当前行带到偏上 1/3 */
+requestAnimationFrame(() => { wrap.scrollTop = targetTop(); cur = wrap.scrollTop; });
+</script>
+</body>
+</html>

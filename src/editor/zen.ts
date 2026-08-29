@@ -1,10 +1,15 @@
 /**
- * 凝神模式（打字机 + 禅 融合）：所见即所得下的「当前块高亮 + 其余淡化 + 当前行居中」。
+ * 凝神模式 2.0（打字机 + 禅 融合）：所见即所得下的「当前块微光 + 雾化衰减 + 纸卷滚动」。
+ * 设计规格：docs/FOCUS-MODE-2.0-DESIGN.md。
  *
  * 实现：
- * - 用 ProseMirror 的 `Decoration.node` 给顶层块加 `.zen-active`（当前块）/ `.zen-dim`（其余块），
- *   非破坏性（不改动文档内容，只改渲染类），切走即还原。
- * - 居中滚动走 `.milkdown` 滚动容器，把光标所在行顶到视口约 1/3 处（偏上，符合打字机观感）。
+ * - ProseMirror `Decoration.node` 按顶层块距给块加 `.zen-active`（当前块）/ `.zen-dim-1..5`
+ *   （五档衰减，档位由 --fog-1..5 CSS 变量承载，设置面板换档只改变量）。
+ *   非破坏性（不改文档内容，只改渲染类），切走即还原。
+ * - 「雾感」只走 opacity——大文档逐块 blur 必掉帧；上下羽化由 shell 级 .editor 遮罩承担。
+ * - 纸卷滚动：rAF lerp 追随（k 可调三档平滑度），只在「脏」时拉锚——选区/文档变化由
+ *   plugin update 标脏，用户手动滚轮浏览不被强行拉回；粘贴大段单帧限幅 120px，
+ *   lerp 自带缓出「轻轻刹住」。
  * - 开关是「插件状态」：EditorHost 经 `view.dispatch(tr.setMeta(zenKey, value))` 切换。
  *   用 meta 而非模块级标志 + 空事务，是因为「空事务」可能被视图派发链路当作无变化而跳过，
  *   导致装饰不重算、凝神看起来「无效」；meta 事务必定触发 plugin.apply → 重建装饰，稳定生效。
@@ -26,11 +31,29 @@ interface ZenValue {
   decos: DecorationSet
 }
 
-/**
- * 模块级开关：供源码模式下 SourceEditor 的 `isZenActive()` 与 plugin 的 `view.update`
- * 读取（源码模式没有 PM 装饰，淡化在 WYSIWYG 才生效，但居中在两种模式都跑）。
- */
+/** 雾化衰减五档（当前块外第 1..5+ 块的 opacity），对应设置面板 快/中/慢 */
+export const ZEN_FOG_PRESETS = {
+  fast: [0.45, 0.28, 0.2, 0.17, 0.16],
+  mid: [0.55, 0.38, 0.28, 0.22, 0.18],
+  slow: [0.66, 0.5, 0.4, 0.32, 0.26]
+} as const
+
+export type ZenFogLevel = keyof typeof ZEN_FOG_PRESETS
+
+export interface ZenPrefs {
+  /** 锚点：光标行中心钉在视口高度的比例（0.333 偏上1/3 / 0.382 黄金分割 / 0.5 正中） */
+  anchor: number
+  /** 雾化衰减档 */
+  fog: ZenFogLevel
+  /** 滚动平滑度：lerp 系数（0.16 跟手 / 0.10 平滑 / 0.06 极平滑） */
+  scroll: number
+}
+
+const DEFAULT_PREFS: ZenPrefs = { anchor: 1 / 3, fog: 'mid', scroll: 0.16 }
+
+/** 模块级开关与偏好：供源码模式 `isZenActive()`、plugin `view.update` 与设置面板读写 */
 const zenState = { active: false }
+let prefs: ZenPrefs = { ...DEFAULT_PREFS }
 
 export function setZenActive(value: boolean): void {
   zenState.active = value
@@ -40,7 +63,24 @@ export function isZenActive(): boolean {
   return zenState.active
 }
 
-/** 依据光标 head 找到顶层块索引，并为每个顶层文本块生成 .zen-active / .zen-dim 装饰 */
+/**
+ * 应用凝神偏好（锚点 / 雾化 / 平滑度）：
+ * 雾化档位写为根节点 CSS 变量（editor.css 的 .zen-dim-* 消费），其余存模块变量。
+ */
+export function setZenPrefs(next: Partial<ZenPrefs>): void {
+  prefs = { ...prefs, ...next }
+  const fog = ZEN_FOG_PRESETS[prefs.fog] ?? ZEN_FOG_PRESETS.mid
+  if (typeof document !== 'undefined') {
+    const root = document.documentElement
+    fog.forEach((o, i) => root.style.setProperty(`--fog-${i + 1}`, String(o)))
+  }
+}
+
+/**
+ * 依据光标 head 找到顶层块索引，按块距生成 .zen-active / .zen-dim-1..5 装饰。
+ * 距离在全部顶层块上度量（含表格等非文本块），类只挂在文本块上——
+ * 视觉密度与阅读距离一致，跳过一个高表格时淡化不会「漏档」。
+ */
 function buildDecorations(doc: PMNode, head: number): DecorationSet {
   const decos: Decoration[] = []
   let activeIndex = -1
@@ -52,15 +92,14 @@ function buildDecorations(doc: PMNode, head: number): DecorationSet {
   i = 0
   doc.forEach((node, offset) => {
     if (node.isTextblock) {
-      const cls = i === activeIndex ? 'zen-active' : 'zen-dim'
+      const d = Math.abs(i - activeIndex)
+      const cls = d === 0 ? 'zen-active' : `zen-dim-${Math.min(d, 5)}`
       decos.push(Decoration.node(offset, offset + node.nodeSize, { class: cls }))
     }
     i++
   })
   return DecorationSet.create(doc, decos)
 }
-
-let raf = 0
 
 /** 向上找到真正承载滚动的祖先（优先 overflow:auto/scroll 且内容溢出的元素） */
 function scrollContainer(dom: HTMLElement): HTMLElement | null {
@@ -74,23 +113,46 @@ function scrollContainer(dom: HTMLElement): HTMLElement | null {
   return dom.closest('.milkdown') as HTMLElement | null
 }
 
+/* ── 纸卷滚动：rAF lerp 追随 ───────────────────────────
+   只在「脏」（选区/文档变化）时拉锚，收敛即停——用户滚轮浏览不被抢滚动条；
+   粘贴大段时单帧限幅 120px，先匀速补偿再由 lerp 自然减速刹住。 */
+
+let scrollRaf = 0
+let scrollDirty = false
+
+/** 光标行中心到达锚点所需的 scrollTop 目标值 */
+function anchorScrollTop(view: EditorView, pane: HTMLElement): number {
+  const coords = view.coordsAtPos(view.state.selection.head)
+  const paneRect = pane.getBoundingClientRect()
+  const lineCenter = coords.top + (coords.bottom - coords.top) / 2
+  return pane.scrollTop + (lineCenter - paneRect.top) - pane.clientHeight * prefs.anchor
+}
+
+function scrollStep(view: EditorView): void {
+  scrollRaf = 0
+  if (!zenState.active || !scrollDirty) return
+  const pane = scrollContainer(view.dom as HTMLElement)
+  if (!pane) return
+  const target = anchorScrollTop(view, pane)
+  let delta = target - pane.scrollTop
+  if (Math.abs(delta) > 120) delta = 120 * Math.sign(delta)
+  const next = pane.scrollTop + delta * prefs.scroll
+  pane.scrollTop = Math.abs(target - next) < 0.5 ? target : next
+  if (Math.abs(target - pane.scrollTop) >= 0.5) {
+    scrollRaf = requestAnimationFrame(() => scrollStep(view))
+  } else {
+    scrollDirty = false
+  }
+}
+
 /**
- * 把光标所在行在滚动容器里垂直居中（偏上 1/3）。
- * rAF 节流；失焦由调用方决定是否调用（plugin 的 update 里已做 hasFocus 守卫）。
+ * 标脏并启动纸卷循环（幂等）：选区/文档变化、进入凝神时调用。
+ * 保留旧名 centerZenLine 以兼容既有调用点。
  */
 export function centerZenLine(view: EditorView): void {
-  if (raf) return
-  raf = requestAnimationFrame(() => {
-    raf = 0
-    if (!zenState.active) return
-    const pane = scrollContainer(view.dom as HTMLElement)
-    if (!pane) return
-    const coords = view.coordsAtPos(view.state.selection.head)
-    const paneRect = pane.getBoundingClientRect()
-    const lineCenter = coords.top + (coords.bottom - coords.top) / 2
-    const target = lineCenter - paneRect.top - pane.clientHeight * 0.33
-    pane.scrollTo({ top: pane.scrollTop + target, behavior: 'smooth' })
-  })
+  if (!zenState.active) return
+  scrollDirty = true
+  if (!scrollRaf) scrollRaf = requestAnimationFrame(() => scrollStep(view))
 }
 
 export function createZenPlugin(): Plugin {
@@ -119,7 +181,10 @@ export function createZenPlugin(): Plugin {
         update(view, prev) {
           if (!zenState.active) return
           if (!view.hasFocus()) return
-          if (prev.selection.head !== view.state.selection.head) {
+          if (
+            prev.selection.head !== view.state.selection.head ||
+            prev.doc !== view.state.doc
+          ) {
             centerZenLine(view)
           }
         }

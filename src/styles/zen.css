@@ -1,0 +1,125 @@
+/* ============================================================
+   凝神 2.0 · 布局进退场（docs/FOCUS-MODE-2.0-DESIGN.md §3）
+
+   四幕进场（~360ms，幕间重叠）：
+     一 · 退入雾中    0–100ms   侧栏左退 / 大纲右退（宽→0 + 淡出）
+     二 · 框架收幕   80–200ms   标题栏 / 标签条 / 状态栏高→0 + 淡出
+     三 · 纸卷微收  180–300ms   正文列 720→640（--w-column 注册过渡）
+     四 · 雾起锚定  280–400ms   上下 48px 羽化遮罩淡入；装饰淡入由
+                                editor.css 的 --dur-fast 过渡承担
+   退场（240ms，三幕，反向更快——「回来干活不需要仪式感」）。
+
+   全部为 transform/opacity/height/注册变量过渡；状态由 App 根节点
+   .shell[data-zen] 驱动，JS 只挂/摘属性，零逐元素样式操作。
+   ============================================================ */
+
+/* 注册 --w-column 为可过渡长度：所有正文块 max-width 引用同一变量，
+   变量一变整列联动，一次样式重算而非逐块动画（Chromium 支持 @property） */
+@property --w-column {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 720px;
+}
+
+/* ── 退场（基态）：三幕反向，更快 ── */
+.shell {
+  transition: --w-column 100ms var(--ease) 0s;
+}
+.shell:not([data-zen]) .bar,
+.shell:not([data-zen]) .tabbar,
+.shell:not([data-zen]) .statusbar {
+  transition:
+    height 120ms var(--ease-zen) 60ms,
+    opacity 100ms var(--ease) 60ms;
+}
+.shell:not([data-zen]) .sidebar,
+.shell:not([data-zen]) .outline {
+  transition:
+    width var(--dur-base) var(--ease),
+    opacity 140ms var(--ease) 60ms;
+}
+.shell:not([data-zen]) .editor::before,
+.shell:not([data-zen]) .editor::after {
+  transition: opacity 100ms var(--ease) 0s;
+}
+
+/* ── 进场：四幕时序 ── */
+
+/* 幕二 · 框架收幕（80ms 起） */
+.shell[data-zen] .bar,
+.shell[data-zen] .tabbar,
+.shell[data-zen] .statusbar {
+  height: 0 !important;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-bottom-color: transparent;
+  border-top-color: transparent;
+  transition:
+    height 120ms var(--ease-zen) 80ms,
+    opacity 120ms var(--ease-zen) 80ms;
+}
+
+/* 幕一 · 退入雾中（0ms 起；宽→0 由 Sidebar/Outline 的 is-collapsed 承担） */
+.shell[data-zen] .sidebar,
+.shell[data-zen] .outline {
+  opacity: 0;
+  transition:
+    width 100ms var(--ease-zen) 0s,
+    opacity 100ms var(--ease-zen) 0s;
+}
+
+/* 幕三 · 纸卷微收（180ms 起） */
+.shell[data-zen] {
+  --w-column: var(--w-column-zen);
+  transition: --w-column 120ms var(--ease-zen) 180ms;
+}
+
+/* 幕四 · 雾起（280ms 起）：内容列上下羽化遮罩，容器级单元素，零逐块开销 */
+.editor::before,
+.editor::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 48px;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-zen) 280ms;
+}
+.editor::before {
+  top: 0;
+  background: linear-gradient(180deg, var(--hue-editor), transparent);
+}
+.editor::after {
+  bottom: 0;
+  background: linear-gradient(0deg, var(--hue-editor), transparent);
+}
+.shell[data-zen] .editor::before,
+.shell[data-zen] .editor::after {
+  opacity: 1;
+  transition: opacity 120ms var(--ease-zen) 280ms;
+}
+
+/* ── 无障碍：尊重系统减弱动效偏好 → 状态直接切换，无位移无淡出 ── */
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .shell[data-zen] .bar,
+  .shell[data-zen] .tabbar,
+  .shell[data-zen] .statusbar,
+  .shell[data-zen] .sidebar,
+  .shell[data-zen] .outline,
+  .shell[data-zen] .editor::before,
+  .shell[data-zen] .editor::after,
+  .shell:not([data-zen]) .bar,
+  .shell:not([data-zen]) .tabbar,
+  .shell:not([data-zen]) .statusbar,
+  .shell:not([data-zen]) .sidebar,
+  .shell:not([data-zen]) .outline,
+  .shell:not([data-zen]) .editor::before,
+  .shell:not([data-zen]) .editor::after {
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+}

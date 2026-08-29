@@ -102,6 +102,9 @@ const api = {
 
   isMaximized: (): Promise<boolean> => ipcRenderer.invoke(IPC.WIN_IS_MAXIMIZED),
 
+  /** 凝神 2.0：进入时自动全屏（偏好开关，默认关） */
+  setFullscreen: (flag: boolean): void => ipcRenderer.send(IPC.WIN_SET_FULLSCREEN, flag),
+
   onWindowStateChange: (callback: (state: WindowState) => void): void => {
     ipcRenderer.on(IPC.WIN_STATE_CHANGE, (_event, state: WindowState) => callback(state))
   },

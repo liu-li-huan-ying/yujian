@@ -24,7 +24,7 @@
 | 全局/文件内查找替换  | ✅     | 复用 MiniSearch；匹配计数/循环/选区范围/全局上下文片段+键盘导航+范围筛选 |
 | 版本快照        | ✅     | 自动（保存+定时）+ 手动；行级 diff 预览 + 命名备注              |
 | 写作统计        | ✅     | 汉字/英文/字符/阅读时长；选中统计；写作目标追踪                    |
-| 打字机 / 禅模式  | ✅     | 融合为「凝神」模式：当前行垂直居中 + 当前块高亮、其余块淡化 + 失焦暂停（零依赖）   |
+| 打字机 / 禅模式   | ✅     | 融合为「凝神」模式：当前行垂直居中 + 当前块高亮、其余块淡化 + 失焦暂停（零依赖）  |
 | 导出增强：docx   | ✅     | mammoth，纯 JS                                 |
 | 导出增强：ePub   | ✅     | 纯 JS 打包                                      |
 | 导出增强：LaTeX  | ✅     | 模板生成 .tex                                    |
@@ -103,6 +103,7 @@
 * **单实例红线 + 开关机制（修复「凝神无效」根因）**：所见即所得走 `src/editor/zen.ts` 的 `createZenPlugin()`（ProseMirror Plugin），装饰状态由 `PluginKey<ZenValue>` 持有；`setZen` 经 `view.dispatch(tr.setMeta(zenKey, value))` 切换——**meta 事务必定触发** `apply` 重建装饰。早期版本用模块级标志 + 空事务 `dispatch(v.state.tr)`，空事务在视图派发链中常被当作「无变化」跳过，导致装饰不重算、淡化/高亮不出现（即「凝神无效」）；改 meta 后稳定生效。源码模式走 `SourceEditor` 的 `EditorView.scrollIntoView` 居中（同源 `isZenActive()` 模块级开关，仍保留供源码模式与 plugin `view.update` 读取）；居中两模式都跑，淡化仅 WYSIWYG 生效。
 * **多标签兼容**：切 tab 时 `zenState.active` 已是 false（面板/模式切换前暂停居中），互不冲突；与 `captureScroll/restoreScroll` 互不打架。
 * **持久化**：`SessionState` 新增 `focusMode?: boolean`，随会话恢复（`App.onMounted` 读 `focusMode` → 若为真则 `setZen(true)`）。纯 CSS + 选区监听，零新增依赖。
+* **凝神 2.0「雾与纸」（批次二收尾后升级，权威细节见 `docs/FOCUS-MODE-2.0-DESIGN.md` 与 ARCHITECTURE §5.11）**：四幕进场/三幕退场布局动画（`styles/zen.css`，`.shell[data-zen]` 驱动）、块距**五档雾化衰减**（`.zen-dim-1..5`，档位走 `--fog-1..5` 变量）、纸卷 lerp 滚动（单帧限幅、只脏时拉锚）、Esc **轻退栏**（32px 玻璃胶囊）与**设置面板**（锚点/雾化/平滑度/自动全屏/轻退栏，偏好持久化于 `SessionState.zenPrefs`）。
 
 ### 3.6 写作辅助包
 
