@@ -497,6 +497,27 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 范围限定为**当前搜索命中的文件**：`window.api.replaceInVault(root, query, replacement, false)`（不区分大小写，与搜索一致），仅对命中文件做字面量替换并写回磁盘；返回 `{replaced, files, paths}`，前端 toast 反馈并刷新搜索；若当前编辑文档在 `paths` 中则自动从磁盘重载。
 * IPC：新增通道 `vault:replace`（`ReplaceResult` 接口），main 侧 `replaceInVault` 复用 `searchVault` 取命中文件、正则转义后替换、仅内容变化时写回；`electron/shared/ipc-channels.ts` 集中定义，preload 暴露 `window.api.replaceInVault`。
 
+### 5.11 凝神 2.0：雾与纸（2026-08-29，设计稿 docs/FOCUS-MODE-2.0-DESIGN.md）
+
+**进退场（`src/styles/zen.css`，App 根节点 `.shell[data-zen]` 驱动，JS 只挂/摘属性）**
+
+* 四幕进场 ~360ms：① 侧栏/大纲宽→0+淡出（0–100ms，复用 `is-collapsed`，App 传 `visible && !focusMode`）② 标题栏 `.bar`/标签条 `.tabbar`/状态栏 `.statusbar` 高→0（80–200ms）③ 正文列 `--w-column` 720→640（180–300ms，`@property` 注册长度变量使全部块联动、一次样式重算）④ `.editor::before/::after` 上下 48px 羽化遮罩 + 装饰淡入（280ms 起）。
+* 退场 240ms 三幕反向（`:not([data-zen])` 基态规则承载退场时序——transition 取目标态规则，进退场各自独立时序）。`prefers-reduced-motion` 全部降为 0ms 直接切换。
+
+**雾化五档（`src/editor/zen.ts` + `editor.css`）**
+
+* `buildDecorations` 按顶层块距生成 `.zen-active` / `.zen-dim-1..5`（距离含非文本块，类只挂文本块）；档位由根节点 `--fog-1..5` CSS 变量承载（快 `[.45,.28,.2,.17,.16]` / 中 `[.55,.38,.28,.22,.18]` / 慢 `[.66,.5,.4,.32,.26]`），换档只改变量。只用 opacity（拒绝逐块 blur）；当前块青瓷微光底衬替代被否决的「光标闪烁频率」。
+
+**纸卷滚动（lerp）**
+
+* `centerZenLine` 改为 rAF lerp 追随：只在「脏」（选区/文档变化，plugin `view.update` 判定）时拉锚，收敛即停——滚轮浏览不被抢滚动条；单帧限幅 120px（粘贴大段匀速补偿、缓出刹住）；开启凝神后延迟 320ms 再拉锚，避开布局动画。锚点/平滑度参数来自偏好。
+
+**轻退栏 + 设置面板 + 偏好**
+
+* `ZenRetreatBar.vue`：32px 玻璃胶囊（`position:fixed` 不占布局），文件名 · 字数 · 相对保存时间（30s 自刷新）｜⚙ 设置 / 切换文档（复用标签激活）/ 退出凝神。Esc 状态机在 `App.onKeydown`（设置面板优先、`.find` 来源甄别交还 FindPanel、轻退栏可关）。
+* `ZenSettings.vue`：玻璃模态，锚点（1/3·黄金分割·正中）/ 雾化（快中慢）/ 滚动（跟手·平滑·极平滑）/ 自动全屏 / 轻退栏，改即生效并 `patchSession({ zenPrefs })`。`SessionState.zenPrefs` 经 `session.ts sanitizeZenPrefs` 逐字段校验。
+* 自动全屏走新 IPC `win:setFullscreen`（preload `window.api.setFullscreen`）；只还原自己转的全屏（`zenAutoFullscreen` 标记），不碰用户手动 F11。
+
 ***
 
 ## 6. 技术写作场景专项设计

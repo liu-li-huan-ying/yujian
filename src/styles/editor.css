@@ -517,20 +517,31 @@
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
-/* ── 凝神模式（打字机 + 禅 融合，批次二）──
-   当前块高亮、其余块淡化，营造沉浸写作场。装饰由 ProseMirror plugin 非破坏性注入
-   （只加 class，不改文档），退出即还原。过渡让淡化/聚焦柔和过渡，不突兀。 */
-.milkdown .ProseMirror .zen-dim {
-  opacity: 0.26;
-  filter: saturate(0.65);
-  transition:
-    opacity var(--dur-med) var(--ease),
-    filter var(--dur-med) var(--ease);
+/* ── 凝神 2.0（打字机 + 禅 融合）──
+   当前块青瓷微光底衬；其余块按「块距」五档衰减（.zen-dim-1..5）——前两跳掉得快、
+   远处趋同，余光不被文字墙拽走、抬眼即找回上下文。档位由 --fog-1..5 承载
+   （设置面板换档只改变量，见 editor/zen.ts 的 setZenPrefs），装饰由 ProseMirror
+   plugin 非破坏性注入（只加 class，不改文档），退出即还原。
+   「雾感」只走 opacity（大文档逐块 blur 必掉帧）；上下羽化遮罩由 shell 级
+   .editor::before/::after 承担（styles/zen.css）。 */
+.milkdown .ProseMirror .zen-dim-1 { opacity: var(--fog-1, 0.55); }
+.milkdown .ProseMirror .zen-dim-2 { opacity: var(--fog-2, 0.38); }
+.milkdown .ProseMirror .zen-dim-3 { opacity: var(--fog-3, 0.28); }
+.milkdown .ProseMirror .zen-dim-4 { opacity: var(--fog-4, 0.22); }
+.milkdown .ProseMirror .zen-dim-5 { opacity: var(--fog-5, 0.18); }
+.milkdown .ProseMirror .zen-dim-1,
+.milkdown .ProseMirror .zen-dim-2,
+.milkdown .ProseMirror .zen-dim-3,
+.milkdown .ProseMirror .zen-dim-4,
+.milkdown .ProseMirror .zen-dim-5 {
+  transition: opacity var(--dur-fast) var(--ease);
 }
 .milkdown .ProseMirror .zen-active {
   opacity: 1;
-  filter: none;
+  /* 当前块青瓷微光底衬：+2% 提亮的呼吸感强调（替代「光标闪烁频率」——原生 caret 不可定制） */
+  background: linear-gradient(90deg, rgba(var(--hue-tint-1), 0.1), transparent 72%);
+  border-radius: 8px;
   transition:
-    opacity var(--dur-med) var(--ease),
-    filter var(--dur-med) var(--ease);
+    opacity var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
 }

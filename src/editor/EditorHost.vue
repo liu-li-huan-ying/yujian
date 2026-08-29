@@ -107,9 +107,10 @@ const stats = computed<TextStats>(() => computeStats(fidelity.currentText.value)
 const zenActive = ref(false)
 
 /**
- * 切换凝神模式。开关写入模块级状态后，向 PM 视图 dispatch 一个空事务触发
- * decoration 重算（apply 读模块标志重建 .zen-active/.zen-dim）；开启时立即居中当前行。
- * 空事务不改文档内容，不会触发 markdownUpdated → 不会误标脏/误存。
+ * 切换凝神模式。开关写入插件状态（meta 事务必触发装饰重算，重建 .zen-active/
+ * .zen-dim-1..5 五档衰减）。开启时等进退场布局动画（幕三纸卷微收 ~300ms）结束
+ * 后再启动「纸卷」lerp 拉锚——避免滚动与布局动画打架。
+ * meta 事务不改文档内容，不会触发 markdownUpdated → 不会误标脏/误存。
  */
 function setZen(value: boolean): void {
   if (zenActive.value === value) return
@@ -120,7 +121,9 @@ function setZen(value: boolean): void {
     // 用 meta 事务切换：空事务可能被视图派发链路当作无变化跳过，导致装饰不重算、
     // 凝神模式看起来「无效」。meta 事务必定触发 plugin.apply → 重建装饰，稳定生效。
     v.dispatch(v.state.tr.setMeta(zenKey, value))
-    if (value) centerZenLine(v)
+    if (value) {
+      window.setTimeout(() => centerZenLine(milkdownView() ?? v), 320)
+    }
   }
   // 源码模式下同时居中当前行（淡化仅在所见即所得生效）
   if (value && mode.value === 'source') source.value?.centerActiveLine()

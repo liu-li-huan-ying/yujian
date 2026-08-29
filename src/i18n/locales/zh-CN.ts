@@ -188,7 +188,36 @@ const zhCN = {
     replaceFail: '替换失败',
     /* ── 凝神模式（打字机 + 禅 融合，批次二）── */
     focus: '凝神',
-    focusTitle: '凝神模式：当前行居中 + 沉浸淡化'
+    focusTitle: '凝神模式：当前行居中 + 沉浸淡化',
+    /* ── 凝神 2.0：轻退栏 + 设置面板 ── */
+    zenSettings: '凝神设置',
+    zenSettingsSub: '改动即时生效并随会话持久化 · 无需保存',
+    zenExit: '退出凝神',
+    zenSwitchDoc: '切换文档',
+    zenSavedPrefix: '已保存',
+    zenSavedJustNow: '刚刚',
+    zenSavedMinAgo: '{n} 分钟前',
+    zenSavedHourAgo: '{n} 小时前',
+    zenAnchor: '锚点位置',
+    zenAnchorHint: '当前行钉在视口的位置',
+    zenAnchorThird: '偏上 1/3',
+    zenAnchorGolden: '黄金分割',
+    zenAnchorCenter: '正中',
+    zenFog: '雾化衰减',
+    zenFogHint: '前两跳掉得快，远处趋同',
+    zenFogFast: '快',
+    zenFogMid: '中',
+    zenFogSlow: '慢',
+    zenScroll: '滚动平滑度',
+    zenScrollHint: '纸卷的松紧',
+    zenScrollSnappy: '跟手',
+    zenScrollSmooth: '平滑',
+    zenScrollSilky: '极平滑',
+    zenFullscreen: '进入时自动全屏',
+    zenFullscreenHint: '进入凝神时窗口转全屏，退出时还原',
+    zenRetreatBar: '轻退信息栏',
+    zenRetreatBarHint: '凝神中按 Esc 掀帘看一眼，再按收起',
+    zenDone: '完成'
   },
 
   /* ── 帮助面板：快捷键 + 使用指南 ── */

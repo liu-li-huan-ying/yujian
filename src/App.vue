@@ -12,9 +12,12 @@ import TabBar from './components/TabBar.vue'
 import FindPanel from './components/FindPanel.vue'
 import SnapshotPanel from './components/SnapshotPanel.vue'
 import StatsPopover from './components/StatsPopover.vue'
+import ZenRetreatBar from './components/ZenRetreatBar.vue'
+import ZenSettings from './components/ZenSettings.vue'
+import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
-import type { FileNode, VaultChange, StartupMode } from '../electron/shared/ipc-channels'
+import type { FileNode, VaultChange, StartupMode, ZenPrefs } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
@@ -297,6 +300,23 @@ function onKeydown(e: KeyboardEvent): void {
     onHelp('shortcuts')
     return
   }
+  // Esc 状态机（凝神 2.0）：设置面板开着先关面板；事件源自查找面板时交还给
+  // FindPanel 自己的关闭逻辑（其 emit 已在本处理前同步置 findOpen=false，须按来源甄别）；
+  // 否则凝神中 Esc = 掀帘/收帘（轻退栏可在设置中关闭）。
+  if (e.key === 'Escape') {
+    if (zenSettingsOpen.value) {
+      zenSettingsOpen.value = false
+      return
+    }
+    if ((e.target as HTMLElement | null)?.closest?.('.find')) return
+    if (focusMode.value && !findOpen.value) {
+      if (zenPrefs.value.retreatBar) {
+        retreatOpen.value = !retreatOpen.value
+        e.preventDefault()
+      }
+      return
+    }
+  }
   if (!(e.ctrlKey || e.metaKey)) return
   const k = e.key.toLowerCase()
   if (k === 's') {
@@ -397,11 +417,58 @@ function onToggleSnapshot(): void {
   if (snapshotOpen.value) void snapshots.refresh(vaultPath.value, filePath.value)
 }
 
-/** 切换凝神模式：同步编辑器 + 持久化 */
+/** 切换凝神模式：同步编辑器 + 持久化；含「自动全屏」偏好（进入转全屏、退出还原） */
 function onToggleFocus(): void {
   focusMode.value = !focusMode.value
   host.value?.setZen(focusMode.value)
+  if (!focusMode.value) retreatOpen.value = false
+  if (focusMode.value && zenPrefs.value.fullscreen) {
+    zenAutoFullscreen = true
+    window.api.setFullscreen(true)
+  } else if (!focusMode.value && zenAutoFullscreen) {
+    zenAutoFullscreen = false
+    window.api.setFullscreen(false)
+  }
   void window.api.patchSession({ focusMode: focusMode.value })
+}
+
+/* ── 凝神 2.0：轻退栏 + 设置面板 + 偏好（docs/FOCUS-MODE-2.0-DESIGN.md）── */
+
+/** 轻退栏是否掀起（Esc 状态机：Esc 掀帘 / 再按或点编辑区收起） */
+const retreatOpen = ref(false)
+const zenSettingsOpen = ref(false)
+/** 凝神偏好：锚点 / 雾化 / 平滑度 / 自动全屏 / 轻退栏（会话持久化） */
+const zenPrefs = ref<ZenPrefs>({
+  anchor: 1 / 3,
+  fog: 'mid',
+  scroll: 0.16,
+  fullscreen: false,
+  retreatBar: true
+})
+/** 本次凝神是否因偏好自动全屏（退出时只还原自己转的全屏，不碰用户手动 F11） */
+let zenAutoFullscreen = false
+
+/** 设置面板改即生效：合并 → 应用（雾化档位写 CSS 变量 / 其余进 zen 模块）→ 持久化 */
+function onZenPrefsChange(patch: Partial<ZenPrefs>): void {
+  zenPrefs.value = { ...zenPrefs.value, ...patch }
+  setZenPrefs(zenPrefs.value)
+  void window.api.patchSession({ zenPrefs: zenPrefs.value })
+}
+
+function onZenSettings(): void {
+  retreatOpen.value = false
+  zenSettingsOpen.value = true
+}
+
+/** 轻退栏「切换文档」：复用标签激活逻辑（先落盘脏数据，单实例换内容） */
+function onZenActivateTab(path: string): void {
+  retreatOpen.value = false
+  activateTab(path)
+}
+
+/** 点编辑区收帘（capture 捕获编辑区内任意点击） */
+function onEditorClick(): void {
+  if (retreatOpen.value) retreatOpen.value = false
 }
 
 /** 打开/关闭统计弹层 */
@@ -558,6 +625,9 @@ onMounted(async () => {
   outlineVisible.value = session.outlineVisible
   focusMode.value = session.focusMode === true
   writingGoal.value = session.writingGoal ?? 0
+  // 凝神 2.0 偏好：合并默认值兜底旧 session（无 zenPrefs 字段），并立即应用（雾化档位写 CSS 变量）
+  zenPrefs.value = { ...zenPrefs.value, ...(session.zenPrefs ?? {}) }
+  setZenPrefs(zenPrefs.value)
 
   // 启动偏好为「全新页面」时不恢复上次笔记库/文档，打开即空白
   if (session.startupMode !== 'fresh') {
@@ -583,7 +653,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :data-zen="focusMode ? 'on' : null">
     <TitleBar
       :file-name="fileName"
       :mode="requestedMode"
@@ -627,7 +697,7 @@ onBeforeUnmount(() => {
         :nodes="tree"
         :active-path="filePath"
         :width="sidebarWidth"
-        :visible="sidebarShown"
+        :visible="sidebarShown && !focusMode"
         :refresh-tree="refreshTree"
         :open-doc="openPath"
         @select="onSelect"
@@ -640,7 +710,7 @@ onBeforeUnmount(() => {
         @replaced="onSearchReplaced"
       />
 
-      <main class="editor">
+      <main class="editor" @click.capture="onEditorClick">
         <EditorHost
           ref="host"
           :file-path="filePath"
@@ -692,7 +762,7 @@ onBeforeUnmount(() => {
       </main>
 
       <Outline
-        :visible="outlineShown"
+        :visible="outlineShown && !focusMode"
         :items="host?.outline ?? []"
         :active-index="host?.activeHeadingIndex ?? -1"
         @select="onOutlineSelect"
@@ -723,6 +793,28 @@ onBeforeUnmount(() => {
         </div>
       </footer>
     </div>
+
+    <!-- 凝神 2.0：轻退栏（Esc 掀帘看一眼）+ 设置面板 -->
+    <ZenRetreatBar
+      v-if="focusMode"
+      :file-name="fileName"
+      :han="stats.han"
+      :saved-at="lastSavedAt"
+      :open="retreatOpen"
+      :tabs="tabs.tabs"
+      :active-path="filePath"
+      @settings="onZenSettings"
+      @exit="onToggleFocus"
+      @activate="onZenActivateTab"
+      @hide="retreatOpen = false"
+    />
+
+    <ZenSettings
+      v-if="zenSettingsOpen"
+      :prefs="zenPrefs"
+      @change="onZenPrefsChange"
+      @close="zenSettingsOpen = false"
+    />
 
     <!-- 导出结果轻提示：玻璃质感浮层，自动消失 -->
     <Transition name="toast">

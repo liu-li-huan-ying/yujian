@@ -34,6 +34,8 @@ export const IPC = {
   WIN_CLOSE: 'win:close',
   WIN_IS_MAXIMIZED: 'win:isMaximized',
   WIN_STATE_CHANGE: 'win:stateChange',
+  // 凝神 2.0：进入时自动全屏（开/关）
+  WIN_SET_FULLSCREEN: 'win:setFullscreen',
 
   // 导出（渲染模式所见即所得 → HTML / PDF）
   EXPORT_HTML: 'export:html',
@@ -121,6 +123,32 @@ export interface ReplaceResult {
   paths: string[]
 }
 
+/**
+ * 凝神 2.0 偏好（docs/FOCUS-MODE-2.0-DESIGN.md §7）。
+ * 光标闪烁频率被有意否决：原生 caret 不可定制，替换为当前块青瓷微光底衬（纯 CSS）。
+ */
+export interface ZenPrefs {
+  /** 锚点：光标行中心钉在视口高度的比例（0.333 偏上1/3 / 0.382 黄金分割 / 0.5 正中） */
+  anchor: number
+  /** 雾化衰减档：快 / 中 / 慢 */
+  fog: 'fast' | 'mid' | 'slow'
+  /** 滚动平滑度：lerp 系数（0.16 跟手 / 0.10 平滑 / 0.06 极平滑） */
+  scroll: number
+  /** 进入凝神时自动全屏（默认关） */
+  fullscreen: boolean
+  /** 轻退信息栏（Esc 掀帘看一眼）开关（默认开） */
+  retreatBar: boolean
+}
+
+/** 凝神偏好默认值：与渲染侧 src/editor/zen.ts 的 DEFAULT_PREFS 保持一致 */
+export const DEFAULT_ZEN_PREFS: ZenPrefs = {
+  anchor: 1 / 3,
+  fog: 'mid',
+  scroll: 0.16,
+  fullscreen: false,
+  retreatBar: true
+}
+
 /* ── 会话状态（崩溃恢复）────────────────────── */
 
 export interface SessionState {
@@ -143,6 +171,8 @@ export interface SessionState {
   focusMode?: boolean
   /** 写作目标字数（0 表示未设目标），持久化于会话，跨文档共享 */
   writingGoal?: number
+  /** 凝神 2.0 偏好：锚点 / 雾化 / 平滑度 / 自动全屏 / 轻退栏 */
+  zenPrefs?: ZenPrefs
 }
 
 export const DEFAULT_SESSION: SessionState = {
@@ -155,7 +185,8 @@ export const DEFAULT_SESSION: SessionState = {
   sidebarVisible: true,
   outlineVisible: true,
   focusMode: false,
-  writingGoal: 0
+  writingGoal: 0,
+  zenPrefs: { ...DEFAULT_ZEN_PREFS }
 }
 
 /* ── 导出（HTML / PDF）────────────────────────── */
