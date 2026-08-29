@@ -104,6 +104,27 @@ const overflowTabs = computed(() =>
   tabs.tabs.filter((_, i) => i < windowStart.value || i >= windowStart.value + windowCount.value)
 )
 const overflowCount = computed(() => Math.max(0, tabs.tabs.length - windowCount.value))
+const activeIndex = computed(() => tabs.tabs.findIndex((t) => t.path === tabs.activePath))
+const posLabel = computed(() =>
+  `${activeIndex.value < 0 ? 0 : activeIndex.value + 1} / ${tabs.tabs.length}`
+)
+
+/* 滚轮在标签条上横向浏览（画廊式翻页）：仅在有溢出时接管滚轮，
+ * 把滑动窗口沿标签序列 ±1 翻页；无溢出时原样放行，不劫持页面滚动。 */
+function shiftWindow(delta: number): void {
+  const len = tabs.tabs.length
+  const cap = windowCount.value
+  if (cap >= len) return
+  const next = Math.min(Math.max(0, windowStart.value + delta), len - cap)
+  if (next !== windowStart.value) windowStart.value = next
+}
+function onWheel(e: WheelEvent): void {
+  if (overflowCount.value <= 0) return
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+  if (d === 0) return
+  e.preventDefault()
+  shiftWindow(d > 0 ? 1 : -1)
+}
 
 /* ── 单标签右键菜单 ── */
 const menu = ref<{ x: number; y: number; path: string } | null>(null)
@@ -141,7 +162,7 @@ function onMoreSelect(action: string): void {
 
 <template>
   <div class="tabbar jade">
-    <div ref="scroller" class="tabbar__scroll">
+    <div ref="scroller" class="tabbar__scroll" @wheel="onWheel">
       <div
         v-for="(tab, i) in visibleTabs"
         :key="tab.path"
@@ -165,6 +186,8 @@ function onMoreSelect(action: string): void {
       </div>
     </div>
 
+    <span v-if="overflowCount > 0" class="tabbar__pos" :title="L.tabPos">{{ posLabel }}</span>
+
     <button
       v-if="overflowCount > 0"
       class="tabbar__more"
@@ -173,7 +196,6 @@ function onMoreSelect(action: string): void {
       @click="onMoreClick"
     >
       <Icon name="more" :size="16" />
-      <span class="tabbar__more-count">{{ overflowCount }}</span>
     </button>
 
     <ContextMenu
@@ -300,7 +322,17 @@ function onMoreSelect(action: string): void {
   color: var(--hue-text-1);
   background: var(--bg-hover);
 }
-.tabbar__more-count {
+
+/* 位置徽标：仅在折叠时出现，静音展示「当前 / 总数」，不抢视觉 */
+.tabbar__pos {
+  flex-shrink: 0;
+  padding: 0 9px;
+  border-left: 1px solid var(--hue-border-subtle);
+  color: var(--hue-text-3);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  user-select: none;
+  white-space: nowrap;
 }
 </style>
