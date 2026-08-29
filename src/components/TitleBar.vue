@@ -33,6 +33,7 @@ const emit = defineEmits<{
   (e: 'about'): void
   (e: 'toggle-sidebar'): void
   (e: 'toggle-outline'): void
+  (e: 'find'): void
 }>()
 
 const L = i18n.ui
@@ -148,16 +149,20 @@ onMounted(() => {
         >
           <Icon name="panel-left" />
         </button>
-        <button
-          class="tbtn"
-          type="button"
-          :class="{ 'tbtn--on': outlineVisible }"
-          :title="L.toggleOutlineTitle"
-          @click="emit('toggle-outline')"
-        >
-          <Icon name="panel-right" />
-        </button>
-      </div>
+    <button
+      class="tbtn"
+      type="button"
+      :class="{ 'tbtn--on': outlineVisible }"
+      :title="L.toggleOutlineTitle"
+      @click="emit('toggle-outline')"
+    >
+      <Icon name="panel-right" />
+    </button>
+
+    <button class="tbtn" type="button" :title="L.find" @click="emit('find')">
+      <Icon name="search" />
+    </button>
+  </div>
 
       <span class="sep" />
 

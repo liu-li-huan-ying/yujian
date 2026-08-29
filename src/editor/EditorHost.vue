@@ -1,11 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import MilkdownEditor from './MilkdownEditor.vue'
 import SourceEditor from './SourceEditor.vue'
 import LoadingBar from '../components/LoadingBar.vue'
 import ReadingProgress from '../components/ReadingProgress.vue'
 import { useFidelity } from './useFidelity'
 import { parseOutline, type OutlineItem } from './outline'
+import {
+  findInView,
+  gotoInView,
+  replaceOneInView,
+  replaceAllInView,
+  clearFindInView,
+  type FindOptions
+} from './find-source'
+import {
+  findMatchesInDoc,
+  selectMatch,
+  replaceMatch,
+  replaceAllInDoc,
+  type WysiwygMatch
+} from './find-wysiwyg'
 
 export type EditorMode = 'wysiwyg' | 'source'
 
@@ -216,6 +231,8 @@ function switchTo(next: EditorMode): void {
       source.value?.scrollToRatio(wysiwygRatio())
       // 对齐后按首可见行重算大纲高亮
       computeActiveHeading(true)
+      // 若处于查找态，重新定位当前查询（源码视图常驻）
+      rerunFind()
     })
   } else {
       // 切回所见即所得：内容在隐藏期保留滚动，重渲染(setMarkdown)会回顶，
@@ -228,11 +245,13 @@ function switchTo(next: EditorMode): void {
         mode.value = 'wysiwyg'
         // 让进度条至少绘制一帧，并恢复滚动位置
         requestAnimationFrame(() => {
-          restoreScroll()
-          if (loadStatus.value === 'loading') stopLoading()
-          // 渲染恢复后重算大纲高亮
-          computeActiveHeading(true)
-        })
+        restoreScroll()
+        if (loadStatus.value === 'loading') stopLoading()
+        // 渲染恢复后重算大纲高亮
+        computeActiveHeading(true)
+        // 若处于查找态，重新定位当前查询（文档已重渲染）
+        rerunFind()
+      })
       } catch (e) {
         failLoading(`渲染失败：${errMsg(e)}`)
         return
@@ -310,6 +329,131 @@ function clear(): void {
   stopLoading()
 }
 
+/* ── 文件内查找 / 替换（批次一）──────────────────
+   两种模式各有一套查找实现，这里统一分派：
+   - 源码：CodeMirror Decoration 高亮 + 替换（find-source.ts）
+   - 所见即所得：ProseMirror 原生选区高亮当前命中 + 替换（find-wysiwyg.ts）
+   单实例红线不变：永远只操作当前激活文档的 view。 */
+const findQuery = ref('')
+const findOpts = ref<FindOptions>({})
+const findCurrent = ref(0)
+const findTotal = ref(0)
+const wysiwygMatches = ref<WysiwygMatch[]>([])
+
+function milkdownView() {
+  return milkdown.value?.getEditorView() ?? null
+}
+function sourceView() {
+  return source.value?.getView() ?? null
+}
+
+/** 执行查找并定位首个命中，返回命中总数 */
+function find(query: string, opts: FindOptions): number {
+  findQuery.value = query
+  findOpts.value = opts
+  findCurrent.value = 0
+  if (mode.value === 'source') {
+    const v = sourceView()
+    if (!v) return 0
+    const n = findInView(v, query, opts, 0)
+    findTotal.value = n
+    return n
+  }
+  const v = milkdownView()
+  if (!v) return 0
+  const matches = findMatchesInDoc(v, query, opts)
+  wysiwygMatches.value = matches
+  findTotal.value = matches.length
+  if (matches.length) selectMatch(v, matches[0])
+  return matches.length
+}
+
+function applyCurrent(): void {
+  if (mode.value === 'source') {
+    const v = sourceView()
+    if (v) gotoInView(v, findQuery.value, findOpts.value, findCurrent.value)
+  } else {
+    const v = milkdownView()
+    if (v && wysiwygMatches.value[findCurrent.value]) selectMatch(v, wysiwygMatches.value[findCurrent.value])
+  }
+}
+
+function findNext(): void {
+  if (!findTotal.value) return
+  findCurrent.value = (findCurrent.value + 1) % findTotal.value
+  applyCurrent()
+}
+
+function findPrev(): void {
+  if (!findTotal.value) return
+  findCurrent.value = (findCurrent.value - 1 + findTotal.value) % findTotal.value
+  applyCurrent()
+}
+
+function replaceOne(repl: string): number {
+  if (mode.value === 'source') {
+    const v = sourceView()
+    if (!v) return 0
+    const n = replaceOneInView(v, findQuery.value, findOpts.value, findCurrent.value, repl)
+    findTotal.value = n
+    if (n) {
+      findCurrent.value = Math.min(findCurrent.value, n - 1)
+      applyCurrent()
+    }
+    return n
+  }
+  const v = milkdownView()
+  if (!v || !wysiwygMatches.value[findCurrent.value]) return 0
+  replaceMatch(v, wysiwygMatches.value[findCurrent.value], repl)
+  wysiwygMatches.value = findMatchesInDoc(v, findQuery.value, findOpts.value)
+  findTotal.value = wysiwygMatches.value.length
+  if (findTotal.value) {
+    findCurrent.value = Math.min(findCurrent.value, findTotal.value - 1)
+    applyCurrent()
+  }
+  return findTotal.value
+}
+
+function replaceAll(repl: string): number {
+  if (mode.value === 'source') {
+    const v = sourceView()
+    if (!v) return 0
+    const n = replaceAllInView(v, findQuery.value, findOpts.value, repl)
+    findTotal.value = 0
+    findCurrent.value = 0
+    return n
+  }
+  const v = milkdownView()
+  if (!v) return 0
+  const n = replaceAllInDoc(v, findQuery.value, findOpts.value, repl)
+  wysiwygMatches.value = []
+  findTotal.value = 0
+  findCurrent.value = 0
+  return n
+}
+
+function clearFind(): void {
+  const sv = sourceView()
+  if (sv) clearFindInView(sv)
+  findQuery.value = ''
+  findOpts.value = {}
+  findCurrent.value = 0
+  findTotal.value = 0
+  wysiwygMatches.value = []
+}
+
+/** 选区字数（状态栏展示）：监听全局 selectionchange */
+const selectionCount = ref(0)
+function updateSelectionCount(): void {
+  const sel = typeof window !== 'undefined' ? window.getSelection?.() : null
+  selectionCount.value = sel && sel.rangeCount ? sel.toString().length : 0
+}
+
+/** 模式切换后若处于查找态，重新定位当前查询（两种模式的 view 始终常驻） */
+function rerunFind(): void {
+  if (findQuery.value) find(findQuery.value, findOpts.value)
+}
+
 /** 全文搜索结果点击：跳转到命中行（仅源码模式可精确定位） */
 function revealLine(line: number): void {
   if (mode.value !== 'source') return
@@ -366,6 +510,17 @@ onMounted(() => {
   // 两个面板始终挂载，仅切换可见性；scroll 不冒泡，用捕获阶段捕获内部滚动容器
   wysiwygPane.value?.addEventListener('scroll', onPaneScroll, true)
   sourcePane.value?.addEventListener('scroll', onPaneScroll, true)
+  // 选区字数展示：监听全局 selectionchange，更新状态栏「选区 N」
+  updateSelectionCount()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('selectionchange', updateSelectionCount)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('selectionchange', updateSelectionCount)
+  }
 })
 
 defineExpose({
@@ -384,7 +539,17 @@ defineExpose({
   willNormalize,
   mode,
   ready,
-  loadStatus
+  loadStatus,
+  // ── 文件内查找 / 替换（批次一）──
+  find,
+  findNext,
+  findPrev,
+  replaceOne,
+  replaceAll,
+  clearFind,
+  selectionCount,
+  findCurrent,
+  findTotal
 })
 </script>
 

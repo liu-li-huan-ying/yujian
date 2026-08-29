@@ -502,3 +502,17 @@
   background: var(--hue-scrollbar-thumb);
   border-radius: 3px;
 }
+
+/* ── 文件内查找高亮（CodeMirror Decoration）──
+   普通命中：强调色半透明底、微圆角；当前命中：实强调色底 + 反相文字，
+   与状态栏「未保存」色点同一套语言。仅作用于 .cm-editor 内部，不污染其他。 */
+.cm-editor .cm-find {
+  background: rgba(var(--hue-tint-2), 0.32);
+  border-radius: 2px;
+}
+.cm-editor .cm-find--current {
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}

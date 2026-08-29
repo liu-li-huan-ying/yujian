@@ -30,6 +30,9 @@ function sanitize(raw: unknown): SessionState {
   return {
     vaultPath: typeof p.vaultPath === 'string' ? p.vaultPath : null,
     activePath: typeof p.activePath === 'string' ? p.activePath : null,
+    openTabs: Array.isArray(p.openTabs)
+      ? (p.openTabs as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [],
     mode: p.mode === 'source' ? 'source' : 'wysiwyg',
     sidebarWidth:
       typeof width === 'number' && Number.isFinite(width)

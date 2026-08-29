@@ -5,6 +5,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirro
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
+import { findField } from './find-source'
 
 const props = withDefaults(
   defineProps<{
@@ -104,6 +105,7 @@ onMounted(() => {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
+        findField,
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || applying) return
@@ -183,7 +185,12 @@ function getFirstVisibleLine(): number {
   return view.state.doc.lineAt(block.from).number
 }
 
-defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine })
+/** 取 CodeMirror EditorView（供文件内查找定位/替换），未就绪返回 null */
+function getView(): EditorView | null {
+  return view
+}
+
+defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, getView })
 </script>
 
 <template>

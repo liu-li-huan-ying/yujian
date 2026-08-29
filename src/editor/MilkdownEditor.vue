@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { languages } from '@codemirror/language-data'
 import { Crepe } from '@milkdown/crepe'
 import { editorViewCtx } from '@milkdown/core'
+import type { EditorView } from '@milkdown/prose/view'
 import { replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
@@ -233,7 +234,13 @@ function setReadonly(value: boolean): void {
   crepe?.setReadonly(value)
 }
 
-defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly })
+/** 取 ProseMirror EditorView（供文件内查找定位/替换），未就绪返回 null */
+function getEditorView(): EditorView | null {
+  if (!crepe) return null
+  return crepe.editor.action((ctx) => ctx.get(editorViewCtx)) as unknown as EditorView
+}
+
+defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, getEditorView })
 </script>
 
 <template>

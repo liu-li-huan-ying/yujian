@@ -33,7 +33,9 @@ const PATHS: Record<string, string> = {
   book:
     '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><line x1="4" y1="5.5" x2="4" y2="19.5"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
-  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  'chevron-up': '<path d="m6 15 6-6 6 6"/>'
 }
 </script>
 

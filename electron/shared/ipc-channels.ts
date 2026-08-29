@@ -110,6 +110,8 @@ export interface SessionState {
   vaultPath: string | null
   /** 当前编辑的文档绝对路径 */
   activePath: string | null
+  /** 多标签：当前打开的文档绝对路径列表（按打开顺序）。为空表示仅 activePath 一个文档 */
+  openTabs?: string[]
   mode: EditorMode
   /** 侧边栏宽度（px） */
   sidebarWidth: number
@@ -124,6 +126,7 @@ export interface SessionState {
 export const DEFAULT_SESSION: SessionState = {
   vaultPath: null,
   activePath: null,
+  openTabs: [],
   mode: 'wysiwyg',
   sidebarWidth: 224,
   startupMode: 'restore',

@@ -453,6 +453,20 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 历史文件缺失/损坏）时按原有逻辑恢复整个会话。无论哪种模式，切换/打开笔记库时仍会把
 `vaultPath` 写回 session，便于之后切回 `restore` 能恢复到最近使用的库。
 
+### 5.9 Phase 2 批次一：多文档标签与文件内查找（2026-08-29）
+
+**多文档标签（守单实例红线）**
+
+* 新增 `src/store/tabs.ts`（Pinia）管理「打开路径集合 + 激活路径」，store **不持有任何文档内容**。
+* `App.vue` 的 `filePath` 改为派生自 `tabs.activePath`；切换标签 = 先 `host.save()` 落盘脏数据，再改 `activePath`，由 `EditorHost` 单实例 `load(newPath)` —— 永远是「单实例换内容」，绝不每标签建实例。
+* 会话白名单 `SessionState` 新增 `openTabs?: string[]`（`electron/shared/ipc-channels.ts` + `session.ts` sanitize），启动 `restore(openTabs, activePath)` 恢复全部标签。
+
+**文件内查找 / 替换（零新增依赖）**
+
+* 源码模式：`src/editor/find-source.ts` —— CodeMirror `StateField` + `Decoration` 高亮，从后往前替换避免偏移。
+* 所见即所得：`src/editor/find-wysiwyg.ts` —— ProseMirror 原生 `TextSelection` 选中当前命中（编辑器天然高亮选区）+ `scrollIntoView`，**不注入任何 decoration plugin**，对文档结构零侵入。
+* 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`；玻璃浮层 `FindPanel.vue` 由标题栏 `search` 图标或 `Ctrl+F` 唤起。
+
 ***
 
 ## 6. 技术写作场景专项设计
@@ -511,8 +525,9 @@ export interface SessionState {
   vaultPath: string | null    // 当前笔记库根目录
   activePath: string | null   // 当前编辑的文档绝对路径
   mode: EditorMode            // 编辑器模式
-  sidebarWidth: number        // 侧边栏宽度（px）
+  sidebarWidth: number        // 侧栏宽度（px）
   startupMode: StartupMode    // 启动偏好：恢复上次会话 / 全新页面
+  openTabs?: string[]         // 多标签：当前打开的文档绝对路径列表（Phase 2 批次一）
 }
 ```
 
@@ -531,7 +546,7 @@ export interface SessionState {
 | **6. 导出**    | HTML / PDF / 单 md           | 导出结果与编辑器内观感一致                     |
 | **7. 打磨**    | 主题、体积裁剪、快捷键、设置面板            | 安装包体积优化，可用                        |
 | **8. 分发**    | electron-builder 打包         | 产出 Windows 安装包，可安装运行              |
-| **9. Phase 2** | 多标签+查找替换+版本快照+写作统计+打字机/禅模式+导出增强+写作辅助+断链检查 | 计划中（见 `docs/PHASE2-PLAN.md`） |
+| **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+打字机/禅模式+导出增强+写作辅助+断链检查 | 🔧 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二/三待排期（见 `docs/PHASE2-PLAN.md`） |
 
 > 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
 

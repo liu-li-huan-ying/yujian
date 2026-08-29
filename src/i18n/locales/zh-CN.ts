@@ -136,7 +136,24 @@ const zhCN = {
     exportTitle: '导出文档',
     exportMenuHtml: 'HTML 文件',
     exportMenuPdf: 'PDF 文件',
-    helpTitle: '帮助与快捷键'
+    helpTitle: '帮助与快捷键',
+    /* ── 多标签 / 查找（批次一）── */
+    close: '关闭',
+    closeOthers: '关闭其他',
+    closeToRight: '关闭右侧',
+    find: '查找',
+    findPlaceholder: '查找…',
+    replace: '替换',
+    replacePlaceholder: '替换为…',
+    hideReplace: '隐藏替换',
+    caseSensitive: '区分大小写',
+    wholeWord: '全词匹配',
+    prev: '上一个',
+    next: '下一个',
+    replaceOne: '替换',
+    replaceAll: '全部替换',
+    noMatch: '无匹配',
+    selection: '选区'
   },
 
   /* ── 帮助面板：快捷键 + 使用指南 ── */

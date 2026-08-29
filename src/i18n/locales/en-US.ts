@@ -137,7 +137,24 @@ const enUS = {
     exportTitle: 'Export',
     exportMenuHtml: 'HTML file',
     exportMenuPdf: 'PDF file',
-    helpTitle: 'Help & Shortcuts'
+    helpTitle: 'Help & Shortcuts',
+    /* ── Multi-tab / Find (Phase 2 Batch 1) ── */
+    close: 'Close',
+    closeOthers: 'Close Others',
+    closeToRight: 'Close to Right',
+    find: 'Find',
+    findPlaceholder: 'Find…',
+    replace: 'Replace',
+    replacePlaceholder: 'Replace with…',
+    hideReplace: 'Hide Replace',
+    caseSensitive: 'Match Case',
+    wholeWord: 'Whole Word',
+    prev: 'Previous',
+    next: 'Next',
+    replaceOne: 'Replace',
+    replaceAll: 'Replace All',
+    noMatch: 'No match',
+    selection: 'Sel'
   },
 
   /* ── Help panel: shortcuts + guide ── */

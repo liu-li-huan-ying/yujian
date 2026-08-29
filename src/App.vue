@@ -8,17 +8,22 @@ import AppearanceSettings from './components/AppearanceSettings.vue'
 import PreferencesSettings from './components/PreferencesSettings.vue'
 import Outline from './components/Outline.vue'
 import HelpPanel from './components/HelpPanel.vue'
+import TabBar from './components/TabBar.vue'
+import FindPanel from './components/FindPanel.vue'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange, StartupMode } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
+import { useTabsStore } from './store/tabs'
 
 const { t: L, getLocale } = useI18n()
 const U = L.ui
 
-const filePath = ref<string | null>(null)
+const tabs = useTabsStore()
+/** 当前编辑文档 = 激活标签路径；多标签下由 tabs store 驱动（单实例换内容，守 Milkdown 红线） */
+const filePath = computed(() => tabs.activePath)
 const requestedMode = ref<EditorMode>('wysiwyg')
 const host = ref<InstanceType<typeof EditorHost> | null>(null)
 const lastSavedAt = ref<number | null>(null)
@@ -56,24 +61,36 @@ async function openVault(): Promise<void> {
   if (!picked) return
   // 切换前保存当前文档的未保存改动，绝不丢失
   if (host.value?.dirty) await host.value.save()
-  // 清理当前活动文档与编辑器状态：切到新库即回到空白，避免残留上一个库的文档
-  filePath.value = null
+  // 清空全部标签与编辑器状态：切到新库即回到空白，避免残留上一个库的文档
+  tabs.restore([], null)
   pendingPath.value = null
   host.value?.clear()
   await useVault(picked)
 }
 
-/** 打开指定文档。切换前先把脏数据落盘，绝不丢编辑 */
-async function openPath(path: string): Promise<void> {
-  if (path === filePath.value) return
-  if (host.value?.dirty) await host.value.save()
-
-  filePath.value = path
-  lastSavedAt.value = Date.now()
-  void window.api.patchSession({ activePath: path })
-
+/** 把当前激活标签对应的文档载入单实例编辑器；未就绪则缓存在 pendingPath */
+async function syncEditorToActive(): Promise<void> {
+  const path = tabs.activePath
+  if (!path) {
+    host.value?.clear()
+    return
+  }
   if (host.value?.ready) await host.value.load(path)
   else pendingPath.value = path
+}
+
+/** 打开指定文档为标签：先落盘脏数据，再激活标签并载入编辑器（永远单实例换内容） */
+async function openPath(path: string): Promise<void> {
+  if (path === tabs.activePath) return
+  if (host.value?.dirty) await host.value.save()
+  // 切文档前先清掉上一个文档的查找高亮，避免装饰错位
+  host.value?.clearFind()
+  tabs.open(path)
+  lastSavedAt.value = Date.now()
+  void window.api.patchSession({ activePath: path, openTabs: tabs.paths })
+  await syncEditorToActive()
+  // 新文档载入后若查找面板还开着，用当前查询重跑
+  if (findOpen.value && findQuery.value) runFind()
 }
 
 // 编辑器就绪后补灌：会话恢复时往往 Crepe 还没初始化完
@@ -98,20 +115,25 @@ async function newDoc(): Promise<void> {
   await openPath(created)
 }
 
-/** 文件树里重命名了当前正在编辑的文档 → 同步活动路径，避免继续往旧路径保存 */
+/** 文件树里重命名了某个已开标签 → 同步该标签路径，避免继续往旧路径保存 */
 function onRenamed(oldPath: string, newPath: string): void {
-  if (oldPath === filePath.value) {
-    filePath.value = newPath
-    void window.api.patchSession({ activePath: newPath })
+  const idx = tabs.tabs.findIndex((t) => t.path === oldPath)
+  if (idx === -1) return
+  tabs.tabs[idx].path = newPath
+  if (oldPath === tabs.activePath) {
+    tabs.activePath = newPath
+    void window.api.patchSession({ activePath: newPath, openTabs: tabs.paths })
   }
 }
 
-/** 文件树里删除了当前正在编辑的文档 → 清空活动路径 */
+/** 文件树里删除了当前正在编辑的文档 → 关闭该标签并载入相邻文档 */
 function onDeleted(path: string): void {
-  if (path === filePath.value) {
-    filePath.value = null
-    void window.api.patchSession({ activePath: null })
-  }
+  if (path !== tabs.activePath) return
+  const wasActive = true
+  if (wasActive && host.value?.dirty) void host.value.save()
+  tabs.close(path)
+  void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
+  void syncEditorToActive()
 }
 
 /** 全文搜索结果点击：打开文档并定位到命中行（源码模式可精确定位） */
@@ -125,6 +147,89 @@ async function onOpenResult(payload: { path: string; line: number }): Promise<vo
   host.value?.revealLine(payload.line)
 }
 
+/* ── 多标签交互 ── */
+
+function activateTab(path: string): void {
+  void openPath(path)
+}
+
+async function closeTab(path: string): Promise<void> {
+  const wasActive = path === tabs.activePath
+  if (wasActive && host.value?.dirty) await host.value.save()
+  tabs.close(path)
+  void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
+  if (wasActive) await syncEditorToActive()
+}
+
+function closeOthers(path: string): void {
+  tabs.closeOthers(path)
+  void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
+}
+
+function closeToRight(path: string): void {
+  tabs.closeToRight(path)
+  void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
+}
+
+/* ── 文件内查找 / 替换（批次一）── */
+
+const findOpen = ref(false)
+const findQuery = ref('')
+const findReplace = ref('')
+const findCase = ref(false)
+const findWord = ref(false)
+const findShowReplace = ref(false)
+const findCurrent = computed(() => host.value?.findCurrent ?? 0)
+const findTotal = computed(() => host.value?.findTotal ?? 0)
+
+function runFind(): void {
+  if (!findOpen.value) return
+  host.value?.find(findQuery.value, { caseSensitive: findCase.value, wholeWord: findWord.value })
+}
+
+function openFind(): void {
+  findOpen.value = true
+  if (findQuery.value) runFind()
+}
+
+function onFindQuery(v: string): void {
+  findQuery.value = v
+  runFind()
+}
+
+function onFindCase(v: boolean): void {
+  findCase.value = v
+  runFind()
+}
+
+function onFindWord(v: boolean): void {
+  findWord.value = v
+  runFind()
+}
+
+function findNext(): void {
+  host.value?.findNext()
+}
+
+function findPrev(): void {
+  host.value?.findPrev()
+}
+
+function findReplaceOne(): void {
+  host.value?.replaceOne(findReplace.value)
+}
+
+function findReplaceAll(): void {
+  host.value?.replaceAll(findReplace.value)
+}
+
+function closeFind(): void {
+  host.value?.clearFind()
+  findOpen.value = false
+  findQuery.value = ''
+  findReplace.value = ''
+}
+
 /* ── 外部改动同步 ── */
 
 let treeTimer: ReturnType<typeof setTimeout> | null = null
@@ -133,9 +238,9 @@ function onVaultChange(change: VaultChange): void {
   // 内容变化不改变树结构，忽略 —— 否则每次自动保存都会触发一次全量重扫
   if (change.kind === 'change') return
 
-  // 当前文档被外部删除：清掉路径，避免继续往一个不存在的文件保存
+  // 当前文档被外部删除：关掉该标签并载入相邻文档
   if (change.kind === 'unlink' && change.path === filePath.value) {
-    filePath.value = null
+    onDeleted(change.path)
   }
 
   if (treeTimer) clearTimeout(treeTimer)
@@ -158,10 +263,11 @@ async function saveFile(): Promise<void> {
 async function saveFileAs(): Promise<void> {
   const picked = await window.api.saveFileDialog(filePath.value ?? undefined)
   if (!picked) return
-  filePath.value = picked
+  // 以新路径作为激活标签，随后 save() 把当前内容写入新路径
+  tabs.open(picked)
   await host.value?.save()
   lastSavedAt.value = Date.now()
-  void window.api.patchSession({ activePath: picked })
+  void window.api.patchSession({ activePath: picked, openTabs: tabs.paths })
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -180,6 +286,9 @@ function onKeydown(e: KeyboardEvent): void {
   } else if (k === 'o') {
     e.preventDefault()
     void openFile()
+  } else if (k === 'f') {
+    e.preventDefault()
+    openFind()
   } else if (k === '\\') {
     e.preventDefault()
     // Ctrl+\ 切左侧笔记库；Ctrl+Shift+\ 切右侧大纲
@@ -369,7 +478,13 @@ onMounted(async () => {
   // 启动偏好为「全新页面」时不恢复上次笔记库/文档，打开即空白
   if (session.startupMode !== 'fresh') {
     if (session.vaultPath) await useVault(session.vaultPath)
-    if (session.activePath) await openPath(session.activePath)
+    // 恢复全部已开标签 + 激活文档，并载入激活文档
+    const restored = session.openTabs ?? []
+    tabs.restore(restored, session.activePath ?? restored[0] ?? null)
+    if (tabs.activePath) {
+      if (host.value?.ready) await host.value.load(tabs.activePath)
+      else pendingPath.value = tabs.activePath
+    }
   }
 })
 
@@ -407,6 +522,15 @@ onBeforeUnmount(() => {
       :outline-visible="outlineVisible"
       @toggle-sidebar="onToggleSidebar"
       @toggle-outline="onToggleOutline"
+      @find="openFind"
+    />
+
+    <TabBar
+      :dirty="host?.dirty ?? false"
+      @activate="activateTab"
+      @close="closeTab"
+      @close-others="closeOthers"
+      @close-to-right="closeToRight"
     />
 
     <div class="body">
@@ -436,6 +560,27 @@ onBeforeUnmount(() => {
           :lang-key="langVer"
           @saved="lastSavedAt = Date.now()"
         />
+
+        <FindPanel
+          v-if="findOpen"
+          :query="findQuery"
+          :replace="findReplace"
+          :case-sensitive="findCase"
+          :whole-word="findWord"
+          :show-replace="findShowReplace"
+          :current="findCurrent"
+          :total="findTotal"
+          @update:query="onFindQuery"
+          @update:replace="findReplace = $event"
+          @update:case-sensitive="onFindCase"
+          @update:whole-word="onFindWord"
+          @update:show-replace="findShowReplace = $event"
+          @next="findNext"
+          @prev="findPrev"
+          @replace-one="findReplaceOne"
+          @replace-all="findReplaceAll"
+          @close="closeFind"
+        />
       </main>
 
       <Outline
@@ -458,6 +603,7 @@ onBeforeUnmount(() => {
               {{ host?.dirty ? U.statusUnsaved : U.statusSaved }}
             </span>
             <span>{{ modeLabel }}</span>
+            <span v-if="host?.selectionCount" class="sel">{{ U.selection }} {{ host.selectionCount }}</span>
             <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
               {{ localeLabel }}
             </button>
@@ -515,6 +661,7 @@ onBeforeUnmount(() => {
 }
 
 .editor {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -547,6 +694,10 @@ onBeforeUnmount(() => {
 
 .warn {
   color: var(--hue-accent);
+}
+
+.sel {
+  color: var(--hue-text-2);
 }
 
 .dot {
