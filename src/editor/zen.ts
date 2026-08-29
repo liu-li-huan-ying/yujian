@@ -77,26 +77,51 @@ export function setZenPrefs(next: Partial<ZenPrefs>): void {
 }
 
 /**
- * 依据光标 head 找到顶层块索引，按块距生成 .zen-active / .zen-dim-1..5 装饰。
- * 距离在全部顶层块上度量（含表格等非文本块），类只挂在文本块上——
- * 视觉密度与阅读距离一致，跳过一个高表格时淡化不会「漏档」。
+ * 依据光标 head 生成雾化装饰：
+ * ① 全部文本块（含列表项 / 引用 / 表格单元格内的嵌套文本块）按文档序编号，
+ *    雾化距离 = 文本块距 —— 长列表 / 长表格内部也能逐块淡出，不会「整棵全亮」；
+ *    类只挂在文本块上，容器（ul / blockquote / table 等）本身不挂类，
+ *    嵌套文本块各自只收到一档 opacity，无透明度复合叠加。
+ * ② 顶层叶块（图 / 分割线 / mermaid 等无文本子节点的块）按「其之前的文本块数」
+ *    雾化，避免整块突兀地停在满透明度（它们不含文本块，与 ① 不叠加）。
+ *    容器类视觉元素（表格网格线 / 引用竖线 / 列表圆点）保持满透明度——
+ *    「结构保留，文字退后」，恰好强化了雾的层次感。
  */
 function buildDecorations(doc: PMNode, head: number): DecorationSet {
   const decos: Decoration[] = []
-  let activeIndex = -1
-  let i = 0
-  doc.forEach((node, offset) => {
-    if (offset <= head && head <= offset + node.nodeSize) activeIndex = i
-    i++
+  const texts: { pos: number; size: number }[] = []
+  doc.descendants((node, pos) => {
+    if (node.isTextblock) texts.push({ pos, size: node.nodeSize })
   })
-  i = 0
-  doc.forEach((node, offset) => {
-    if (node.isTextblock) {
-      const d = Math.abs(i - activeIndex)
-      const cls = d === 0 ? 'zen-active' : `zen-dim-${Math.min(d, 5)}`
-      decos.push(Decoration.node(offset, offset + node.nodeSize, { class: cls }))
+  let active = -1
+  texts.some((b, i) => {
+    if (b.pos <= head && head <= b.pos + b.size) {
+      active = i
+      return true
     }
-    i++
+    return false
+  })
+  texts.forEach((b, i) => {
+    const d = active < 0 ? i : Math.abs(i - active)
+    decos.push(
+      Decoration.node(b.pos, b.pos + b.size, {
+        class: d === 0 ? 'zen-active' : `zen-dim-${Math.min(d, 5)}`
+      })
+    )
+  })
+  doc.forEach((node, pos) => {
+    if (node.isTextblock || node.childCount > 0) return
+    let before = 0
+    for (const t of texts) {
+      if (t.pos < pos) before++
+      else break
+    }
+    const d = active < 0 ? before : Math.abs(before - active)
+    decos.push(
+      Decoration.node(pos, pos + node.nodeSize, {
+        class: d === 0 ? 'zen-active' : `zen-dim-${Math.min(d, 5)}`
+      })
+    )
   })
   return DecorationSet.create(doc, decos)
 }

@@ -246,22 +246,29 @@
 ### 5.1 文件树
 
 ```
-▾ 技术笔记                      文件夹：12px / text-secondary
-    │ electron-架构.md          选中：bg-active + 左侧 2px accent 竖条
-      vite-版本锁定.md           默认：12px / text-secondary
-      prosemirror-节点.md        悬停：bg-hover
-▾ 随笔
+▾ 技术笔记                      目录：13px / text-1 / 500 · chevron + folder
+  │  electron-架构.md          文档：13px / text-2 · file-text 图标（隐藏 .md 后缀）
+  │  vite-版本锁定.md          当前文档：bg-active + accent 竖条 + accent 文字/图标
+  ▾ prosemirror              展开目录：folder-open 图标 accent 点睛 · 引导线由此行垂直贯穿
+    │   节点.md               嵌套行：9px 水平接片连接引导线
+    │   schema.md
+    随笔.md                   祖先链目录：图标 accent 点睛（当前文档所在目录）
 ```
 
 | 项    | 规格                                                                 |
 | ---- | ------------------------------------------------------------------ |
-| 行高   | 28px（保证触控目标 ≥ 28px）                                                |
-| 缩进   | 每级 16px                                                            |
-| 展开箭头 | 9×9 三角形，点击热区扩展到整行左侧 20px                                           |
-| 选中态  | `background: var(--bg-active)` + 左侧 `2px` accent 竖条（圆角 1px，内缩 6px） |
-| 文件图标 | 省略——Markdown 文档统一不显示图标，靠 `.md` 后缀区分，减少视觉噪音                         |
+| 行高   | 28px（`--h-row`，保证触控目标 ≥ 28px）                                     |
+| 缩进   | 每级 14px（行内边距 `8 + level × 14`）                                     |
+| 层级引导 | VS Code 式引导线：垂直引导线从父行**箭头中心**贯穿整棵子树（仅展开且有子节点时出现），子行带 9px 水平接片；线与箭头列严格对齐（箭头中心 = `13 + level × 14`），收起时不残留断线 |
+| 展开箭头 | 10×10 chevron，展开旋转 90°；文件行同宽占位，图标列恒定对齐                     |
+| 图标   | 目录：`folder` / `folder-open`（展开 accent 点睛）；文档：`file-text`（单字形 doc 图标，低噪音） |
+| 当前文档 | `bg-active` + 左侧 2px accent 竖条 + accent 文字/图标；**嵌套行的竖条对齐本层引导线列**，与树状引导线连成一条视觉轨道 |
+| 祖先链  | 活动文档所在目录链（`row--dir-active`）图标 accent 点睛，一眼看见当前文档「住在哪个文件夹」 |
+| 文字   | 目录 13px / text-1 / 500；文档 13px / text-2；悬停 `bg-hover` + text-1；行内省略号截断 |
+| 无障碍  | 行为 `button`：目录 `aria-expanded`、当前文档 `aria-current="page"`、`focus-visible` 2px accent 描边 |
 
-> **为什么不给文件加图标**：技术笔记库中 95% 以上是 `.md`，图标只会重复信息。只有资源文件夹才显示文件夹图标。
+> **为什么给文档也配一个 doc 图标**：图标列恒定后（chevron → 图标 → 名称），文件行与目录行的排版节奏完全一致、缩进与引导线天然对齐；单字形 doc 图标不携带格式信息（库内几乎全是 `.md`），只是补全视觉节奏，不构成噪音。
+> 引导线用 `li::before/::after` 实现而非整条 `border-left`：线与箭头列严格对齐、末项不残留断线，收起/展开有过渡，观感更轻。
 
 ### 5.2 搜索框
 
