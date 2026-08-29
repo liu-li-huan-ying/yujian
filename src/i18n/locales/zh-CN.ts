@@ -154,7 +154,8 @@ const zhCN = {
     replaceAll: '全部替换',
     noMatch: '无匹配',
     selection: '选区',
-    tabPos: '当前 / 总数'
+    tabPos: '当前 / 总数',
+    moreTabs: '{n} 个标签'
   },
 
   /* ── 帮助面板：快捷键 + 使用指南 ── */

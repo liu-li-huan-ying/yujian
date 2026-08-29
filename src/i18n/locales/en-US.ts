@@ -155,7 +155,8 @@ const enUS = {
     replaceAll: 'Replace All',
     noMatch: 'No match',
     selection: 'Sel',
-    tabPos: 'Current / total'
+    tabPos: 'Current / total',
+    moreTabs: '{n} tabs'
   },
 
   /* ── Help panel: shortcuts + guide ── */
