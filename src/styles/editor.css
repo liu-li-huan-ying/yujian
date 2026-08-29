@@ -38,12 +38,20 @@
   --crepe-shadow-2: var(--hue-shadow-2);
 }
 
-/* ── 编辑区画布：纯净实色，内容列宽 720 居中 ── */
+/* ── 编辑区画布：纯净实色，内容列宽 720 居中 ──
+   居中策略：max-width + margin:auto 放在「整列」.ProseMirror 上，而非逐块。
+   原因：h1/p/blockquote/列表/代码块等块级规则用 margin 简写（如 32px 0 12px）
+   会把左右重置为 0，且选择器比 .ProseMirror > * 更具体，必然覆盖逐块
+   margin:auto —— 结果 720 列被钉在编辑区最左（即「整体偏左」根因）。
+   整列居中后块内文字统一左对齐（正常排版），不再有逐块错位。
+   96px 左沟槽保留：容纳块操作手柄，最窄窗口也不裁切。 */
 .milkdown .ProseMirror {
   font-family: var(--font-ui);
   font-size: 16px;
   line-height: 1.75;
   color: var(--hue-text-1);
+  max-width: var(--w-column);
+  margin: 0 auto;
   padding: 24px 30px 45vh;
   /* 左侧预留 96px 沟槽：容纳块操作手柄（约 64px 宽 + translateX(-12px) 入沟槽）
      后仍有约 20px 余量，最窄窗口下手柄也不会被内容区左缘裁切；宽窗时正文仍居中于内容列。 */
@@ -53,12 +61,6 @@
   box-sizing: border-box;
   outline: none;
   caret-color: var(--hue-accent);
-}
-
-.milkdown .ProseMirror > * {
-  max-width: var(--w-column);
-  margin-left: auto;
-  margin-right: auto;
 }
 
 /* ── 标题层级 ─────────────────────────────── */
