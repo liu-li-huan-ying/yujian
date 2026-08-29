@@ -74,7 +74,7 @@ function onKey(e: KeyboardEvent): void {
         <span class="cell__label">{{ L.totalCharsNoSpace }}</span>
       </div>
       <div class="cell cell--wide">
-        <span class="cell__val">{{ stats.readingMinutes }}′</span>
+        <span class="cell__val">{{ stats.readingMinutes }}{{ L.unitMin }}</span>
         <span class="cell__label">{{ L.readingTime }}</span>
       </div>
     </div>

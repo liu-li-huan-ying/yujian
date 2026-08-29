@@ -21,7 +21,7 @@ import {
   replaceAllInDoc,
   type WysiwygMatch
 } from './find-wysiwyg'
-import { setZenActive, centerZenLine } from './zen'
+import { setZenActive, centerZenLine, zenKey } from './zen'
 import { computeStats } from '../utils/text-stats'
 import type { TextStats } from '../utils/text-stats'
 
@@ -117,7 +117,9 @@ function setZen(value: boolean): void {
   setZenActive(value)
   const v = milkdownView()
   if (v) {
-    v.dispatch(v.state.tr)
+    // 用 meta 事务切换：空事务可能被视图派发链路当作无变化跳过，导致装饰不重算、
+    // 凝神模式看起来「无效」。meta 事务必定触发 plugin.apply → 重建装饰，稳定生效。
+    v.dispatch(v.state.tr.setMeta(zenKey, value))
     if (value) centerZenLine(v)
   }
   // 源码模式下同时居中当前行（淡化仅在所见即所得生效）

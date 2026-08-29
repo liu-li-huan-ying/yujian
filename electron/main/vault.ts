@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
-import type { FileNode, SearchFileResult, SearchLineHit, VaultChange, VaultChangeKind } from '../shared/ipc-channels'
+import type { FileNode, SearchFileResult, SearchLineHit, VaultChange, VaultChangeKind, ReplaceResult } from '../shared/ipc-channels'
 
 const MD_EXT = new Set(['.md', '.markdown'])
 
@@ -250,4 +250,48 @@ export async function searchVault(root: string, query: string): Promise<SearchFi
 
   await walk(root)
   return results
+}
+
+/**
+ * 全局替换：在「当前搜索命中文件」范围内，把 query（字面量、不区分大小写，与 searchVault 一致）
+ * 全部替换为 replacement，写回磁盘（仅内容真正变化时落盘）。返回替换总数与被修改文件数。
+ * 范围限定为搜索命中的文件，避免误伤无关文档；绝不触碰图片/资源，只处理 Markdown 源文本。
+ */
+export async function replaceInVault(
+  root: string,
+  query: string,
+  replacement: string,
+  caseSensitive: boolean
+): Promise<ReplaceResult> {
+  const q = query.trim()
+  if (!q) return { replaced: 0, files: 0, paths: [] }
+
+  const results = await searchVault(root, q)
+  const targets = results.map((r) => r.path)
+
+  const flags = caseSensitive ? 'g' : 'gi'
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
+
+  let replaced = 0
+  let files = 0
+  const paths: string[] = []
+  for (const p of targets) {
+    let content: string
+    try {
+      content = await readFile(p, 'utf-8')
+    } catch {
+      continue
+    }
+    const next = content.replace(re, replacement)
+    if (next === content) continue
+    try {
+      await writeFile(p, next, 'utf-8')
+      replaced += content.match(re)?.length ?? 0
+      files++
+      paths.push(p)
+    } catch {
+      // 单文件写失败不影响其余文件（如只读文件）
+    }
+  }
+  return { replaced, files, paths }
 }

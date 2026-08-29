@@ -178,6 +178,14 @@ const zhCN = {
     writingGoal: '写作目标',
     writingGoalPlaceholder: '目标字数',
     goalProgress: '进度',
+    /* ── 状态栏统计单位（中英一致）── */
+    unitHan: '字',
+    unitWord: '词',
+    unitMin: '′',
+    /* ── 左侧搜索全局替换（批次三）：复用上方 replace / replacePlaceholder / replaceAll ── */
+    replaceConfirm: '将替换全部 {n} 处匹配（不可撤销），继续？',
+    replaceDone: '已替换 {n} 处 / {files} 个文件',
+    replaceFail: '替换失败',
     /* ── 凝神模式（打字机 + 禅 融合，批次二）── */
     focus: '凝神',
     focusTitle: '凝神模式：当前行居中 + 沉浸淡化'

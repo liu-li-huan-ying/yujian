@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { FileNode } from '../../electron/shared/ipc-channels'
 import RenameInput from './RenameInput.vue'
+import Icon from './Icon.vue'
 
 const props = defineProps<{
   nodes: FileNode[]
@@ -62,6 +63,7 @@ function fwdRenameConfirm(path: string, value: string): void {
         @click="node.type === 'dir' ? emit('toggle', node.path) : emit('select', node)"
         @contextmenu.prevent="onContextMenu(node, $event)"
       >
+        <!-- 目录：可展开箭头；文件：占位对齐 -->
         <svg
           v-if="node.type === 'dir'"
           class="chev"
@@ -80,7 +82,14 @@ function fwdRenameConfirm(path: string, value: string): void {
             stroke-linejoin="round"
           />
         </svg>
-        <span v-else class="chev" aria-hidden="true" />
+        <span v-else class="chev chev--spacer" aria-hidden="true" />
+
+        <Icon
+          :name="node.type === 'dir' ? 'folder' : 'file'"
+          :size="14"
+          class="ico"
+          :class="{ 'ico--open': node.type === 'dir' && expanded.has(node.path) }"
+        />
 
         <RenameInput
           v-if="props.editingPath === node.path"
@@ -116,7 +125,15 @@ function fwdRenameConfirm(path: string, value: string): void {
   padding: 0;
 }
 
+/* 嵌套层级用极细的玉质分隔线表达「归属关系」，层次一目了然而不喧宾夺主 */
+.tree .tree {
+  margin-left: 7px;
+  padding-left: 0;
+  border-left: 1px solid var(--hue-border-subtle);
+}
+
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -141,14 +158,33 @@ function fwdRenameConfirm(path: string, value: string): void {
   color: var(--hue-text-1);
 }
 
+/* 当前文档：玉质高亮底 + 强调色文字 + 左侧一道克制的高亮条，与整体语言一致 */
 .row--active {
   background: var(--hue-active);
-  color: var(--hue-text-1);
+  color: var(--hue-accent);
+}
+
+.row--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: calc(var(--h-row) - 10px);
+  border-radius: 2px;
+  background: var(--hue-accent);
 }
 
 .row:focus-visible {
   outline: 2px solid var(--hue-accent);
   outline-offset: -2px;
+}
+
+/* 目录与文件用不同明度的文字，强化层级但不割裂 */
+.row--dir .name {
+  color: var(--hue-text-1);
+  font-weight: 500;
 }
 
 .chev {
@@ -159,6 +195,24 @@ function fwdRenameConfirm(path: string, value: string): void {
 
 .chev--open {
   transform: rotate(90deg);
+}
+
+.chev--spacer {
+  width: 10px;
+}
+
+.ico {
+  flex: 0 0 14px;
+  color: var(--hue-text-3);
+}
+
+/* 展开的目录用强调色点睛，收起则保持低调 */
+.row--dir .ico--open {
+  color: var(--hue-accent);
+}
+
+.row--active .ico {
+  color: var(--hue-accent);
 }
 
 .name {

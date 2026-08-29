@@ -476,18 +476,26 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**）；玻璃 `SnapshotPanel.vue`（锚定 `.editor` 右上）：备注输入 + 保存、列表（时间 + 备注 + 字数差 `deltaChars`）、选中→`snapshotRestore` 只读返回→`diffLines`（`diff@^7.0.0`）摊平逐行 add/del/ctx 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
 * 行级 diff 库选型修正：原计划写 `jsdiff`，但 `jsdiff@1.1.1` 实为「JSON 对象 diff」库（装配错误）；正确库是 `diff@^7.0.0`（`diffLines`），已在 `package.json` 落地，`jsdiff` 已卸载；无类型的 `diff@7` 在 `src/types/diff.d.ts` 补了环境声明。
 * 自动快照策略（防抖保存 + 定时）已留接口；批次二先落地「手动留档 + 行级 diff 预览 + 回滚」闭环，自动策略在后续打磨中接入同一 `snapshotCreate`。
+* ⚠️ **状态：实现但未测试（implemented but NOT yet tested）**：快照逻辑（主进程 `.yujian-history/` 存储 + `snapshot:*` 通道 + 行级 diff 预览 + 回滚标脏不覆盖磁盘）已完整落地，但**尚未在运行期人工验证**（存/看 diff/恢复/删除的实际交互与边界：大文档、空文档、并发、断电均未体验）。暂不提供体验入口，待后续专项审查补运行期测试与验收标准；前端 `SnapshotPanel.vue` 顶部已加统一「⚠ 实现但未测试」标注。
 
 **写作统计（纯函数，零依赖）**
 
 * `src/utils/text-stats.ts`：`computeStats(text)` 输出 `han`(CJK 字数) / `words`(英文词) / `chars`(含空白) / `charsNoSpace` / `readingMinutes`（中文 \~300 字/分 + 英文 \~200 词/分混合估算）。
-* 状态栏紧凑读数 `{{han}}字 · {{words}}词 · {{readingMinutes}}′`（点击唤起玻璃 `StatsPopover.vue`）；弹层含汉字/词/字符/不含空白/阅读时长 2 列网格 + 选区统计 + SVG 进度环（`R=26`，按 `han/goal` 比例）+ 写作目标 `number` 输入；目标经 `patchSession({ writingGoal })` 持久化。
+* 状态栏紧凑读数 `{{han}}{{U.unitHan}} · {{words}}{{U.unitWord}} · {{readingMinutes}}{{U.unitMin}}`（`U` 为 i18n 单位：`unitHan='字'/'chars'`、`unitWord='词'/'words'`、`unitMin='′'/'min'`，随中/英语言切换）；点击唤起玻璃 `StatsPopover.vue`（其阅读时长单位 `L.unitMin` 同样随语言）。
 
 **凝神模式 = 打字机 + 禅 融合（零新增依赖）**
 
 * 用户决策：两体验融合为典雅的「**凝神**」模式（图标 `moon`，英文 `Focus`），标题栏一个开关统一控制。
 * 所见即所得：`src/editor/zen.ts` 用 ProseMirror **node Decoration**（`$prose(() => createZenPlugin())` 注册）——当前光标块加 `.zen-active`、其余块加 `.zen-dim`（opacity .26 + 降饱和）；CSS 做不到「按光标给除当前块外所有块加类」，故必须走 Decoration（非破坏性，不标 dirty）。当前行 `behavior:'smooth'` 垂直居中（偏上 1/3），rAF 节流、失焦暂停。
-* 源码模式：`SourceEditor` 用 `EditorView.scrollIntoView` 居中（同源 `isZenActive()` 模块级开关）。`setZen` 切换后 dispatch **空事务**触发 `apply` 重算装饰（空事务不改文档、不误标脏）。
+* 源码模式：`SourceEditor` 用 `EditorView.scrollIntoView` 居中（同源 `isZenActive()` 模块级开关）；居中在两种模式都跑，淡化仅在 WYSIWYG 生效。
+* **开关机制（修复「凝神无效」根因）**：装饰状态改由 `PluginKey<ZenValue>` 持有，`setZen` 经 `view.dispatch(tr.setMeta(zenKey, value))` 切换——**meta 事务必定触发** `apply` 重建装饰。早期版本用模块级标志 + 空事务 `dispatch(v.state.tr)`，空事务在视图派发链中常被当作「无变化」跳过，导致装饰不重算、淡化/高亮不出现（即「凝神无效」现象）；改 meta 后稳定生效。模块级 `zenState.active` 仍保留供源码模式 `isZenActive()` 与 plugin `view.update` 读取。
 * 持久化：`SessionState` 新增 `focusMode?: boolean`，随会话恢复（`App.onMounted` 读 `focusMode` → 为真则 `setZen(true)`）；切 tab / 切模式前暂停居中，与 `captureScroll/restoreScroll`、多标签互不打架。
+
+**全局替换（左侧文件树搜索增强，打磨项）**
+
+* 左侧 `Sidebar.vue` 搜索框在「有搜索命中」时展开一个玉质 `.repl` 区块：开关 `.repl__toggle`（复用 `t.ui.replace`）→ 输入替换串 → 确认框展示「将替换全部 {n} 处」→ 执行。
+* 范围限定为**当前搜索命中的文件**：`window.api.replaceInVault(root, query, replacement, false)`（不区分大小写，与搜索一致），仅对命中文件做字面量替换并写回磁盘；返回 `{replaced, files, paths}`，前端 toast 反馈并刷新搜索；若当前编辑文档在 `paths` 中则自动从磁盘重载。
+* IPC：新增通道 `vault:replace`（`ReplaceResult` 接口），main 侧 `replaceInVault` 复用 `searchVault` 取命中文件、正则转义后替换、仅内容变化时写回；`electron/shared/ipc-channels.ts` 集中定义，preload 暴露 `window.api.replaceInVault`。
 
 ***
 

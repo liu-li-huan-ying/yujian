@@ -11,6 +11,7 @@ import {
   type SaveAssetPayload,
   type SavedAsset,
   type SearchFileResult,
+  type ReplaceResult,
   type SessionState,
   type SnapshotInfo,
   type VaultChange,
@@ -65,6 +66,15 @@ const api = {
   /** 全文搜索：在笔记库内递归检索所有 Markdown 文档内容，返回命中行 */
   searchVault: (root: string, query: string): Promise<SearchFileResult[]> =>
     ipcRenderer.invoke(IPC.VAULT_SEARCH, root, query),
+
+  /** 全局替换：在搜索命中的文件范围内，把 query 全部替换为 replacement（不区分大小写） */
+  replaceInVault: (
+    root: string,
+    query: string,
+    replacement: string,
+    caseSensitive: boolean
+  ): Promise<ReplaceResult> =>
+    ipcRenderer.invoke(IPC.VAULT_REPLACE, root, query, replacement, caseSensitive),
 
   watchVault: (root: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_WATCH, root),
