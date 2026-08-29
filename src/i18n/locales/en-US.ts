@@ -230,38 +230,50 @@ const enUS = {
     scFile: 'File',
     scOpen: 'Open file',
     scSave: 'Save document',
+    scEdit: 'Edit',
+    scFind: 'Find / Replace',
     scView: 'View',
     scSidebar: 'Show / hide sidebar',
     scOutline: 'Show / hide outline',
     scMode: 'Toggle WYSIWYG / Source',
+    scFocus: 'Focus',
+    scFocusEsc: 'In focus: collapse / reveal retreat bar',
     scGeneral: 'General',
     scHelp: 'Open help',
     guideTitle: 'Get Started with 玉笺',
     guideIntro:
-      '玉笺 is a desktop Markdown editor for technical writers: WYSIWYG and source modes, a jade-textured interface, local-first, with faithful Markdown round-tripping.',
+      '玉笺 is a desktop Markdown editor for technical writers: WYSIWYG and source modes, multi-tabs, version snapshots and a zen focus mode, a jade-textured interface, local-first, with faithful Markdown round-tripping.',
     guideSections: [
       {
         h: '1 · Open a vault',
         p: 'Click "Choose Folder" in the sidebar or the folder icon in the title bar to pick a local folder as your vault. Its .md files and sibling .assets show up live in the left file tree.'
       },
       {
-        h: '2 · Create & write',
-        p: 'The "＋" in the title bar creates a document in the vault. The body is WYSIWYG by default; switch to precise editing via the "WYSIWYG / Source" segment or Ctrl+/.'
+        h: '2 · Tabs & write',
+        p: 'The "＋" in the title bar creates a document in the vault; open several docs at once from the tree and switch on the tab bar. The body is WYSIWYG by default; switch to precise editing via the "WYSIWYG / Source" segment or Ctrl+/.'
       },
       {
-        h: '3 · Two synced panels',
-        p: 'The left tree manages documents; the right outline highlights the current section on scroll and jumps on click. Both panels toggle independently (Ctrl+\\ / Ctrl+Shift+\\) and auto-collapse on narrow windows.'
+        h: '3 · Find & replace',
+        p: 'Ctrl+F finds / replaces within the document; the sidebar search box scans the whole vault with one-click batch replace across hits. The tree and outline panels toggle independently (Ctrl+\\ / Ctrl+Shift+\\) and auto-collapse on narrow windows.'
       },
       {
-        h: '4 · Export & share',
+        h: '4 · Snapshots & stats',
+        p: 'The "history" icon snapshots the current document with notes, line-level diff preview and rollback; the status bar counts hanzi / words / reading time live, and the popover shows a goal progress ring.'
+      },
+      {
+        h: '5 · Focus mode',
+        p: 'The "moon" icon enters zen writing: side panels recede into fog, other text blocks fade by distance, and the caret line is anchored by a gentle paper-scroll. Esc reveals a slim retreat bar; settings tune anchor / fog / smoothness.'
+      },
+      {
+        h: '6 · Export & share',
         p: 'The title-bar "Export" produces a single HTML or PDF. Export reads the editor DOM directly, true WYSIWYG; assets can ship as a sibling .assets folder or inline base64.'
       },
       {
-        h: '5 · Images & img host',
+        h: '7 · Images & img host',
         p: 'Local images live in a same-named .assets folder with relative links. To publish externally, configure an img host under "More · Image Host" and replace links in one click.'
       },
       {
-        h: '6 · Appearance & skins',
+        h: '8 · Appearance & skins',
         p: 'The palette icon cycles five traditional Chinese kiln skins (Celadon / Sky / Moon / Dai / Amber) and dark / light / system — material and hue are decoupled, switching is instant.'
       }
     ],
