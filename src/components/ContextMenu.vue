@@ -8,6 +8,8 @@ export interface MenuItem {
   /** 危险操作（删除），用警示色 */
   danger?: boolean
   disabled?: boolean
+  /** 当前选中项（溢出标签菜单用），高亮显示 */
+  active?: boolean
   /** 仅作分隔线，不触发动作 */
   separator?: boolean
 }
@@ -72,7 +74,7 @@ onBeforeUnmount(() => {
       <button
         v-else
         class="ctx__item"
-        :class="{ 'ctx__item--danger': item.danger, 'ctx__item--disabled': item.disabled }"
+        :class="{ 'ctx__item--danger': item.danger, 'ctx__item--disabled': item.disabled, 'ctx__item--active': item.active }"
         type="button"
         role="menuitem"
         :disabled="item.disabled"
@@ -89,6 +91,8 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 60;
   width: 188px;
+  max-height: var(--menu-max-h, 280px);
+  overflow-y: auto;
   padding: 4px;
   border-radius: var(--radius-md);
   font-size: 12.5px;
@@ -118,6 +122,12 @@ onBeforeUnmount(() => {
 
 .ctx__item:hover:not(.ctx__item--disabled) {
   background: var(--hue-active);
+}
+
+.ctx__item--active {
+  background: rgba(var(--hue-tint-1), 0.14);
+  color: var(--hue-accent);
+  font-weight: 600;
 }
 
 .ctx__item--danger {
