@@ -396,6 +396,19 @@ function revealLine(line: number): void {
 }
 
 /**
+ * 驱动源码模式搜索高亮（本文档范围，复用统一搜索的 query/选项）。
+ * 由 Sidebar 在「本文档」范围有查询时调用；currentLine 标记当前结果行强化显示；
+ * 传空 query 即清空。经 SourceEditor 的 CodeMirror Decoration 常驻高亮全部命中。
+ */
+function setFindHighlight(
+  query?: string,
+  opts?: { caseSensitive?: boolean; wholeWord?: boolean },
+  currentLine?: number
+): void {
+  source.value?.setFind(query, opts, currentLine)
+}
+
+/**
  * 取当前文档的渲染 HTML（用于导出）。
  * 源码模式下渲染器 DOM 落后于编辑，先灌入当前源码文本再读，
  * 且不切换可见模式、不触发保存态变化（内容本就等于原文）。
@@ -465,6 +478,7 @@ defineExpose({
   switchTo,
   captureScroll,
   revealLine,
+  setFindHighlight,
   getHTML,
   publishImages,
   gotoOutline,

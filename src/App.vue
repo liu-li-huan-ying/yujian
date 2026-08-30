@@ -160,6 +160,16 @@ async function onOpenResult(payload: { path: string; line: number }): Promise<vo
   host.value?.revealLine(payload.line)
 }
 
+/** 源码模式命中高亮：把侧栏搜索状态（query/选项/当前行）转交给编辑器，复用统一搜索逻辑 */
+function onFindHighlight(payload: {
+  query: string
+  opts: { caseSensitive: boolean; wholeWord: boolean }
+  currentLine?: number
+} | null): void {
+  if (payload) host.value?.setFindHighlight(payload.query, payload.opts, payload.currentLine)
+  else host.value?.setFindHighlight()
+}
+
 /** 链接健康检查：点击断链 → 打开文档并定位到断链所在行（源码模式可精确定位，与全文搜索一致） */
 async function onOpenBrokenLink(item: BrokenLinkItem): Promise<void> {
   // 已经是当前文档则跳过「打开」步骤（openPath 对同路径会提前返回，导致后续定位不执行）
@@ -676,6 +686,7 @@ onBeforeUnmount(() => {
         @deleted="onDeleted"
         @open-result="onOpenResult"
         @replaced="onSearchReplaced"
+        @find-highlight="onFindHighlight"
       />
 
       <main class="editor" @click.capture="onEditorClick">

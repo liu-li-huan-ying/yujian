@@ -6,6 +6,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { isZenActive } from './zen'
+import { sourceFindField, setSourceFind, type SourceFindState } from './find-source'
 
 const props = withDefaults(
   defineProps<{
@@ -105,6 +106,7 @@ onMounted(() => {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
+        sourceFindField,
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !applying) emit('update:modelValue', update.state.doc.toString())
@@ -212,7 +214,29 @@ function insertAtCursor(text: string): void {
   })
 }
 
-defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, centerActiveLine, insertAtCursor })
+/**
+ * 应用/清除源码模式搜索高亮（本文档范围，复用统一搜索的 query/选项）。
+ * 传 query 即按当前文档内容高亮全部命中；currentLine 标记当前结果所在行（强化显示）；
+ * 传 undefined 清空高亮。纯视图装饰，不改动文档内容。
+ */
+function setFind(
+  query?: string,
+  opts?: { caseSensitive?: boolean; wholeWord?: boolean },
+  currentLine?: number
+): void {
+  if (!view) return
+  const st: SourceFindState | null = query
+    ? {
+        query,
+        caseSensitive: !!opts?.caseSensitive,
+        wholeWord: !!opts?.wholeWord,
+        currentLine
+      }
+    : null
+  view.dispatch({ effects: setSourceFind.of(st) })
+}
+
+defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, centerActiveLine, insertAtCursor, setFind })
 </script>
 
 <template>

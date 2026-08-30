@@ -470,6 +470,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
   后端其余逻辑（按行切分命中、替换回写、原子写）两范围完全共用。IPC 通道 `VAULT_SEARCH` / `VAULT_REPLACE` 与 preload 的 `searchVault / replaceInVault` 签名同步透传 `file`。
 * **前端 `Sidebar`**：只保留一个搜索框 + 一个 `SearchResults` 渲染器 + 一个替换面板。`scopeFile()` 在「本文档」范围返回 `props.activePath`、在「全部」返回 `undefined`，作为第 4/5 实参传入 `searchVault / replaceInVault`；命中结果一律**点击跳转**（复用既有 `onOpenResult(path, line)` → `EditorHost.revealLine`），不再有 ‹ › 逐个步进。结果元信息用 `SearchResults` 的 `singleFile` 属性区分：`本文档` 显示「N 处命中」，`全部` 显示「N 处命中 · M 个文件」。
 * **取舍**：放弃了编辑器内逐命中常驻高亮 + ‹ › 步进（即用户最初觉得「所见即所得下只是跳转不够直观」那部分体验），换来零代码冗余与两种范围完全一致的交互。命中定位仍可靠（点击命中行即跳到源码模式对应行并精确滚动）。
+* **2026-08-30 补回：源码模式命中常驻高亮（仅源码模式）**：用户认可源码模式用 CodeMirror `Decoration` 常驻高亮全部命中的体验，故在统一引擎之上补回该视图层高亮（不恢复所见即所得装饰）。新增 `src/editor/find-source.ts`：导出 `sourceFindField`（`StateField` + `setSourceFind` effect），按当前 `query/opts` 全文扫描命中区间打 `.cm-find`、当前结果所在行打 `.cm-find--current`；文档编辑时经 `tr.docChanged` 跟随重算。`SourceEditor` 挂载该字段并暴露 `setFind(query?, opts?, currentLine?)`；`EditorHost.setFindHighlight` 桥接；`Sidebar` 在「本文档」范围有查询时经 `find-highlight` 事件把状态推给编辑器（全库范围 / 无查询 / 无文档时抛 null 清空）。`editor.css` 恢复 `.cm-find`（青瓷半透底）/ `.cm-find--current`（实强调色 + 反相文字）。纯视图装饰，不进文档、对 Markdown 往返保真零影响。
 
 ### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）
 
