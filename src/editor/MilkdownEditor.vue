@@ -303,17 +303,11 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.editor.use(htmlInlineSchema)
   // 行内数学 $…$ 改由 MathJax 渲染（接管 math_inline 节点显示）
   crepe.editor.use($prose(() => mathInlineNodeViewPlugin()))
-
-  await crepe.create()
-
-  // 块级数学 $$…$$ 走 renderPreview（language='latex'）。
-  // ⚠️ 关键坑：Crepe 的 Latex 特性在 crepe.create() 期间用 katex 覆盖了
-  // codeBlockConfig.renderPreview，而 Milkdown 的 ctx.update 链「最后注册的成为最外层」，
-  // 故写在 create() 之前的覆盖会被 katex 盖掉 —— 于是所有 latex 块仍走 KaTeX，
-  // 而 KaTeX 不支持跨块 \label/\eqref，渲染成 (???)。
-  // 必须把覆盖放到 create() 之后，让 MathJax 成为最外层、稳定胜出。
-  // 行内 math_inline 用的是 nodeView（优先级高于 schema.toDOM 的 katex），不受影响。
-  await crepe.editor.action((ctx) => {
+  // 块级数学 $$…$$ 走 renderPreview（language='latex'）。Crepe 的 Latex 特性会在 create()
+  // 期间用 katex 覆盖 codeBlockConfig.renderPreview，普通 editor.config 调用排在它之前会被盖掉；
+  // 故这里用 .use() 特性（排到内部特性之后）再覆盖一次，让 MathJax 最终胜出，
+  // 从而支持 \ce / \require / \label / \eqref。mermaid 等其它语言仍交回上一级处理。
+  crepe.editor.use((ctx) => () => {
     ctx.update(codeBlockConfig.key, (prev) => ({
       ...prev,
       renderPreview: (language, content, applyPreview) => {
@@ -324,6 +318,8 @@ async function init(defaultValue?: string): Promise<void> {
       }
     }))
   })
+
+  await crepe.create()
   crepe.setReadonly(props.readonly)
   setupImageResolver()
   // Ctrl/⌘+点击链接跳转：普通点击保持可编辑，仅修饰键按下时打开外部浏览器
