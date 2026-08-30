@@ -9,15 +9,15 @@
 
 ## 0. 现状底座（已核实，直接复用，不重复造）
 
-| 能力           | 现状                                                                          | 本批次如何复用                                                          |
-| ------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| 状态管理         | 已装 `pinia@4`，多标签 store 已验证                                                         | 快照列表 store 直接用 Pinia                                            |
-| 玻璃浮层         | `FindPanel` / `TitleMenu` / `ContextMenu` 共用 `.glass` 单一事实来源                       | 快照面板、统计弹层全部套 `.glass`                                          |
-| 右键菜单         | `ContextMenu.vue`（玻璃、`items`、危险项）                                                | 快照列表项右键「恢复/删除」直接传 items                                     |
-| 图标           | `Icon.vue`（Lucide 线性、`currentColor`）                                           | `history`(快照) / `moon`(凝神) 走它；需补这两个 PATHS                          |
-| 单实例 EditorHost | 两 pane 常驻、`fidelity` 保真层、`captureScroll/restoreScroll`、`getMarkdown/setMarkdown` 已就绪 | 快照 = 取 `getMarkdown` 存盘；凝神 = 在 EditorHost 内加滚动/装饰，不新建实例（守红线 2）  |
-| i18n         | `zh-CN.ts` / `en-US.ts` 双语、零依赖 reactive                                        | 本批次新增快照/统计/凝神全套文案                                            |
-| 选区字数         | 批次一已在状态栏显示 `选区 N` 并由 `host.selectionCount` 喂入                              | 统计弹层复用同一选区监听，扩展为「选区汉字/词/字符」                                |
+| 能力             | 现状                                                                                   | 本批次如何复用                                                        |
+| -------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| 状态管理           | 已装 `pinia@4`，多标签 store 已验证                                                           | 快照列表 store 直接用 Pinia                                           |
+| 玻璃浮层           | `FindPanel` / `TitleMenu` / `ContextMenu` 共用 `.glass` 单一事实来源                         | 快照面板、统计弹层全部套 `.glass`                                          |
+| 右键菜单           | `ContextMenu.vue`（玻璃、`items`、危险项）                                                    | 快照列表项右键「恢复/删除」直接传 items                                        |
+| 图标             | `Icon.vue`（Lucide 线性、`currentColor`）                                                 | `history`(快照) / `moon`(凝神) 走它；需补这两个 PATHS                      |
+| 单实例 EditorHost | 两 pane 常驻、`fidelity` 保真层、`captureScroll/restoreScroll`、`getMarkdown/setMarkdown` 已就绪 | 快照 = 取 `getMarkdown` 存盘；凝神 = 在 EditorHost 内加滚动/装饰，不新建实例（守红线 2） |
+| i18n           | `zh-CN.ts` / `en-US.ts` 双语、零依赖 reactive                                              | 本批次新增快照/统计/凝神全套文案                                              |
+| 选区字数           | 批次一已在状态栏显示 `选区 N` 并由 `host.selectionCount` 喂入                                        | 统计弹层复用同一选区监听，扩展为「选区汉字/词/字符」                                    |
 
 ***
 
@@ -43,43 +43,44 @@
 ```
 
 **关键决策**
-- 标题栏「视图/布局」组在 `find` 后追加两个开关：`快照(history)`、`凝神(moon)`。
-- 快照面板 = 玻璃浮层，锚定 `.editor` 容器右侧（同 `FindPanel` 定位语言），不进编辑区 DOM（守纯净红线）。
-- 统计 = 状态栏常驻紧凑读数 + 点击展开玻璃弹层（详情 + 目标进度环），弹层复用 `.glass`。
+
+* 标题栏「视图/布局」组在 `find` 后追加两个开关：`快照(history)`、`凝神(moon)`。
+* 快照面板 = 玻璃浮层，锚定 `.editor` 容器右侧（同 `FindPanel` 定位语言），不进编辑区 DOM（守纯净红线）。
+* 统计 = 状态栏常驻紧凑读数 + 点击展开玻璃弹层（详情 + 目标进度环），弹层复用 `.glass`。
 
 ***
 
 ## 2. 材质归属（风格一致性核心，必须严格执行）
 
-| 元素         | 材质                          | 理由                                              |
-| ---------- | --------------------------- | ----------------------------------------------- |
-| **标题栏开关**   | `.tbtn`（玉质 hover）              | 与现有视图组按钮同一套语言                                  |
-| **快照面板**    | `.glass` 玻璃                 | 浮起层，与 FindPanel / TitleMenu 同源                       |
-| **统计弹层**    | `.glass` 玻璃                 | 浮起层                                             |
-| **进度环**     | 内联 SVG（`--hue-accent` 描边）      | 在玻璃弹层内，矢量、随皮肤变色                                 |
-| **状态栏读数**   | `.jade`（已是 footer jade）         | 框架层常驻                                           |
-| **凝神降透明度**  | ProseMirror 装饰 `.zen-dim` + CSS | 属「文本/段落视觉」非「背景纹理」，**不破坏编辑区纯净红线**                 |
-| ❌ 禁止       | 面板嵌进编辑区 DOM / 用玻璃做常驻框架        | 违反框架/浮起分层与编辑区纯净双红线                             |
+| 元素         | 材质                              | 理由                               |
+| ---------- | ------------------------------- | -------------------------------- |
+| **标题栏开关**  | `.tbtn`（玉质 hover）               | 与现有视图组按钮同一套语言                    |
+| **快照面板**   | `.glass` 玻璃                     | 浮起层，与 FindPanel / TitleMenu 同源   |
+| **统计弹层**   | `.glass` 玻璃                     | 浮起层                              |
+| **进度环**    | 内联 SVG（`--hue-accent` 描边）       | 在玻璃弹层内，矢量、随皮肤变色                  |
+| **状态栏读数**  | `.jade`（已是 footer jade）         | 框架层常驻                            |
+| **凝神降透明度** | ProseMirror 装饰 `.zen-dim` + CSS | 属「文本/段落视觉」非「背景纹理」，**不破坏编辑区纯净红线** |
+| ❌ 禁止       | 面板嵌进编辑区 DOM / 用玻璃做常驻框架          | 违反框架/浮起分层与编辑区纯净双红线               |
 
 ***
 
 ## 3. 组件复用清单（本批次新增 ≤ 5 个文件）
 
-| 文件                                | 类型                  | 职责                                                                      | 复用                           |
-| --------------------------------- | ------------------- | ----------------------------------------------------------------------- | ---------------------------- |
-| `electron/main/snapshots.ts`       | **新增** main 模块        | 路径哈希 → `.yujian-history/<hash>/<ISO8601>.md` 写盘、列目录、读内容、删（走回收站）                      | node `crypto`/`fs`（纯原生）            |
-| `electron/preload.ts`             | **改**                | 暴露 `snapshotList/Create/Restore/Delete` 到 `window.api`（与现有 api 一致）                 | 现有 preload 模式                  |
-| `electron/shared/ipc-channels.ts` | **改（小）**             | `SessionState` 加 `focusMode?: boolean`；新增 snapshot IPC 通道                            | 与 `openTabs` 同款白名单                |
-| `src/utils/text-stats.ts`         | **新增** 纯函数           | 汉字数 / 英文词数 / 字符数(含·不含空白) / 阅读时长（中 300 字·分、英 200 词·分混合估）                        | 零依赖                           |
-| `src/store/snapshots.ts`          | **新增** Pinia store    | 当前文档快照列表缓存（时间/备注/大小/字数差）、加载中态、与 IPC 同步                                         | Pinia（已装）                     |
-| `src/components/SnapshotPanel.vue` | **新增** 玻璃组件           | 列表（时间 + 备注 + 字数差）+ 选中看 jsdiff 行级 diff + 恢复/删除 + 右键菜单                               | 内嵌 `ContextMenu` + `Icon`        |
-| `src/components/StatsPopover.vue`  | **新增** 玻璃组件           | 详情读数 + 写作目标输入 + SVG 进度环；点状态栏读数展开                                            | `.glass` + 内联 SVG              |
-| `src/editor/zen.ts`               | **新增** PM 装饰插件        | 凝神装饰：当前块加 `.zen-active`、其余块加 `.zen-dim`（非破坏性 decoration，守红线 1）                        | 与 find-wysiwyg 装饰同级            |
-| `src/components/TitleBar.vue`     | **改**                 | 视图组追加 `快照(history)` / `凝神(moon)` 两个 `.tbtn` 开关（emit `toggle-snapshot/focus`）       | 现有 `.tbtn`/`seg` 语言             |
-| `src/editor/EditorHost.vue`       | **改（中）**              | 暴露 `stats`；凝神滚动（当前行垂直居中，失焦暂停，rAF 节流）+ 载入 `zen` 装饰；保存后自动快照（防抖 800ms）            | 现有滚动保持 + 装饰模式                |
-| `src/App.vue`                     | **改**                 | 挂 `SnapshotPanel`/`StatsPopover`；状态栏加统计读数；响应标题栏两开关；`onMounted` 恢复 `focusMode`；会话持久化 | 现有 `openPath/save/patchSession`  |
-| `src/styles/editor.css`           | **改（小）**              | `.zen-dim` / `.zen-active` 透明度与高亮                                          | 复用 `--hue-tint` 令牌             |
-| `src/i18n/locales/*`              | **改**                 | 新增 snapshot/stats/focus 全套文案                                             | 现有双语结构                      |
+| 文件                                 | 类型                 | 职责                                                                                  | 复用                              |
+| ---------------------------------- | ------------------ | ----------------------------------------------------------------------------------- | ------------------------------- |
+| `electron/main/snapshots.ts`       | **新增** main 模块     | 路径哈希 → `.yujian-history/<hash>/<ISO8601>.md` 写盘、列目录、读内容、删（走回收站）                     | node `crypto`/`fs`（纯原生）         |
+| `electron/preload.ts`              | **改**              | 暴露 `snapshotList/Create/Restore/Delete` 到 `window.api`（与现有 api 一致）                  | 现有 preload 模式                   |
+| `electron/shared/ipc-channels.ts`  | **改（小）**           | `SessionState` 加 `focusMode?: boolean`；新增 snapshot IPC 通道                           | 与 `openTabs` 同款白名单              |
+| `src/utils/text-stats.ts`          | **新增** 纯函数         | 汉字数 / 英文词数 / 字符数(含·不含空白) / 阅读时长（中 300 字·分、英 200 词·分混合估）                             | 零依赖                             |
+| `src/store/snapshots.ts`           | **新增** Pinia store | 当前文档快照列表缓存（时间/备注/大小/字数差）、加载中态、与 IPC 同步                                              | Pinia（已装）                       |
+| `src/components/SnapshotPanel.vue` | **新增** 玻璃组件        | 列表（时间 + 备注 + 字数差）+ 选中看 jsdiff 行级 diff + 恢复/删除 + 右键菜单                                | 内嵌 `ContextMenu` + `Icon`       |
+| `src/components/StatsPopover.vue`  | **新增** 玻璃组件        | 详情读数 + 写作目标输入 + SVG 进度环；点状态栏读数展开                                                    | `.glass` + 内联 SVG               |
+| `src/editor/zen.ts`                | **新增** PM 装饰插件     | 凝神装饰：当前块加 `.zen-active`、其余块加 `.zen-dim`（非破坏性 decoration，守红线 1）                      | 独立 PM 装饰插件                       |
+| `src/components/TitleBar.vue`      | **改**              | 视图组追加 `快照(history)` / `凝神(moon)` 两个 `.tbtn` 开关（emit `toggle-snapshot/focus`）        | 现有 `.tbtn`/`seg` 语言             |
+| `src/editor/EditorHost.vue`        | **改（中）**           | 暴露 `stats`；凝神滚动（当前行垂直居中，失焦暂停，rAF 节流）+ 载入 `zen` 装饰；保存后自动快照（防抖 800ms）                 | 现有滚动保持 + 装饰模式                   |
+| `src/App.vue`                      | **改**              | 挂 `SnapshotPanel`/`StatsPopover`；状态栏加统计读数；响应标题栏两开关；`onMounted` 恢复 `focusMode`；会话持久化 | 现有 `openPath/save/patchSession` |
+| `src/styles/editor.css`            | **改（小）**           | `.zen-dim` / `.zen-active` 透明度与高亮                                                   | 复用 `--hue-tint` 令牌              |
+| `src/i18n/locales/*`               | **改**              | 新增 snapshot/stats/focus 全套文案                                                        | 现有双语结构                          |
 
 > 依赖新增：`jsdiff`（纯 JS，行级 diff，体积小，安全）。其余全部零新增依赖。
 
@@ -143,13 +144,13 @@
 
 ## 6. 待主人确认的决策点（已按推荐锁定）
 
-| # | 决策点        | 采用项                                  |
-| - | --------- | ------------------------------------- |
-| 1 | 快照面板形态    | 玻璃浮层，锚定编辑区右侧（同 FindPanel 定位语言）           |
-| 2 | 统计入口      | 状态栏常驻紧凑读数 + 点击展开玻璃弹层（含进度环）              |
-| 3 | 打字机+禅融合  | **融合为「凝神」模式**：当前行居中(偏上 1/3) + 当前块高亮 + 余者淡化 |
-| 4 | 凝神图标/命名   | 图标 `moon`（静夜凝神）；中文「凝神」/ 英文 `Focus`       |
-| 5 | 写作目标粒度    | 单文档目标字数（汉字）+ 进度环，存 session             |
+| # | 决策点     | 采用项                                        |
+| - | ------- | ------------------------------------------ |
+| 1 | 快照面板形态  | 玻璃浮层，锚定编辑区右侧（同 FindPanel 定位语言）             |
+| 2 | 统计入口    | 状态栏常驻紧凑读数 + 点击展开玻璃弹层（含进度环）                 |
+| 3 | 打字机+禅融合 | **融合为「凝神」模式**：当前行居中(偏上 1/3) + 当前块高亮 + 余者淡化 |
+| 4 | 凝神图标/命名 | 图标 `moon`（静夜凝神）；中文「凝神」/ 英文 `Focus`         |
+| 5 | 写作目标粒度  | 单文档目标字数（汉字）+ 进度环，存 session                 |
 
 > 「当前句高亮」本期先做到「当前块」，句子级细化留作验收后小打磨；块级已能 deliver 沉浸感且零风险。
 
@@ -170,3 +171,4 @@
 * 快照数 > 50 时列表可滚动；恢复大文档（>1MB）不卡 UI；
 * 凝神在窄窗（<720px）/ 长文档下居中稳定、不触发页面级滚动跳动；
 * 自动快照防抖正确：连续输入只在停顿后留一份，不每键一份。
+

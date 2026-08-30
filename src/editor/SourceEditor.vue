@@ -5,7 +5,6 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirro
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { findField } from './find-source'
 import { isZenActive } from './zen'
 
 const props = withDefaults(
@@ -106,7 +105,6 @@ onMounted(() => {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
-        findField,
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !applying) emit('update:modelValue', update.state.doc.toString())
@@ -194,11 +192,6 @@ function getFirstVisibleLine(): number {
   return view.state.doc.lineAt(block.from).number
 }
 
-/** 取 CodeMirror EditorView（供文件内查找定位/替换），未就绪返回 null */
-function getView(): EditorView | null {
-  return view
-}
-
 /** 把当前光标所在行滚动到视口中央（凝神/打字机模式调用） */
 function centerActiveLine(): void {
   if (!view) return
@@ -219,7 +212,7 @@ function insertAtCursor(text: string): void {
   })
 }
 
-defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, getView, centerActiveLine, insertAtCursor })
+defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, centerActiveLine, insertAtCursor })
 </script>
 
 <template>

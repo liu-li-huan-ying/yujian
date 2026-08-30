@@ -8,6 +8,8 @@ const props = defineProps<{
   activePath: string | null
   /** 是否区分大小写（高亮规则与搜索保持一致） */
   caseSensitive?: boolean
+  /** 单文件范围（左侧「本文档」）：隐藏文件名分组头，只列出命中行 */
+  singleFile?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,14 +36,22 @@ function highlight(text: string): string {
 }
 
 const totalHits = computed(() => props.results.reduce((n, f) => n + f.hits.length, 0))
+
+/** 命中计数文案：单文件范围只报命中数，全库范围附带文件数 */
+const metaText = computed(() =>
+  props.singleFile
+    ? `${totalHits.value} 处命中`
+    : `${totalHits.value} 处命中 · ${props.results.length} 个文件`
+)
 </script>
 
 <template>
   <div class="results">
-    <div class="results__meta">{{ totalHits }} 处命中 · {{ results.length }} 个文件</div>
+    <div class="results__meta">{{ metaText }}</div>
 
-    <div v-for="file in results" :key="file.path" class="file">
+    <template v-for="file in results" :key="file.path">
       <button
+        v-if="!singleFile"
         class="file__head"
         :class="{ 'file__head--active': file.path === activePath }"
         type="button"
@@ -52,7 +62,7 @@ const totalHits = computed(() => props.results.reduce((n, f) => n + f.hits.lengt
         <span class="file__count">{{ file.hits.length }}</span>
       </button>
 
-      <ul class="hits">
+      <ul class="hits" :class="{ 'hits--bare': singleFile }">
         <li v-for="hit in file.hits" :key="hit.line">
           <button class="hit" type="button" @click="emit('open', file.path, hit.line)">
             <span class="hit__line">{{ hit.line }}</span>
@@ -60,7 +70,7 @@ const totalHits = computed(() => props.results.reduce((n, f) => n + f.hits.lengt
           </button>
         </li>
       </ul>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -118,6 +128,11 @@ const totalHits = computed(() => props.results.reduce((n, f) => n + f.hits.lengt
   list-style: none;
   margin: 0;
   padding: 0 0 0 10px;
+}
+
+/* 单文件范围（本文档）：无文件名分组头，左缩进收敛，视觉更紧凑 */
+.hits--bare {
+  padding-left: 2px;
 }
 
 .hit {

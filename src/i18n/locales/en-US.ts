@@ -161,9 +161,7 @@ const enUS = {
     scopeVault: 'All',
     scopeDoc: 'This doc',
     scopeDocHint: 'Open a document first',
-    docHits: 'This doc: {n} match(es) · use ‹ › to jump',
     noResult: 'No results for “{q}”',
-    noMatchInDoc: 'No match for “{q}” in this document',
     searching: 'Searching…',
     /* ── Version snapshots (Batch 2) ── */
     snapshots: 'Snapshots',
@@ -309,7 +307,7 @@ const enUS = {
       },
       {
         h: '3 · Search & replace',
-        p: 'The sidebar search box unifies retrieval: switch to “All” to full-text search the whole vault (one-click batch replace on hits); switch to “This doc” to find / replace within the current document only, jumping between matches with ‹ ›. Both scopes support “Match case / Whole word”. Ctrl+F focuses the search box.'
+        p: 'The sidebar search box unifies retrieval: switch to “All” to full-text search the whole vault (one-click batch replace on hits); switch to “This doc” to find / replace within the current document only. Both scopes share the same search engine and differ only by scope; clicking a hit jumps to it. Both support “Match case / Whole word”. Ctrl+F focuses the search box.'
       },
       {
         h: '4 · Snapshots & stats',
