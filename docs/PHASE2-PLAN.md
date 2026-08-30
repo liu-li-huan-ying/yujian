@@ -107,8 +107,7 @@
 
 ### 3.6 写作辅助包
 
-* **片段/模板（Snippets）**：可配置的片段库（JSON，本地），编辑器内触发词或命令面板插入常用结构（文档头 / 代码模板 / 表格）；纯本地、零依赖。
-* **文档属性面板**：用项目已依赖的 `gray-matter` 解析 frontmatter，做成表单（标题/作者/标签/日期），编辑即写回 YAML；直接喂给导出元信息与 Phase 3 标签体系。
+* **已实现（2026-08-30）**：渲染侧 `src/editor/frontmatter.ts` 复用已依赖的 `gray-matter` 解析 / 回写 frontmatter，正文逐字保真、未知字段透传；新增 `EditorHost.insertText`（所见即所得走 ProseMirror `tr.insertText`、源码走 CodeMirror dispatch）作为片段插入与未来命令面板的统一入口。`src/components/WritingAidsPanel.vue` 玻璃面板双标签页——**属性**（标题/作者/描述/标签/日期表单，应用即改写顶部 YAML、`loadMarkdownExternal` 自动保存）与**片段**（内置文档模板/代码块/表格/提示框/任务列表/脚注/流程图/公式块，点击光标处插入）。标题栏「更多 ⌄ · 写作辅助」唤起；i18n 文案集中在 `ui.writingAids`。直接喂给导出元信息与 Phase 3 标签体系。
 
 ### 3.7 链接健康检查
 

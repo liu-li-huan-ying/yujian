@@ -206,7 +206,20 @@ function centerActiveLine(): void {
   view.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: 'center' }) })
 }
 
-defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, getView, centerActiveLine })
+/**
+ * 在光标处插入文本（写作辅助·片段模板用）。有选区时替换选区内容，
+ * 插入后光标落在文本末尾。仅改文档、不改模式，触发 update 自动落盘。
+ */
+function insertAtCursor(text: string): void {
+  if (!view) return
+  const { from, to } = view.state.selection.main
+  view.dispatch({
+    changes: { from, to, insert: text },
+    selection: { anchor: from + text.length }
+  })
+}
+
+defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, getView, centerActiveLine, insertAtCursor })
 </script>
 
 <template>

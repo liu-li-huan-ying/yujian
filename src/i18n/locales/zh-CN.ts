@@ -229,7 +229,35 @@ const zhCN = {
     zenFullscreenHint: '进入凝神时窗口转全屏，退出时还原',
     zenRetreatBar: '轻退信息栏',
     zenRetreatBarHint: '凝神中按 Esc 掀帘看一眼，再按收起',
-    zenDone: '完成'
+    zenDone: '完成',
+    /* ── 写作辅助包（批次三 §3.6）── */
+    writingAids: {
+      title: '写作辅助',
+      tabProps: '属性',
+      tabSnippets: '片段',
+      labelTitle: '标题',
+      labelAuthor: '作者',
+      labelDesc: '描述',
+      labelTags: '标签',
+      labelDate: '日期',
+      placeTitle: '文档标题',
+      placeAuthor: '作者名',
+      placeDesc: '一句话简介',
+      placeTags: '标签1, 标签2',
+      tagsHint: '逗号或空格分隔多个标签',
+      apply: '应用',
+      close: '关闭',
+      noDoc: '请先打开一个文档',
+      snipDoc: '文档模板',
+      snipCode: '代码块',
+      snipTable: '表格',
+      snipCallout: '提示框',
+      snipTask: '任务列表',
+      snipFoot: '脚注',
+      snipMermaid: '流程图',
+      snipMath: '公式块',
+      toastApplied: '文档属性已更新'
+    }
   },
 
   /* ── 帮助面板：快捷键 + 使用指南 ── */

@@ -33,6 +33,7 @@ const emit = defineEmits<{
   (e: 'preferences'): void
   (e: 'zen-settings'): void
   (e: 'link-check'): void
+  (e: 'writing-aids'): void
   (e: 'save'): void
   (e: 'save-as'): void
   (e: 'help'): void
@@ -73,6 +74,7 @@ const moreItems = (): MenuEntry[] => [
   { action: 'preferences', label: L.preferences, icon: 'sliders' },
   { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
   { action: 'link-check', label: L.linkCheck, icon: 'link' },
+  { action: 'writing-aids', label: L.writingAids.title, icon: 'writing' },
   { separator: true },
   { action: 'save', label: L.save, icon: 'file', hint: 'Ctrl S' },
   { action: 'save-as', label: L.saveAs, icon: 'file' },
@@ -93,6 +95,9 @@ function onMoreSelect(action: string): void {
       break
     case 'link-check':
       emit('link-check')
+      break
+    case 'writing-aids':
+      emit('writing-aids')
       break
     case 'save':
       emit('save')

@@ -532,6 +532,23 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 * 挂载即扫描（加载态 → 汇总「扫描 N 篇、发现 M 处」→ 列表）；可「重新扫描」。每行按 kind 三色徽标（Wiki / 链接 / 图片）+ 源文件基名 + 行号 + 目标（等宽），点击经 `App.openPath` 在编辑器中定位该文档；零断链显示「未发现断链 ✓」。
 
+### 5.13 写作辅助（2026-08-30，Phase 2 批次三 §3.6）
+
+**frontmatter 解析 / 回写（`src/editor/frontmatter.ts`，复用已依赖的 `gray-matter`，零新增依赖）**
+
+* `parseFrontmatter(text)`：用 `gray-matter` 分离 YAML 元数据与正文，正文 `content` 一字不改返回；同时用正则判定原文档是否以合法 `---` 开头（`hasFrontmatter`）。
+* `serializeFrontmatter(data, content)`：只对顶部 `---` 块做增删改，正文原样接回。未知字段（用户手写的其他 key）经 `data` 透传、由 gray-matter 内置 js-yaml 原样保留；若全部字段清空则直接去掉 frontmatter 块返回纯正文。严守 Markdown 往返保真红线。
+
+**插入路径（`EditorHost.insertText` + `SourceEditor.insertAtCursor`）**
+
+* 所见即所得：用 ProseMirror 视图 `tr.insertText(text, from, to)` 在光标处插入（替换选区），触发 `markdownUpdated` → 自动落盘。
+* 源码：CodeMirror `dispatch` 在 `selection.head` 处插入并移动光标。两种模式都不切换、不影响保真层之外状态。
+
+**面板（`src/components/WritingAidsPanel.vue`，玻璃浮层，入口：标题栏「更多 ⌄ · 写作辅助」）**
+
+* 两个标签页：**属性** —— frontmatter 表单（标题 / 作者 / 描述 / 标签[逗号或空格分隔] / 日期），挂载时从 `App` 传入的当前文档全文解析填充；「应用」经 `App.onApplyFrontmatter` → `host.loadMarkdownExternal(newText)` 改写并自动保存，正文逐字保留。**片段** —— 内置 8 类常用模板（文档模板 / 代码块 / 表格 / 提示框 / 任务列表 / 脚注 / 流程图 / 公式块），点击经 `App.onInsertSnippet` → `host.insertText` 在光标处插入。
+* 面板打开时快照一次当前文档全文（`host.getMarkdown()`），`canEdit` 由是否打开文档决定；无文档时仅提示。i18n 文案集中在 `ui.writingAids`，中英文 key 一一对应。
+
 ***
 
 ## 6. 技术写作场景专项设计
