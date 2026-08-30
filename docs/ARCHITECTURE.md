@@ -443,7 +443,8 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * **元信息**：`readExportMeta()` 取 `fidelity` 的 Markdown，用 `parseFrontmatter` 读 title / author / date（YAML 的 Date 统一转 `YYYY-MM-DD`），喂给封面页与 LaTeX 的 `\title` / `\author` / `\date`。
 * **UI**：导出菜单扩展 `MenuEntry`（HTML / PDF / LaTeX + 分隔线 + 五个开关：自动目录 / 封面页 / 图片内联 / 仅选中范围 / 导出前预览 + 多文件合订入口）。`MenuEntry` 暂无 checkbox 字段，故用 `☑ / ☐` 符号表达开关态，避免改动 `TitleMenu` 的类型契约。
 * **多文件合订**（2026-08-30）：`src/components/CompilePanel.vue` 按文件树顺序列出 vault 内全部 `.md`，支持勾选 + 上下移排序 + 合订标题 + 每篇另起页（`break-before:page`）；输出 HTML / PDF / LaTeX 任选。逐文件 `readFile → markdownToHtml（复用 Milkdown parser/schema，不建第二实例）→ inlineImages（按各自文档目录解析相对图片，因为合订后无法用单一基准路径）→ 拼接`，再走与单文档完全相同的 `buildExportContent(override, forceInline)` 管道；`forceInline` 强制内联图片与 Mermaid 图表，保证跨目录自包含。LaTeX 合订则直接拼接各文件 Markdown 原文。
-* **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox)` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘复用同一份已构建内容，不重复渲染。
+* **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox)` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘复用同一份已构建内容，不重复渲染。确认按钮明示「确认并选择位置」+ hint「确认后将弹出系统对话框，选择保存位置」，并有空内容兜底态。
+* **导出细节二次打磨（2026-08-30）**：针对「开了预览却无预览/无保存框/不知成败」——`EditorHost.getHTML()` 修复：源码模式下所见即所得 DOM 滞后/为空会返回空串，使 `buildExportContent` 因 `!body` 静默短路 → 不预览、不弹框、不提示；改为**源码模式直接走 `markdownToHtml()` 解析管线**（与合订/选区导出同源）。`App.vue` 的 `doExport`/`onCompile`/`confirmExport`/`writeExport` 全链路包 try/catch，失败 `showToast(...,'err',5000)` 显具体错误，成功 toast 显保存路径（4500ms），取消/失败回传明确状态，杜绝静默失败。
 
 ### 5.7 主题系统
 

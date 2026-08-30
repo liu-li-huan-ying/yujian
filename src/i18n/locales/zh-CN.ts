@@ -148,7 +148,9 @@ const zhCN = {
     exportMenuCompile: '多文件合订…',
     exportPreviewTitle: '导出预览',
     exportPreviewCancel: '取消',
-    exportPreviewConfirm: '确认导出',
+    exportPreviewConfirm: '确认并选择位置',
+    exportPreviewHint: '确认后将弹出系统对话框，选择保存位置',
+    exportPreviewEmpty: '当前内容为空，无可预览内容',
     /* ── 多文件合订面板 ── */
     compileTitle: '多文件合订',
     compileHint: '选择要合订的笔记（按文件树顺序）',
