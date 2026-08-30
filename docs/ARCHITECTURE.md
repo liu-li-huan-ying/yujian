@@ -496,6 +496,30 @@ markdown-editor/
 去掉可能残留的 `$$…$$` / `\[…\]` 包裹 —— 带着 `$$` 喂 MathJax 不会报错，但会多渲染两个
 `$$` 字形（实测 SVG 宽度 27.6ex → 32.1ex），看着像公式坏了。
 
+**`\require` 红色泄漏根治（2026-08-31）**：即便 `errorHtml()` 已改为不回显源码，
+截图证实 `\require{amscd}` 仍以红色文本出现在 MathJax 的 SVG 输出中——
+这是 **MathJax 自身**未能静默消费该预加载指令导致的（AllPackages 虽已包含 amscd 扩展，
+但 `\require` 在某些上下文中仍被当作未知命令渲染为 merror 节点）。
+根因修复：新增 `stripRequireDirectives()` 在送入 MathJax 前正则移除所有 `\require{…}` 行。
+由于 AllPackages 已全量加载，该指令在功能上完全冗余；剥离后既消除视觉污染又不影响渲染能力。
+
+**`\eqref` ??? 延迟重试安全网（2026-08-31）**：此前已有 `onLabelsChanged` 广播机制
+（含 `\label` 的公式渲染完成后通知引用方重渲染），但存在竞态窗口——
+若 MathJax 首次加载是缓存的（promise 立即 resolve），block 与 inline 的 convert 可能在
+同一微任务内完成，inline 订阅 listener 时 block 已触发完毕 → `???` 卡住。
+三重保险：
+1. `onLabelsChanged` 回调（label 注册后立即触发，原有机制）；
+2. 首次渲染结果含 `???` 时延迟 120ms 重试（覆盖「订阅前已触发」窗口）；
+3. 二次仍失败时以 3 倍递增延迟再试（最多 2 次重试）。
+行内 math_inline nodeView 与块级 renderMathBlockPreview 均已加入此安全网。
+
+**CodeMirror 按钮 i18n 补全（2026-08-31）**：代码块预览区右上角的 Edit / Hide 按钮在中文模式下
+仍显示英文。根因：Crepe `code-mirror/index.ts:70-72` 硬编码 fallback
+`(previewOnlyMode ? 'Edit' : 'Hide')`，我们的 CodeMirror featureConfig 漏传了
+`previewToggleText` 函数。修复：在 `MilkdownEditor.vue` 的配置中补传
+`previewToggleText: (previewOnly) => previewOnly ? L.codeMirror.editLabel : L.codeMirror.hideLabel`，
+并在中英文 locale 各增 `editLabel` / `hideLabel` 条目。
+
 ### 5.3.3 脚注双向跳转（2026-08-30）
 
 Milkdown 的 GFM 脚注渲染为：正文引用 `<sup data-type="footnote_reference" data-label="N">`

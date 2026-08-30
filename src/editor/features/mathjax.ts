@@ -149,20 +149,52 @@ class MathInlineView {
     void renderMathToSvg(value, false).then((svg) => {
       if (mine !== this.token) return
       this.dom.innerHTML = svg
+      // 交叉引用安全网：若首次渲染即含 ???（label 尚未注册），延迟重试
+      if (hasRef(value) && svg.includes('???')) {
+        setTimeout(() => {
+          if (this.token !== mine) return
+          void renderMathToSvg(value, false).then((svg2) => {
+            if (mine === this.token) this.dom.innerHTML = svg2
+          })
+        }, 120)
+      }
     })
 
-    // 交叉引用：\eqref 可能先于 \label 渲染出来（顺序不定），订阅标签表变化后重渲染
+    // 交叉引用：\eqref 可能先于 \label 渲染出来（顺序不定），订阅标签表变化后重渲染。
+    // 三重保险：
+    //   ① onLabelsChanged 回调（label 注册后立即触发）
+    //   ② 首次渲染结果含 ??? 时延迟重试（覆盖「订阅前已触发」的竞态窗口）
+    //   ③ 二次仍失败时更长延迟再试一次
     this.offLabels?.()
     this.offLabels = null
     if (hasRef(value)) {
+      const retryWithBackoff = (delay: number): void => {
+        setTimeout(() => {
+          if (this.token !== mine) return
+          void renderMathToSvg(value, false).then((svg) => {
+            if (mine === this.token) {
+              this.dom.innerHTML = svg
+              // 如果仍然包含 ???，用更长的延迟再试一次
+              if (svg.includes('???') && delay < 800) {
+                retryWithBackoff(delay * 3)
+              }
+            }
+          })
+        }, delay)
+      }
+      // 保险①：标签变化即时重渲染（含递归重试：若结果仍含 ??? 则自动加延迟再试）
+      const mineRef = mine
       this.offLabels = onLabelsChanged(() => {
-        if (this.token !== mine) {
+        if (this.token !== mineRef) {
           this.offLabels?.()
           this.offLabels = null
           return
         }
         void renderMathToSvg(value, false).then((svg) => {
-          if (mine === this.token) this.dom.innerHTML = svg
+          if (mineRef === this.token) {
+            this.dom.innerHTML = svg
+            if (svg.includes('???')) retryWithBackoff(120)
+          }
         })
       })
     }
@@ -299,6 +331,18 @@ async function renderLatexDoc(content: string): Promise<string> {
  * 供编辑器预览（renderMathBlockPreview）与导出（renderLatexBlocksInExport）共用。
  */
 /**
+ * 剥离 LaTeX 源码中的 \require{…} 预加载指令。
+ *
+ * 为什么需要：我们已通过 AllPackages 加载了全部 MathJax 扩展（含 amscd / mhchem 等），
+ * \require 在此环境下是冗余的；且 MathJax 并不总能「静默消费」该指令——
+ * 实测发现 \require{amscd} 会以红色错误文本泄漏进 SVG 输出（用户反馈"红色的 \require"）。
+ * 故在送入 MathJax 前直接移除，既消除视觉污染又不影响渲染能力。
+ */
+function stripRequireDirectives(src: string): string {
+  return src.replace(/\\require\{[^}]*\}/g, '').trim()
+}
+
+/**
  * 去掉可能残留的 `$$…$$` / `\[…\]` 定界符。
  * remark-math 通常会先剥离，但粘贴等来源不保证；带着 `$$` 喂给 MathJax 不会报错，
  * 却会多渲染出两个 `$$` 字形（实测 SVG 宽度从 27.6ex 涨到 32.1ex），看着像公式坏了。
@@ -315,8 +359,10 @@ function stripMathDelims(src: string): string {
 export async function renderLatexContent(content: string): Promise<string> {
   if (!content.trim()) return ''
   try {
-    if (isFullLatexDoc(content)) return await renderLatexDoc(content)
-    return await renderMathToSvg(stripMathDelims(content), true)
+    // 剥离 \require{…}：AllPackages 已全量加载，该指令冗余且会泄漏为红色错误文本
+    const cleaned = stripRequireDirectives(content)
+    if (isFullLatexDoc(cleaned)) return await renderLatexDoc(cleaned)
+    return await renderMathToSvg(stripMathDelims(cleaned), true)
   } catch (err: unknown) {
     return errorHtml(err, content)
   }
@@ -347,12 +393,29 @@ export function renderMathBlockPreview(
 
   const run = (): void => {
     void renderLatexContent(content).then((html) => {
-      if (latexBlockToken.get(applyPreview) === mine) applyPreview(html)
+      if (latexBlockToken.get(applyPreview) !== mine) return
+      applyPreview(html)
+      // 交叉引用安全网：块级结果含 ??? 时延迟重试（label 可能尚未注册）
+      if (hasRef(content) && html?.includes('???')) {
+        scheduleRefRetry()
+      }
     })
   }
   run()
 
-  // 块里的 \eqref 同样可能早于别处的 \label 渲染，订阅后重跑
+  // 块里的 \eqref 同样可能早于别处的 \label 渲染，订阅后重跑。
+  // 额外安全网：若结果含 ???，延迟再试（覆盖竞态窗口）。
+  let refRetryCount = 0
+  const scheduleRefRetry = (): void => {
+    if (refRetryCount >= 2) return // 最多重试 2 次
+    const delay = [150, 400][refRetryCount] ?? 400
+    refRetryCount++
+    setTimeout(() => {
+      if (latexBlockToken.get(applyPreview) !== mine) return
+      run()
+    }, delay)
+  }
+
   if (hasRef(content)) {
     const off = onLabelsChanged(() => {
       if (latexBlockToken.get(applyPreview) !== mine) {

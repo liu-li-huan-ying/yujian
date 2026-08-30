@@ -246,7 +246,9 @@ async function init(defaultValue?: string): Promise<void> {
         previewLoading: L.codeMirror.previewLoading,
         searchPlaceholder: L.codeMirror.searchPlaceholder,
         noResultText: L.codeMirror.noResultText,
-        copyText: L.codeMirror.copyText
+        copyText: L.codeMirror.copyText,
+        previewToggleText: (previewOnly: boolean) =>
+          previewOnly ? L.codeMirror.editLabel : L.codeMirror.hideLabel
       },
       [Crepe.Feature.ImageBlock]: {
         onUpload: (file: File) => uploadToAssets(file),
