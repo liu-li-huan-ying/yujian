@@ -33,10 +33,6 @@ const groups = computed(() => [
     ]
   },
   {
-    title: H.scEdit,
-    items: [{ keys: ['Ctrl', 'F'], desc: H.scFind }]
-  },
-  {
     title: H.scView,
     items: [
       { keys: ['Ctrl', '\\'], desc: H.scSidebar },

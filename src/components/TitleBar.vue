@@ -40,7 +40,6 @@ const emit = defineEmits<{
   (e: 'about'): void
   (e: 'toggle-sidebar'): void
   (e: 'toggle-outline'): void
-  (e: 'find'): void
   (e: 'toggle-snapshot'): void
   (e: 'toggle-focus'): void
 }>()
@@ -178,10 +177,6 @@ onMounted(() => {
       @click="emit('toggle-outline')"
     >
       <Icon name="panel-right" />
-    </button>
-
-    <button class="tbtn" type="button" :title="L.find" @click="emit('find')">
-      <Icon name="search" />
     </button>
 
     <!-- 批次二：快照 / 凝神（融合打字机+禅的沉浸模式） -->

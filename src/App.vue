@@ -9,7 +9,6 @@ import PreferencesSettings from './components/PreferencesSettings.vue'
 import Outline from './components/Outline.vue'
 import HelpPanel from './components/HelpPanel.vue'
 import TabBar from './components/TabBar.vue'
-import FindPanel from './components/FindPanel.vue'
 import SnapshotPanel from './components/SnapshotPanel.vue'
 import LinkCheckPanel from './components/LinkCheckPanel.vue'
 import WritingAidsPanel from './components/WritingAidsPanel.vue'
@@ -92,14 +91,10 @@ async function syncEditorToActive(): Promise<void> {
 async function openPath(path: string): Promise<void> {
   if (path === tabs.activePath) return
   if (host.value?.dirty) await host.value.save()
-  // 切文档前先清掉上一个文档的查找高亮，避免装饰错位
-  host.value?.clearFind()
   tabs.open(path)
   lastSavedAt.value = Date.now()
   void window.api.patchSession({ activePath: path, openTabs: tabs.paths })
   await syncEditorToActive()
-  // 新文档载入后若查找面板还开着，用当前查询重跑
-  if (findOpen.value && findQuery.value) runFind()
 }
 
 // 编辑器就绪后补灌：会话恢复时往往 Crepe 还没初始化完
@@ -208,65 +203,6 @@ function closeToRight(path: string): void {
   void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
 }
 
-/* ── 文件内查找 / 替换（批次一）── */
-
-const findOpen = ref(false)
-const findQuery = ref('')
-const findReplace = ref('')
-const findCase = ref(false)
-const findWord = ref(false)
-const findShowReplace = ref(false)
-const findCurrent = computed(() => host.value?.findCurrent ?? 0)
-const findTotal = computed(() => host.value?.findTotal ?? 0)
-
-function runFind(): void {
-  if (!findOpen.value) return
-  host.value?.find(findQuery.value, { caseSensitive: findCase.value, wholeWord: findWord.value })
-}
-
-function openFind(): void {
-  findOpen.value = true
-  if (findQuery.value) runFind()
-}
-
-function onFindQuery(v: string): void {
-  findQuery.value = v
-  runFind()
-}
-
-function onFindCase(v: boolean): void {
-  findCase.value = v
-  runFind()
-}
-
-function onFindWord(v: boolean): void {
-  findWord.value = v
-  runFind()
-}
-
-function findNext(): void {
-  host.value?.findNext()
-}
-
-function findPrev(): void {
-  host.value?.findPrev()
-}
-
-function findReplaceOne(): void {
-  host.value?.replaceOne(findReplace.value)
-}
-
-function findReplaceAll(): void {
-  host.value?.replaceAll(findReplace.value)
-}
-
-function closeFind(): void {
-  host.value?.clearFind()
-  findOpen.value = false
-  findQuery.value = ''
-  findReplace.value = ''
-}
-
 /* ── 外部改动同步 ── */
 
 let treeTimer: ReturnType<typeof setTimeout> | null = null
@@ -315,16 +251,13 @@ function onKeydown(e: KeyboardEvent): void {
     onHelp('shortcuts')
     return
   }
-  // Esc 状态机（凝神 2.0）：设置面板开着先关面板；事件源自查找面板时交还给
-  // FindPanel 自己的关闭逻辑（其 emit 已在本处理前同步置 findOpen=false，须按来源甄别）；
-  // 否则凝神中 Esc = 掀帘/收帘（轻退栏可在设置中关闭）。
+  // Esc 状态机（凝神 2.0）：设置面板开着先关面板；否则凝神中 Esc = 掀帘/收帘（轻退栏可在设置中关闭）。
   if (e.key === 'Escape') {
     if (zenSettingsOpen.value) {
       zenSettingsOpen.value = false
       return
     }
-    if ((e.target as HTMLElement | null)?.closest?.('.find')) return
-    if (focusMode.value && !findOpen.value) {
+    if (focusMode.value) {
       if (zenPrefs.value.retreatBar) {
         retreatOpen.value = !retreatOpen.value
         e.preventDefault()
@@ -340,9 +273,6 @@ function onKeydown(e: KeyboardEvent): void {
   } else if (k === 'o') {
     e.preventDefault()
     void openFile()
-  } else if (k === 'f') {
-    e.preventDefault()
-    openFind()
   } else if (k === '\\') {
     e.preventDefault()
     // Ctrl+\ 切左侧笔记库；Ctrl+Shift+\ 切右侧大纲
@@ -709,7 +639,6 @@ onBeforeUnmount(() => {
       :focus-active="focusMode"
       @toggle-sidebar="onToggleSidebar"
       @toggle-outline="onToggleOutline"
-      @find="openFind"
       @toggle-snapshot="onToggleSnapshot"
       @toggle-focus="onToggleFocus"
     />
@@ -749,27 +678,6 @@ onBeforeUnmount(() => {
           :requested-mode="requestedMode"
           :lang-key="langVer"
           @saved="lastSavedAt = Date.now()"
-        />
-
-        <FindPanel
-          v-if="findOpen"
-          :query="findQuery"
-          :replace="findReplace"
-          :case-sensitive="findCase"
-          :whole-word="findWord"
-          :show-replace="findShowReplace"
-          :current="findCurrent"
-          :total="findTotal"
-          @update:query="onFindQuery"
-          @update:replace="findReplace = $event"
-          @update:case-sensitive="onFindCase"
-          @update:whole-word="onFindWord"
-          @update:show-replace="findShowReplace = $event"
-          @next="findNext"
-          @prev="findPrev"
-          @replace-one="findReplaceOne"
-          @replace-all="findReplaceAll"
-          @close="closeFind"
         />
 
         <SnapshotPanel
