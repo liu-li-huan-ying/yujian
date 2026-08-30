@@ -445,6 +445,22 @@
   background: transparent;
 }
 
+/* ── 所见即所得模式搜索命中常驻高亮（ProseMirror 装饰，与源码模式对称）──
+   普通命中：青瓷强调色半透底；当前结果命中：实强调色 + 反相文字。
+   纯视图装饰，不进文档、对 Markdown 往返保真零影响。 */
+.milkdown .pm-find {
+  background: var(--hue-active);
+  border-radius: 2px;
+}
+.milkdown .pm-find--current {
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
+  border-radius: 2px;
+}
+.milkdown .pm-find--current ::selection {
+  background: transparent;
+}
+
 /* ── Mermaid 图表预览区 ───────────────────── */
 .milkdown .preview-panel {
   border-top: 1px solid var(--hue-border-subtle);

@@ -11,6 +11,7 @@ import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
 import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
+import { createFindDecoPlugin, findKey, type WysiwygFindState } from './find-wysiwyg'
 
 const props = withDefaults(
   defineProps<{
@@ -195,6 +196,8 @@ async function init(defaultValue?: string): Promise<void> {
 
   // 凝神模式装饰插件：开关由 EditorHost 经模块级状态控制，空事务触发重算，零侵入。
   crepe.editor.use($prose(() => createZenPlugin()))
+  // 所见即所得搜索命中高亮插件：与源码模式对称，由统一搜索 query/选项驱动。
+  crepe.editor.use($prose(() => createFindDecoPlugin()))
 
   await crepe.create()
   crepe.setReadonly(props.readonly)
@@ -244,7 +247,19 @@ function getEditorView(): EditorView | null {
   return crepe.editor.action((ctx) => ctx.get(editorViewCtx)) as unknown as EditorView
 }
 
-defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, getEditorView })
+/**
+ * 驱动所见即所得模式搜索命中高亮（对称于源码模式）：传 WysiwygFindState 即按统一
+ * query/选项高亮全部命中并映射 currentLine；传 null 清空。经 meta 事务必定触发
+ * plugin.apply → 重建装饰，稳定生效。视图未就绪时静默返回（文档加载后 docChanged
+ * 会按存储的 query 自行重算，不丢高亮）。
+ */
+function setFind(fs: WysiwygFindState | null): void {
+  const view = getEditorView()
+  if (!view) return
+  view.dispatch(view.state.tr.setMeta(findKey, fs))
+}
+
+defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, getEditorView, setFind })
 </script>
 
 <template>

@@ -396,9 +396,10 @@ function revealLine(line: number): void {
 }
 
 /**
- * 驱动源码模式搜索高亮（本文档范围，复用统一搜索的 query/选项）。
- * 由 Sidebar 在「本文档」范围有查询时调用；currentLine 标记当前结果行强化显示；
- * 传空 query 即清空。经 SourceEditor 的 CodeMirror Decoration 常驻高亮全部命中。
+ * 驱动两端搜索命中高亮（复用统一搜索的 query/选项，与范围无关）：
+ * - 源码模式：经 SourceEditor 的 CodeMirror Decoration 常驻高亮全部命中；
+ * - 所见即所得：经 MilkdownEditor 的 ProseMirror Decoration 对称高亮全部命中。
+ * currentLine 标记当前结果行强化显示；传空 query 即两端同时清空。
  */
 function setFindHighlight(
   query?: string,
@@ -406,6 +407,16 @@ function setFindHighlight(
   currentLine?: number
 ): void {
   source.value?.setFind(query, opts, currentLine)
+  if (query && query.trim()) {
+    milkdown.value?.setFind({
+      query: query.trim(),
+      caseSensitive: opts?.caseSensitive ?? false,
+      wholeWord: opts?.wholeWord ?? false,
+      currentLine
+    })
+  } else {
+    milkdown.value?.setFind(null)
+  }
 }
 
 /**
