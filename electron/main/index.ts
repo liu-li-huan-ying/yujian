@@ -15,7 +15,8 @@ import {
   type SessionState,
   type SnapshotInfo,
   type VaultChange,
-  type WindowState
+  type WindowState,
+  type SearchOptions
 } from '../shared/ipc-channels'
 import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
 import { patchSession, readSession } from './session'
@@ -186,14 +187,14 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.VAULT_UNWATCH, () => stopWatching())
 
-  ipcMain.handle(IPC.VAULT_SEARCH, (_event, root: string, query: string) =>
-    searchVault(root, query)
+  ipcMain.handle(IPC.VAULT_SEARCH, (_event, root: string, query: string, opts?: SearchOptions) =>
+    searchVault(root, query, opts)
   )
 
   ipcMain.handle(
     IPC.VAULT_REPLACE,
-    (_event, root: string, query: string, replacement: string, caseSensitive: boolean) =>
-      replaceInVault(root, query, replacement, caseSensitive)
+    (_event, root: string, query: string, replacement: string, opts?: SearchOptions) =>
+      replaceInVault(root, query, replacement, opts)
   )
 
   ipcMain.handle(IPC.VAULT_CHECK_LINKS, async (_event, root: string) => checkLinks(root))

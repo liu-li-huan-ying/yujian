@@ -6,6 +6,8 @@ const props = defineProps<{
   results: SearchFileResult[]
   query: string
   activePath: string | null
+  /** 是否区分大小写（高亮规则与搜索保持一致） */
+  caseSensitive?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -26,7 +28,8 @@ function highlight(text: string): string {
   const safe = escapeHtml(text)
   const q = escapeHtml(props.query).trim()
   if (!q) return safe
-  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  const flags = props.caseSensitive ? 'g' : 'gi'
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
   return safe.replace(re, (m) => `<mark>${m}</mark>`)
 }
 
