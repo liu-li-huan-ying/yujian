@@ -50,6 +50,15 @@
   --bg-hover: rgba(255, 255, 255, 0.05);
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
+
+  /* ── 行内标记色（兜底值，各皮肤会覆盖）─────────
+     为什么单独设令牌而不是写死：高亮 / 键帽必须随皮肤走，
+     写死一个金色在琥珀皮肤上会糊成一片、在天青皮肤上又显脏。
+     RGB 分量存储，便于 rgba(...) 调透明度。
+       --hue-mark：==高亮== 的荧光笔迹色
+       --hue-key ：<kbd> 键帽的玉料色（取皮肤同源色，像同块玉雕出来的键） */
+  --hue-mark: 226, 190, 120;
+  --hue-key: 150, 205, 194;
 }
 
 /* ============================================================
@@ -61,6 +70,8 @@
   --hue-bar: #1f2527;
   --hue-tint-1: 126, 196, 182;
   --hue-tint-2: 95, 168, 160;
+  --hue-mark: 226, 190, 120;
+  --hue-key: 150, 205, 194;
   --hue-accent: #5fa8a0;
   --hue-editor: #1c1e1f;
   --hue-code: rgba(255, 255, 255, 0.035);
@@ -79,6 +90,8 @@
   --hue-bar: #f3f5f3;
   --hue-tint-1: 184, 214, 206;
   --hue-tint-2: 196, 222, 216;
+  --hue-mark: 200, 158, 52;
+  --hue-key: 116, 168, 158;
   --hue-accent: #248077;
   --hue-editor: #fcfcfb;
   --hue-code: #f3f5f3;
@@ -104,6 +117,8 @@
   --hue-bar: #1d242a;
   --hue-tint-1: 140, 190, 214;
   --hue-tint-2: 94, 157, 190;
+  --hue-mark: 228, 186, 118;
+  --hue-key: 152, 198, 224;
   --hue-accent: #5e9dbe;
   --hue-editor: #1b2125;
   --hue-code: rgba(255, 255, 255, 0.035);
@@ -122,6 +137,8 @@
   --hue-bar: #f2f5f7;
   --hue-tint-1: 168, 205, 222;
   --hue-tint-2: 190, 216, 228;
+  --hue-mark: 195, 148, 44;
+  --hue-key: 96, 148, 180;
   --hue-accent: #2b7ba8;
   --hue-editor: #fcfdfd;
   --hue-code: #f1f4f6;
@@ -147,6 +164,8 @@
   --hue-bar: #1f2428;
   --hue-tint-1: 180, 196, 206;
   --hue-tint-2: 147, 167, 180;
+  --hue-mark: 214, 198, 158;
+  --hue-key: 190, 204, 214;
   --hue-accent: #93a7b4;
   --hue-editor: #1c2024;
   --hue-code: rgba(255, 255, 255, 0.035);
@@ -165,6 +184,8 @@
   --hue-bar: #f4f6f7;
   --hue-tint-1: 200, 212, 220;
   --hue-tint-2: 208, 219, 226;
+  --hue-mark: 168, 142, 76;
+  --hue-key: 140, 158, 172;
   --hue-accent: #5a7180;
   --hue-editor: #fdfdfe;
   --hue-code: #eef1f3;
@@ -190,6 +211,8 @@
   --hue-bar: #21202b;
   --hue-tint-1: 178, 168, 212;
   --hue-tint-2: 139, 124, 184;
+  --hue-mark: 234, 186, 128;
+  --hue-key: 190, 180, 222;
   --hue-accent: #8b7cb8;
   --hue-editor: #1f1e28;
   --hue-code: rgba(255, 255, 255, 0.035);
@@ -208,6 +231,8 @@
   --hue-bar: #f4f2f7;
   --hue-tint-1: 206, 198, 224;
   --hue-tint-2: 216, 209, 230;
+  --hue-mark: 190, 142, 66;
+  --hue-key: 152, 140, 192;
   --hue-accent: #6a5a9e;
   --hue-editor: #fdfcfe;
   --hue-code: #f1eef5;
@@ -233,6 +258,8 @@
   --hue-bar: #251f19;
   --hue-tint-1: 221, 186, 120;
   --hue-tint-2: 199, 154, 78;
+  --hue-mark: 132, 202, 180;
+  --hue-key: 232, 198, 140;
   --hue-accent: #c79a4e;
   --hue-editor: #221e18;
   --hue-code: rgba(255, 255, 255, 0.035);
@@ -251,6 +278,8 @@
   --hue-bar: #f7f4ed;
   --hue-tint-1: 224, 202, 158;
   --hue-tint-2: 230, 210, 172;
+  --hue-mark: 56, 138, 118;
+  --hue-key: 196, 160, 96;
   --hue-accent: #9a6f24;
   --hue-editor: #fefdfb;
   --hue-code: #f3efe7;

@@ -503,15 +503,35 @@ markdown-editor/
 根因修复：新增 `stripRequireDirectives()` 在送入 MathJax 前正则移除所有 `\require{…}` 行。
 由于 AllPackages 已全量加载，该指令在功能上完全冗余；剥离后既消除视觉污染又不影响渲染能力。
 
-**`\eqref` ??? 延迟重试安全网（2026-08-31）**：此前已有 `onLabelsChanged` 广播机制
-（含 `\label` 的公式渲染完成后通知引用方重渲染），但存在竞态窗口——
-若 MathJax 首次加载是缓存的（promise 立即 resolve），block 与 inline 的 convert 可能在
-同一微任务内完成，inline 订阅 listener 时 block 已触发完毕 → `???` 卡住。
-三重保险：
-1. `onLabelsChanged` 回调（label 注册后立即触发，原有机制）；
-2. 首次渲染结果含 `???` 时延迟 120ms 重试（覆盖「订阅前已触发」窗口）；
-3. 二次仍失败时以 3 倍递增延迟再试（最多 2 次重试）。
-行内 math_inline nodeView 与块级 renderMathBlockPreview 均已加入此安全网。
+**`\eqref` 显示 `???` 的根治（2026-08-31，推翻此前两版结论）**：
+
+此前两版修复（延迟重试、`onLabelsChanged` 广播）**全都无效**，因为踩了三个连环坑，
+且前两个都是"看起来在修、其实没生效"：
+
+| # | 坑 | 说明 | 根治 |
+|---|---|---|---|
+| 1 | **压根没编号** | MathJax v3 的 `TagsFactory.OPTIONS.defaultTags = 'none'`（见 `mathjax-full/js/input/tex/Tags.js`）。只有显式 `\tag{…}` 的公式才有号，`\begin{equation}\label{eq:x}` **不自动编号**，`\label` 登记的是一个 tag 为空的 `Label` → `\eqref` 拿到空值 → `(???)`。 | 构造 TeX 时传 **`tags: 'ams'`**（v2 的 `equationNumbers.autoNumber:'AMS'` 的 v3 等价写法，与 StackOverflow / Quarto / VSCode-MPE 的通行解法一致）。`ams` 语义：`equation`/`align` 编号，`equation*`/`align*` 与行内不编号。 |
+| 2 | **`???` 检测从未命中** | SVG 输出里没有字面文本，字符编成字形路径，`?` 写作 `<path data-c="3F">`。此前所有 `svg.includes('???')` 判断**恒为 false**，重试逻辑一次都没触发过。 | 改为解码 `data-c` 判断，且只在含 `MathJax_ref` 的节点上判定（避免误伤公式里正常的问号）。 |
+| 3 | **编号漂移** | `tags.allCounter` 跨 `convert()` 累加，同一公式每重渲染一次编号 +1，边打字边看编号往上涨。 | 自维护 `label → 固定编号` 映射，渲染前 `primeCounter(n)` 把计数器上膛到该编号。 |
+
+配套三处健壮性处理：
+- `ignoreDuplicateLabels: true` —— 否则同一公式重渲染时 `\label` 会抛 `Label multiply defined`；
+- 引用排队入队后**立即复查一次标签表**：微任务时序下「入队」完全可能发生在
+  「标签注册 → 刷新队列」之后，此后不再有事件唤醒，任务将永久挂起（实测必现）；
+- **1200ms 超时兜底 + 最多 3 轮**：引用了根本不存在的 label 时永远不会有注册事件，
+  宁可显示 `(???)` 提示用户"引用没解析出来"，也不要让节点一直停在占位源码 `$…$` 上装死。
+
+**裸 `$$…\label…$$` 自动套编号环境（2026-08-31）**：AMS 语义下 `$$…$$` 本身不编号，
+写了 `\label` 也拿不到号。Markdown 用户写 `$$E=mc^2\label{eq:e}$$` 时心里想的
+几乎一定是"这公式要能被引"。故 `ensureNumberedEnv()` 仅在**「有 `\label`、无任何环境、
+无手动 `\tag`」**这三种条件同时满足时自动套壳：含 `\\` 或 `&` 时套 `align`（`equation`
+单行环境吃不下换行对齐），否则套 `equation`。已有环境的一律尊重原样。
+
+**行内标记与键帽的主题化（2026-08-31）**：新增两个色相层令牌，随皮肤走：
+- `--hue-mark`（`==高亮==` 的荧光笔迹）：冷色皮肤（青瓷/天青/月白/黛）配**金缮暖金**，
+  琥珀暖皮反过来配**石绿**，避免金色在暖调背景上糊成一片；
+- `--hue-key`（`<kbd>` 键帽的玉料色）：取各皮肤同源色，像从同一块玉上雕下来的键。
+均存 RGB 分量，便于 `rgba(var(--hue-mark), α)` 调透明度。
 
 **CodeMirror 按钮 i18n 补全（2026-08-31）**：代码块预览区右上角的 Edit / Hide 按钮在中文模式下
 仍显示英文。根因：Crepe `code-mirror/index.ts:70-72` 硬编码 fallback
@@ -614,10 +634,61 @@ Milkdown 默认没有 HTML 节点，`<kbd>Ctrl</kbd>` 被 micromark 解析成 `h
    （标签不显示、只显示渲染结果），并随皮肤 / 明暗自动着色；
 3. `toMarkdown` 把原始 HTML 原样写回，**保证 Markdown 往返保真**。
 
+> #### ⚠️ 标签对必须合并成「一个」节点（2026-08-31 血泪）
+>
+> **症状**：键帽渲染成「左边一块空白的 `<kbd></kbd>`，右边光秃秃跟着 `Ctrl` 两个字」
+> —— 用户痛斥的「文字与格式分离」。
+>
+> **根因**：CommonMark 的行内 HTML 是**逐个标签**解析的。
+> `按 <kbd>Ctrl</kbd> 复制` 被切成三个 mdast 节点：
+>
+> ```
+> html("<kbd>")  →  text("Ctrl")  →  html("</kbd>")
+> ```
+>
+> 旧实现不假思索地把开闭标签**各自**转成一个 `htmlInline` 原子节点，于是渲染出
+> `<kbd></kbd>`（空键帽，只剩描边底色）+ 裸文本 `Ctrl` + 一个无渲染效果的 `</kbd>`。
+>
+> **修复**：`mergeInlineHtml()` 在转换时向后扫描找到配对的闭合标签（同层、支持嵌套计数），
+> 把「开标签 + 中间内容 + 闭合标签」合并成**单个** `htmlInline` 节点。
+> 取值优先用 `position.start/end.offset` 从**原文切片**（而非拼接 children），
+> 嵌套标签、属性、内部行内标记都能原样保留。
+>
+> 空标签（`<br>` / `<img>` / `<hr>` …，见 `VOID_TAGS`）与自闭合形式（`<br/>`）没有配对闭合，
+> 单独成节点；未闭合的畸形标签退化为单节点，至少不丢内容。
+> 13 条用例覆盖：单键帽 / 带属性 / `<br>` / 同行多键帽 / 嵌套 / 内含行内标记 / 块级不接管 / 逐字往返。
+
 > 取舍：A / B 两路现在**都是真实节点**，编辑区与导出共用同一套语义标签
 > （`<mark>` / `<sup>` / `<sub>` / `<kbd>`），从根上杜绝「编辑区好看、导出变形」。
 > 代价是这些节点为**原子节点**（内容不可在位编辑，需整块重输），换取的是往返一字不改。
 > 旧的 `replaceInlineMarkupInHtml()` 导出后处理已随之删除（不再是死代码）。
+
+### 5.3.6 大排查与回归测试（2026-08-31）
+
+用户明确要求「Markdown 解析是基础功能立身之本，必须非常完美」「大排查并解决」。
+本轮在动手改之前先做了**根因实证**（用 Node 直接跑 MathJax / remark，而非凭印象），
+并落地了一套**自动化回归网**（`scripts/verify-markdown.mjs`，`npm run verify:md`），
+把本轮发现的每个坑都固化成用例，避免反复踩。
+
+**排查覆盖与结论：**
+
+| 项 | 排查点 | 结论 |
+|---|---|---|
+| 数学渲染 | MathJax 标签表是否跨 `convert()` 保留 | 标签对象共享且 `labels` 确实有值，但 v3 默认 `tags:'none'` 导致 `equation` 不编号、`\label` 是空壳 → `\eqref` 出 `???`。**已切 `tags:'ams'`** |
+| 数学 `???` 检测 | 旧 `svg.includes('???')` 为何永远不命中 | SVG 用路径字形编码 `?`（十六进制 `data-c="3F"`），**字面 `???` 根本不存在于输出**。检测改为解码字形码 |
+| HTML 内联 | `<kbd>Ctrl</kbd>` 为何「空键帽 + 裸文字」 | CommonMark 把开闭标签切成 3 个 mdast 节点；旧实现各自成节点 → 格式与文字分离。**已用 `mergeInlineHtml()` 合并成对标签** |
+| 主题化 | kbd / mark 是否随皮肤走 | 新增 `--hue-mark` / `--hue-key` 令牌（5 皮肤 × 明暗），冷皮配暖金、暖皮配石绿，避免糊成一片 |
+| CodeMirror i18n | 中文下 Edit/Hide 仍为英文 | Crepe 硬编码 fallback，已补 `previewToggleText` + 中英文 locale |
+| 渲染管线 | 是否执行 remark 转换器 | `remark.runSync(remark.parse(...))` 确实执行（旧记忆有误，已更正于项目记忆） |
+
+**回归用例（29 条，覆盖三大块）：**
+- 数学：`\label`/`\eqref` 跨顺序解析、AMS 编号稳定、裸 `$$…\label…$$` 兜底、`\require` 剥离、
+  未定义引用超时兜底、行内/块级两套节点视图。
+- HTML 内联：单/多键帽、带属性、`<br>`、嵌套、内含行内标记、块级不接管、逐字往返。
+- 混合：主题令牌存在性、跨皮肤明暗取值。
+
+> 设计决策：本脚本**直接 bundle 真实 TS 源码**用 esbuild 在 Node 跑（mathjax.ts / htmlInline.ts），
+> 不走浏览器沙箱、不靠猜；依赖用 `--alias` 桩替换。每次改动后跑 `npm run verify:md` 即可确认无回归。
 
 ### 5.4 图片与图床
 

@@ -23,7 +23,8 @@ import {
 import { remarkInlineMarks } from './features/inlineMarksSyntax'
 import {
   mathInlineNodeViewPlugin,
-  renderMathBlockPreview
+  renderMathBlockPreview,
+  resetMathNumbering
 } from './features/mathjax'
 import { codeBlockConfig } from '@milkdown/kit/component/code-block'
 import { i18n } from '../i18n'
@@ -346,6 +347,9 @@ onBeforeUnmount(() => {
 /** 供父组件在切回 WYSIWYG 时灌入源码文本（异步：导出需等 DOM 刷新后再读） */
 async function setMarkdown(markdown: string): Promise<void> {
   if (!crepe) return
+  // 灌入新内容前先清空公式编号与标签表，
+  // 否则上一篇文档的编号会接着往下排、同名 label 还会命中旧值。
+  resetMathNumbering()
   await crepe.editor.action(replaceAll(markdown))
   if (host.value) rewriteImages(host.value)
 }

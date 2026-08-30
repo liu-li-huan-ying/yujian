@@ -21,6 +21,12 @@ import type { Node as PMNode } from '@milkdown/kit/prose/model'
 interface MathJaxApi {
   /** 把 TeX 转成自包含 SVG 字符串；display=true 为行间公式 */
   convert: (tex: string, display: boolean) => string
+  /** 标签表查询：该 label 是否已被注册（用于判断 \eqref 能否解析） */
+  hasLabel: (label: string) => boolean
+  /** 设定下一个自动编号的起始值：传入 n 则下一个编号即为 n */
+  primeCounter: (nextNumber: number) => void
+  /** 清空标签表与编号计数器（切换文档时调用） */
+  resetNumbering: () => void
 }
 
 let mjPromise: Promise<MathJaxApi> | null = null
@@ -39,15 +45,37 @@ function loadMathJax(): Promise<MathJaxApi> {
 
     const adaptor = adaptorMod.liteAdaptor()
     handlerMod.RegisterHTMLHandler(adaptor)
-    const tex = new texMod.TeX({ packages: packagesMod.AllPackages })
+    // tags: 'ams' —— 关键配置，缺了它 \label / \eqref 形同虚设。
+    // MathJax v3 默认 tags:'none'（TagsFactory.OPTIONS 里 defaultTags='none'）：
+    // 只有显式 \tag{…} 的公式才会拿到编号，\begin{equation}\label{eq:x} 不会自动编号，
+    // 于是 \label 只登记了一个 tag 为空的 Label，\eqref 解析时拿到空 tag → 渲染成 (???)。
+    // 'ams' 才是 LaTeX/AMS 正统语义：equation/align 等编号，equation*/align* 不编号，行内不编号。
+    // ignoreDuplicateLabels —— 同一公式重渲染（编辑时每敲一下就重渲）时，
+    // \label 会命中「Label multiply defined」抛错，必须允许重复登记。
+    const tex = new texMod.TeX({
+      packages: packagesMod.AllPackages,
+      tags: 'ams',
+      ignoreDuplicateLabels: true
+    })
     // fontCache: 'none' → 每个 SVG 自包含（不依赖全局 <defs>），便于独立插入与导出
     const svg = new svgMod.SVG({ fontCache: 'none' })
     const doc = mathjaxMod.mathjax.document('', { InputJax: tex, OutputJax: svg })
+    const tags = (): { allLabels: Record<string, unknown>; allCounter: number; reset: (n?: number) => void } =>
+      (tex.parseOptions as unknown as { tags: never }).tags as never
 
     return {
       convert: (source: string, display: boolean) => {
         const node = doc.convert(source, { display })
         return adaptor.innerHTML(node)
+      },
+      hasLabel: (label: string) => Boolean(tags().allLabels[label]),
+      // startEquation() 会把 counter 重置为 allCounter，autoTag() 先自增再取号，
+      // 故把 allCounter 设成 n-1，下一个编号就是 n。
+      primeCounter: (nextNumber: number) => {
+        tags().allCounter = nextNumber - 1
+      },
+      resetNumbering: () => {
+        tags().reset(0)
       }
     }
   })()
@@ -75,28 +103,156 @@ function errorHtml(err: unknown, _source: string): string {
   return `<span class="math-error" title="${escapeHtml(message)}">⚠ 公式无法渲染</span>`
 }
 
-/* ── \label / \eqref 交叉引用 ────────────────────
-   MathJax 的标签表挂在共享 document 上、跨 convert 保留，所以 `\eqref` 能否解析
-   取决于「\label 是否已经渲染过」。而渲染是异步且顺序不定的（行内 nodeView 立即渲染、
-   块级走防抖预览），`\eqref` 经常先于 `\label` 渲染 → 显示 ???。
-   故这里做一处通知：任何含 \label 的公式渲染完成后，触发所有含引用的公式重渲染。 */
+/* ── \label / \ref / \eqref 交叉引用 ──────────────
+   三个曾让 \eqref 永远显示 ??? 的坑，逐个说清（都是实测踩出来的）：
 
-const labelListeners = new Set<() => void>()
+   坑一｜不自动编号。MathJax v3 的 TagsFactory.OPTIONS 里 defaultTags='none'，
+         
+只有显式 \tag{…} 的公式才有编号，\begin{equation}\label{eq:x} 拿不到号，
+         \label 登记的是一个 tag 为空的 Label，\eqref 解析时拿到空值 → (???)。
+         根治：构造 TeX 时传 tags:'ams'（详见 loadMathJax 内注释）。
 
-/** 注册「标签表变化」回调，返回取消函数 */
-export function onLabelsChanged(fn: () => void): () => void {
-  labelListeners.add(fn)
-  return () => {
-    labelListeners.delete(fn)
+   坑二｜??? 检测方式根本不成立。SVG 输出里没有字面文本，字符全编成字形路径，
+         '?' 写作 <path data-c="3F">（3F 是码位），所以 `svg.includes('???')`
+         恒为 false —— 之前所有「重试 / 排队」逻辑一次都没被触发过。
+         根治：解码 data-c 判断（见 refUnresolved）。
+
+   坑三｜编号漂移。MathJax 的 allCounter 跨 convert 累加，同一公式每重渲染一次
+         编号就 +1，边打字边看编号往上涨。
+         根治：自维护 label→编号 的固定映射，渲染前把计数器「上膛」到该编号。
+
+   最后，渲染是异步且顺序不定的（行内 nodeView 立即渲染、块级走防抖预览），
+   \eqref 常常先于 \label 渲染，故保留「引用排队 + 标签注册后刷新」的机制。 */
+
+/** label → 固定编号（首次出现时分配，之后不变，杜绝重渲染漂移） */
+const labelNumbers = new Map<string, number>()
+/** 下一个待分配的编号 */
+let nextLabelNumber = 1
+
+/** 等待中的引用渲染任务 */
+const pendingRefs: Array<{
+  source: string
+  display: boolean
+  resolve: (svg: string) => void
+  token: number
+  attempts: number
+}> = []
+
+/**
+ * 最多重试几轮。
+ *
+ * 引用了一个根本不存在的 label（写错名字、label 被删）时，永远等不到注册事件。
+ * 若就此无限挂起，节点会一直停在占位源码 `$…$` 上，比显示 (???) 还糟
+ * —— ??? 至少告诉用户「引用没解析出来」。故超过轮次就认命，把最后一版 SVG 交出去。
+ */
+const MAX_REF_ATTEMPTS = 3
+
+/** 取出源码里所有 \label{X} 的 X（保持出现顺序、去重） */
+function extractLabels(src: string): string[] {
+  const out: string[] = []
+  for (const m of src.matchAll(/\\label\s*\{([^{}]*)\}/g)) {
+    const name = m[1].trim()
+    if (name && !out.includes(name)) out.push(name)
   }
+  return out
 }
 
-/** 源码是否定义标签 / 引用标签 */
+/** 取出源码里所有 \ref{X} / \eqref{X} 的 X */
+function extractRefs(src: string): string[] {
+  const out: string[] = []
+  for (const m of src.matchAll(/\\(?:eq)?ref\s*\{([^{}]*)\}/g)) {
+    const name = m[1].trim()
+    if (name && !out.includes(name)) out.push(name)
+  }
+  return out
+}
+
+/** 源码是否定义标签 / 引用标签（快速预判，省掉无谓的全量扫描） */
 function hasLabel(src: string): boolean {
   return /\\label\s*\{/.test(src)
 }
+
+/**
+ * 裸 `$$ E=mc^2 \label{eq:e} $$` 的兜底：给它套上编号环境。
+ *
+ * AMS 语义下只有 equation / align / gather 等环境才自动编号，
+ * 光秃秃的 `$$…$$` 即便写了 \label 也拿不到号，\eqref 依旧是 (???)。
+ * 这是 LaTeX 的正统行为，但 Markdown 用户写 `$$…\label…$$` 时
+ * 心里想的几乎一定是「这公式要能被引」——不懂这层规矩就会一头雾水。
+ *
+ * 故仅在这种「有 \label、没环境、没手动 \tag」的情形下自动套壳，
+ * 有换行/对齐符时套 align（equation 单行环境吃不下 \\ 和 &），否则套 equation。
+ */
+function ensureNumberedEnv(src: string): string {
+  if (!hasLabel(src)) return src
+  if (/\\tag\s*\{/.test(src)) return src
+  if (/\\begin\s*\{/.test(src)) return src // 已有环境，尊重原样
+  const env = /\\\\|&/.test(src) ? 'align' : 'equation'
+  return `\\begin{${env}}${src}\\end{${env}}`
+}
 function hasRef(src: string): boolean {
   return /\\(?:eq)?ref\s*\{/.test(src)
+}
+
+/**
+ * 为本公式里的 label 分配固定编号，返回「第一个 label 的编号」。
+ * 同一公式不管重渲染多少次，拿到的编号都一致。
+ */
+function assignLabelNumbers(labels: string[]): number {
+  let base = labelNumbers.get(labels[0])
+  if (base === undefined) {
+    base = nextLabelNumber
+    labelNumbers.set(labels[0], base)
+  }
+  // 一个公式里的多个 label（如 align 每行一个）顺序紧随其后
+  for (let i = 1; i < labels.length; i++) labelNumbers.set(labels[i], base + i)
+  nextLabelNumber = Math.max(nextLabelNumber, base + labels.length)
+  return base
+}
+
+/**
+ * 判断 SVG 里是否存在「未解析的引用」。
+ *
+ * MathJax 解析不出 \ref / \eqref 时渲染成 (???)，而 SVG 中字符是字形路径，
+ * '?' 编码为 <path data-c="3F">。故必须解码 data-c，不能搜字符串 '???'。
+ * 只看引用节点（class 含 MathJax_ref）里的 '?'，避免把公式里正常的问号
+ * （如 a \stackrel{?}{=} b）误判成未解析。
+ */
+function refUnresolved(svg: string): boolean {
+  if (!svg.includes('MathJax_ref')) return false
+  return /data-c="3F"/.test(svg)
+}
+
+/**
+ * 刷新所有等待中的引用：label 刚注册，之前失败的任务现在应该能解析了。
+ * 成功则 resolve，仍失败则放回队列等下一轮。
+ */
+function flushPendingRefs(): void {
+  if (pendingRefs.length === 0) return
+  const tasks = pendingRefs.splice(0, pendingRefs.length)
+  for (const task of tasks) {
+    task.attempts += 1
+    void renderMathToSvg(task.source, task.display).then((svg) => {
+      // token 检查：调用方已销毁/更新则丢弃结果（token 为 0 表示不检查，块级场景）
+      if (task.token > 0 && !isTokenValid(task.token)) return
+      // 解析成功、或重试次数用尽（label 多半根本不存在）→ 交出结果
+      if (!refUnresolved(svg) || task.attempts >= MAX_REF_ATTEMPTS) {
+        task.resolve(svg)
+      } else {
+        pendingRefs.push(task) // 仍不可解析，等下一轮 label 注册
+      }
+    })
+  }
+}
+
+/** 令牌有效性检查（行内 nodeView 用 token 追踪生命周期） */
+const activeTokens = new Set<number>()
+export function trackToken(token: number): () => void {
+  activeTokens.add(token)
+  return () => { activeTokens.delete(token) }
+}
+function isTokenValid(token: number): boolean {
+  return activeTokens.has(token)
 }
 
 /** 渲染 TeX → SVG；失败或语法有误时降级为错误徽标（不抛错、不中断编辑） */
@@ -105,16 +261,98 @@ export async function renderMathToSvg(
   display: boolean
 ): Promise<string> {
   if (!source.trim()) return ''
+  // 行间公式才参与编号；裸 $$…\label…$$ 自动套编号环境（详见 ensureNumberedEnv）
+  const tex = display ? ensureNumberedEnv(source) : source
   try {
     const mj = await loadMathJax()
-    const svg = mj.convert(source, display)
-    if (hasLabel(source)) {
-      for (const fn of labelListeners) fn()
+    // 编号上膛：让本公式的 label 拿到它的固定编号，杜绝重渲染时编号漂移
+    const labels = hasLabel(tex) ? extractLabels(tex) : []
+    if (labels.length > 0) mj.primeCounter(assignLabelNumbers(labels))
+    const svg = mj.convert(tex, display)
+    if (labels.length > 0) {
+      // 有新标签登记 → 唤醒等待中的引用
+      flushPendingRefs()
     }
     return svg
   } catch (err: unknown) {
     return errorHtml(err, source)
   }
+}
+
+/**
+ * 渲染含引用的公式（\ref / \eqref）。
+ *
+ * 若引用的 label 尚未登记（或渲染结果里仍是 ???），不返回半成品，
+ * 而是挂起等待；等别处的 \label 渲染完成、标签登记后自动补渲染并 resolve。
+ * 调用方直接 await 即可拿到最终结果，无需自己写重试：
+ * ```ts
+ * const svg = await renderMathWithRef(value, false)
+ * ```
+ */
+export async function renderMathWithRef(
+  source: string,
+  display: boolean,
+  token?: number
+): Promise<string> {
+  const svg = await renderMathToSvg(source, display)
+  const refs = hasRef(source) ? extractRefs(source) : []
+  if (refs.length === 0) return svg
+
+  const mj = await loadMathJax()
+  const allRegistered = refs.every((ref) => mj.hasLabel(ref))
+  if (allRegistered && !refUnresolved(svg)) return svg
+
+  return new Promise<string>((resolve) => {
+    let settled = false
+    const task = {
+      source,
+      display,
+      // 注意：这里必须写 `token: token ?? 0`，不能省略键名。
+      // TS 解析器把对象字面量里标识符后的 `?` 当作「可选属性标记」(token?:)，
+      // 简写形式 `{ token ?? 0 }` 会直接抛 TS1005 语法错误。
+      token: token ?? 0,
+      attempts: 0,
+      resolve: (svg: string): void => {
+        if (settled) return
+        settled = true
+        resolve(svg)
+      }
+    }
+    pendingRefs.push(task)
+
+    // 保险一｜竞态：入队这一下完全可能发生在「标签已注册 → flushPendingRefs()」之后
+    // （微任务排队顺序使然，实测必现）。此后不会再有注册事件来唤醒队列，任务将永久挂起。
+    // 故入队后立刻复查一次标签表，命中就马上补一轮刷新。
+    void loadMathJax().then((m) => {
+      if (refs.every((ref) => m.hasLabel(ref))) flushPendingRefs()
+    })
+
+    // 保险二｜死等：整篇文档压根没有 \label（引用名写错 / 目标被删）时，
+    // 永远不会有注册事件。超时后强制结算，宁可显示 (???) 提示用户「引用没解析出来」，
+    // 也不要让节点一直停在占位源码 `$…$` 上装死。
+    setTimeout(() => {
+      if (settled) return
+      const idx = pendingRefs.indexOf(task)
+      if (idx < 0) return // 已被 flushPendingRefs 取出、正在渲染中
+      pendingRefs.splice(idx, 1)
+      task.attempts = MAX_REF_ATTEMPTS // 令本轮结算后不再入队
+      pendingRefs.push(task)
+      flushPendingRefs()
+    }, 1200)
+  })
+}
+
+/**
+ * 切换文档时清空标签表与编号映射。
+ * 不清的话上一篇文档的编号会接着往下排，且标签表残留会让新文档的同名 label 直接命中旧值。
+ */
+export function resetMathNumbering(): void {
+  labelNumbers.clear()
+  nextLabelNumber = 1
+  pendingRefs.length = 0
+  // MathJax 侧的复位异步进行即可：本进程的映射已同步清空，
+  // 而 MathJax 若尚未加载，加载出来本身就是干净状态。
+  void loadMathJax().then((mj) => mj.resetNumbering())
 }
 
 /* ── 行内数学 nodeView ─────────────────────────── */
@@ -124,8 +362,8 @@ class MathInlineView {
   private node: PMNode
   /** 自增令牌：只认最后一次请求结果，杜绝慢渲染覆盖新渲染 */
   private token = 0
-  /** 交叉引用的重渲染订阅（仅含 \ref/\eqref 时挂载） */
-  private offLabels: (() => void) | null = null
+  /** 令牌追踪（供 renderMathWithRef 判断有效性） */
+  private untrackToken: (() => void) | null = null
 
   constructor(node: PMNode) {
     this.node = node
@@ -146,58 +384,16 @@ class MathInlineView {
     // 先占位显示源码，MathJax 就绪后替换为渲染结果
     this.dom.textContent = '$' + value + '$'
     const mine = ++this.token
-    void renderMathToSvg(value, false).then((svg) => {
+    // 注册令牌追踪（让 renderMathWithRef 能判断我们是否还活着）
+    this.untrackToken?.()
+    this.untrackToken = trackToken(mine)
+
+    // renderMathWithRef：含 \ref/\eqref 且标签未登记时自动挂起排队，
+    // 等别处 \label 渲染完成（flushPendingRefs）后再补渲染并 resolve。
+    void renderMathWithRef(value, false, mine).then((svg) => {
       if (mine !== this.token) return
       this.dom.innerHTML = svg
-      // 交叉引用安全网：若首次渲染即含 ???（label 尚未注册），延迟重试
-      if (hasRef(value) && svg.includes('???')) {
-        setTimeout(() => {
-          if (this.token !== mine) return
-          void renderMathToSvg(value, false).then((svg2) => {
-            if (mine === this.token) this.dom.innerHTML = svg2
-          })
-        }, 120)
-      }
     })
-
-    // 交叉引用：\eqref 可能先于 \label 渲染出来（顺序不定），订阅标签表变化后重渲染。
-    // 三重保险：
-    //   ① onLabelsChanged 回调（label 注册后立即触发）
-    //   ② 首次渲染结果含 ??? 时延迟重试（覆盖「订阅前已触发」的竞态窗口）
-    //   ③ 二次仍失败时更长延迟再试一次
-    this.offLabels?.()
-    this.offLabels = null
-    if (hasRef(value)) {
-      const retryWithBackoff = (delay: number): void => {
-        setTimeout(() => {
-          if (this.token !== mine) return
-          void renderMathToSvg(value, false).then((svg) => {
-            if (mine === this.token) {
-              this.dom.innerHTML = svg
-              // 如果仍然包含 ???，用更长的延迟再试一次
-              if (svg.includes('???') && delay < 800) {
-                retryWithBackoff(delay * 3)
-              }
-            }
-          })
-        }, delay)
-      }
-      // 保险①：标签变化即时重渲染（含递归重试：若结果仍含 ??? 则自动加延迟再试）
-      const mineRef = mine
-      this.offLabels = onLabelsChanged(() => {
-        if (this.token !== mineRef) {
-          this.offLabels?.()
-          this.offLabels = null
-          return
-        }
-        void renderMathToSvg(value, false).then((svg) => {
-          if (mineRef === this.token) {
-            this.dom.innerHTML = svg
-            if (svg.includes('???')) retryWithBackoff(120)
-          }
-        })
-      })
-    }
   }
 
   update(node: PMNode): boolean {
@@ -218,8 +414,8 @@ class MathInlineView {
   destroy(): void {
     // 让在途渲染失效，避免回调写入已销毁的 DOM
     this.token++
-    this.offLabels?.()
-    this.offLabels = null
+    this.untrackToken?.()
+    this.untrackToken = null
   }
 }
 
@@ -362,7 +558,8 @@ export async function renderLatexContent(content: string): Promise<string> {
     // 剥离 \require{…}：AllPackages 已全量加载，该指令冗余且会泄漏为红色错误文本
     const cleaned = stripRequireDirectives(content)
     if (isFullLatexDoc(cleaned)) return await renderLatexDoc(cleaned)
-    return await renderMathToSvg(stripMathDelims(cleaned), true)
+    // 纯数学：用 renderMathWithRef 处理可能的 \ref/\eqref
+    return await renderMathWithRef(stripMathDelims(cleaned), true)
   } catch (err: unknown) {
     return errorHtml(err, content)
   }
@@ -395,35 +592,8 @@ export function renderMathBlockPreview(
     void renderLatexContent(content).then((html) => {
       if (latexBlockToken.get(applyPreview) !== mine) return
       applyPreview(html)
-      // 交叉引用安全网：块级结果含 ??? 时延迟重试（label 可能尚未注册）
-      if (hasRef(content) && html?.includes('???')) {
-        scheduleRefRetry()
-      }
     })
   }
   run()
-
-  // 块里的 \eqref 同样可能早于别处的 \label 渲染，订阅后重跑。
-  // 额外安全网：若结果含 ???，延迟再试（覆盖竞态窗口）。
-  let refRetryCount = 0
-  const scheduleRefRetry = (): void => {
-    if (refRetryCount >= 2) return // 最多重试 2 次
-    const delay = [150, 400][refRetryCount] ?? 400
-    refRetryCount++
-    setTimeout(() => {
-      if (latexBlockToken.get(applyPreview) !== mine) return
-      run()
-    }, delay)
-  }
-
-  if (hasRef(content)) {
-    const off = onLabelsChanged(() => {
-      if (latexBlockToken.get(applyPreview) !== mine) {
-        off()
-        return
-      }
-      run()
-    })
-  }
   return undefined
 }
