@@ -519,6 +519,19 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 凝神下源码模式居中列：`.shell[data-zen] .source-host .cm-scroller` 对称内边距 `max(0, 50% − var(--w-column-zen)/2)`，行号 + 代码整体收进 640px 居中列（行号随列移动），修复 CodeMirror 宽窗整屏贴左。
 * 自动全屏走新 IPC `win:setFullscreen`（preload `window.api.setFullscreen`）；只还原自己转的全屏（`zenAutoFullscreen` 标记），不碰用户手动 F11。
 
+### 5.12 链接健康检查（2026-08-30，Phase 2 批次三 §3.7）
+
+**扫描（`electron/main/vault.ts` 的 `checkLinks(root)`，新增 IPC `vault:checkLinks` → preload `window.api.checkLinks`）**
+
+* 两遍遍历：第一遍收集全部 Markdown 文档，建立「基名（去扩展名，小写）」与「相对库根路径（去扩展名，小写）」索引；第二遍逐文件逐行抽取链接并解析判定。遍历规则与 `listTree` / `searchVault` 一致（跳过点目录 / node_modules / 同名 `.assets`），不引入任何新依赖。
+* 识别三类链接：① `[[wikilink]]`（兼容 `[[X|别名]]`、`[[X#标题]]`，按基名或相对路径解析）；② Markdown 链接 `[text](target)`（相对当前文档目录解析后判定目标文件是否存在）；③ 图片 `![alt](target)`（同上检查图片是否存在）。
+* 跳过不计入断链：外部链接（http(s) / mailto / tel / data / ftp、协议相对 `//`、`www.` 域名）、纯锚点（`#标题`）。断链条目上限 2000 提前返回，防大库爆内存。
+* `BrokenLinkReport { scanned, total, items[] }`，`BrokenLinkItem { file, line, raw, target, kind }`；`kind: 'wikilink' | 'mdlink' | 'image'`。
+
+**报告面板（`src/components/LinkCheckPanel.vue`，玻璃浮层，入口：标题栏「更多 ⌄ · 链接健康检查」）**
+
+* 挂载即扫描（加载态 → 汇总「扫描 N 篇、发现 M 处」→ 列表）；可「重新扫描」。每行按 kind 三色徽标（Wiki / 链接 / 图片）+ 源文件基名 + 行号 + 目标（等宽），点击经 `App.openPath` 在编辑器中定位该文档；零断链显示「未发现断链 ✓」。
+
 ***
 
 ## 6. 技术写作场景专项设计

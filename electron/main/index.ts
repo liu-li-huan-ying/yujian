@@ -17,7 +17,7 @@ import {
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
-import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault } from './vault'
+import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
 import { patchSession, readSession } from './session'
 import { saveAsset } from './assets'
 import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
@@ -195,6 +195,8 @@ function registerIpc(): void {
     (_event, root: string, query: string, replacement: string, caseSensitive: boolean) =>
       replaceInVault(root, query, replacement, caseSensitive)
   )
+
+  ipcMain.handle(IPC.VAULT_CHECK_LINKS, async (_event, root: string) => checkLinks(root))
 
   // ── 会话持久化（崩溃恢复）──
 

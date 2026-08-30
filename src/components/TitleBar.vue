@@ -32,6 +32,7 @@ const emit = defineEmits<{
   (e: 'img-host'): void
   (e: 'preferences'): void
   (e: 'zen-settings'): void
+  (e: 'link-check'): void
   (e: 'save'): void
   (e: 'save-as'): void
   (e: 'help'): void
@@ -71,6 +72,7 @@ const moreItems = (): MenuEntry[] => [
   { action: 'img-host', label: L.imgHost, icon: 'image' },
   { action: 'preferences', label: L.preferences, icon: 'sliders' },
   { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
+  { action: 'link-check', label: L.linkCheck, icon: 'link' },
   { separator: true },
   { action: 'save', label: L.save, icon: 'file', hint: 'Ctrl S' },
   { action: 'save-as', label: L.saveAs, icon: 'file' },
@@ -88,6 +90,9 @@ function onMoreSelect(action: string): void {
       break
     case 'zen-settings':
       emit('zen-settings')
+      break
+    case 'link-check':
+      emit('link-check')
       break
     case 'save':
       emit('save')

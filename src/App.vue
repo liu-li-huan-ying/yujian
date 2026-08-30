@@ -11,6 +11,7 @@ import HelpPanel from './components/HelpPanel.vue'
 import TabBar from './components/TabBar.vue'
 import FindPanel from './components/FindPanel.vue'
 import SnapshotPanel from './components/SnapshotPanel.vue'
+import LinkCheckPanel from './components/LinkCheckPanel.vue'
 import StatsPopover from './components/StatsPopover.vue'
 import ZenRetreatBar from './components/ZenRetreatBar.vue'
 import ZenSettings from './components/ZenSettings.vue'
@@ -401,6 +402,7 @@ const outlineVisible = ref(true)
 
 const snapshots = useSnapshotsStore()
 const snapshotOpen = ref(false)
+const linkCheckOpen = ref(false)
 const statsOpen = ref(false)
 const focusMode = ref(false)
 /** 写作目标字数（会话级持久化；0 = 未设） */
@@ -669,6 +671,7 @@ onBeforeUnmount(() => {
       @img-host="onImgHost"
       @preferences="onPreferences"
       @zen-settings="onZenSettings"
+      @link-check="linkCheckOpen = true"
       @save="saveFile"
       @save-as="saveFileAs"
       @help="onHelp('shortcuts')"
@@ -750,6 +753,13 @@ onBeforeUnmount(() => {
           @restore="onSnapshotRestore"
           @delete="onSnapshotDelete"
           @close="snapshotOpen = false"
+        />
+
+        <LinkCheckPanel
+          v-if="linkCheckOpen"
+          :vault-path="vaultPath"
+          @close="linkCheckOpen = false"
+          @open="openPath"
         />
 
         <StatsPopover

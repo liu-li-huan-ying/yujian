@@ -23,6 +23,8 @@ export const IPC = {
   VAULT_SEARCH: 'vault:search',
   // 笔记库：全局替换（在搜索命中的文件范围内替换）
   VAULT_REPLACE: 'vault:replace',
+  // 笔记库：断链健康检查（扫描 vault 内失效的 [[wikilink]] / 相对路径链接 / 图片）
+  VAULT_CHECK_LINKS: 'vault:checkLinks',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -287,6 +289,31 @@ export interface SnapshotInfo {
   charCount: number
   /** 磁盘字节数 */
   size: number
+}
+
+/* ── 链接健康检查（Phase 2 批次三 §3.7）─────────────────── */
+
+export type BrokenLinkKind = 'wikilink' | 'mdlink' | 'image'
+
+export interface BrokenLinkItem {
+  /** 源 Markdown 文档绝对路径 */
+  file: string
+  /** 断链所在行号（从 1 开始） */
+  line: number
+  /** 原始链接文本（含 [[ ]] 或 ( ) 的完整原文，便于定位） */
+  raw: string
+  /** 归一化后的目标（wikilink 基名 / 解析后的相对路径 / 图片路径） */
+  target: string
+  /** 断链类型：Wiki 链接 / Markdown 链接 / 图片 */
+  kind: BrokenLinkKind
+}
+
+export interface BrokenLinkReport {
+  /** 扫描的 Markdown 文档总数 */
+  scanned: number
+  /** 断链总数 */
+  total: number
+  items: BrokenLinkItem[]
 }
 
 /** 侧边栏可调宽度范围，与 --w-sidebar 默认值呼应 */
