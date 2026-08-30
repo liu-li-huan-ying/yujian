@@ -445,6 +445,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * **多文件合订**（2026-08-30）：`src/components/CompilePanel.vue` 按文件树顺序列出 vault 内全部 `.md`，支持勾选 + 上下移排序 + 合订标题 + 每篇另起页（`break-before:page`）；输出 HTML / PDF / LaTeX 任选。逐文件 `readFile → markdownToHtml（复用 Milkdown parser/schema，不建第二实例）→ inlineImages（按各自文档目录解析相对图片，因为合订后无法用单一基准路径）→ 拼接`，再走与单文档完全相同的 `buildExportContent(override, forceInline)` 管道；`forceInline` 强制内联图片与 Mermaid 图表，保证跨目录自包含。LaTeX 合订则直接拼接各文件 Markdown 原文。
 * **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox)` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘复用同一份已构建内容，不重复渲染。确认按钮明示「确认并选择位置」+ hint「确认后将弹出系统对话框，选择保存位置」，并有空内容兜底态。
 * **导出细节二次打磨（2026-08-30）**：针对「开了预览却无预览/无保存框/不知成败」——`EditorHost.getHTML()` 修复：源码模式下所见即所得 DOM 滞后/为空会返回空串，使 `buildExportContent` 因 `!body` 静默短路 → 不预览、不弹框、不提示；改为**源码模式直接走 `markdownToHtml()` 解析管线**（与合订/选区导出同源）。`App.vue` 的 `doExport`/`onCompile`/`confirmExport`/`writeExport` 全链路包 try/catch，失败 `showToast(...,'err',5000)` 显具体错误，成功 toast 显保存路径（4500ms），取消/失败回传明确状态，杜绝静默失败。
+* **渲染进程 Node 全局 polyfill（2026-08-30）**：`mermaid` 部分图表模块（swimlanes 等）在导出/实时预览渲染时引用全局 `Buffer`，而 renderer 为 `contextIsolation/sandbox`（无 Node 全局），Vite 不自动 polyfill → 含 Mermaid 代码块的文档导出时抛 `Buffer is not defined`。已在 `src/main.ts` 入口注入纯 JS 的 `buffer` 包：`globalThis.Buffer = Buffer`，mermaid 渲染前全局可用。
 
 ### 5.7 主题系统
 
