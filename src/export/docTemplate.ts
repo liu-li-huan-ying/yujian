@@ -7,7 +7,7 @@
  *   离线则优雅降级（数学走 MathML、mermaid 退化为代码块），文档始终有效。
  */
 
-import { enhanceFootnotes, replaceEmojiInHtml, replaceInlineMarkupInHtml, parseHtml } from './domUtils'
+import { enhanceFootnotes, replaceEmojiInHtml, parseHtml } from './domUtils'
 import { renderLatexContent } from '../editor/features/mathjax'
 
 export interface ExportOptions {
@@ -274,7 +274,6 @@ export function buildExportHtml(bodyHtml: string, title: string, opts: ExportOpt
   if (fnRoot) {
     enhanceFootnotes(fnRoot)
     replaceEmojiInHtml(fnRoot)
-    replaceInlineMarkupInHtml(fnRoot)
     body = fnRoot.innerHTML
   }
   // 封面：标题 / 作者 / 日期，缺省项不渲染
