@@ -150,3 +150,26 @@ docx（`docx` 包）与 ePub（`jszip` 手写 OPF / NCX）。（多文件合订�
 
 ## 文件
 `src/index.html`、`src/components/ExportPreview.vue`、`src/appearance.ts`、`electron/shared/ipc-channels.ts`、`electron/preload/index.ts`、`electron/main/index.ts`、`docs/PHASE2-PLAN.md` §3.4、`docs/ARCHITECTURE.md` §5.6。
+
+---
+
+# 合订面板「书名输入框」细节打磨（2026-08-30）
+
+## 症状
+深色模式下，合订（多文件合并）面板里「给合并后文件起名」的输入框是一块**偏白背景 + 偏白字**的框，与整体玉质/玻璃风格割裂、看不清。
+
+## 根因
+`.opt__input` 用了两个**本应用根本不存在**的 CSS 令牌：
+- `background: var(--hue-bg-input, rgba(255,255,255,0.7))` → 回退到近白色，深色下成白块；
+- `color: var(--text-primary)` → 未定义，声明失效、靠继承，深色下继承出偏白字。
+整块面板其实都在用未定义令牌靠继承续命（`--text-primary/--text-secondary` 全项目无定义），只是其余元素恰好继承到可读色，唯独带显式白底的输入框破功。
+
+## 修复（`src/components/CompilePanel.vue`）
+- 输入框重做为**凹陷玻璃字段**：深色 `background: rgba(0,0,0,.22)` + `inset 0 1px 2px rgba(0,0,0,.35)` 内阴影表达「刻入」层次（呼应 UI-DESIGN §10.1 Depth 原则）；高度提到 30px（对齐 28px 触控目标 + 与搜索框一致）；`radius-md`、字号 12.5px、字体走 `--font-ui`。
+- 前导 `book` 图标（青瓷色相 `--hue-text-3`）提升可发现性，输入区左内缩让位。
+- 占位符显式 `--hue-text-3`（`opacity:1`），聚焦时青瓷描边 + `0 0 0 3px` 半透明强调光环（无障碍 §7 焦点可见）。
+- 浅色覆盖：`background: rgba(20,30,28,.05)` 极淡墨调凹陷，避免白底浮在羊脂玉玻璃上；聚焦光环转 `--hue-accent` 深青。
+- 顺手把面板内全部 `--text-primary/--text-secondary` 映射到真实令牌 `--hue-text-1/2`，深色渲染不再依赖脆弱继承。
+
+## 验证
+- `npm run typecheck` ✅、`npm run build` ✅；产物 CSS 确认含凹陷阴影、强调焦点环、`[data-skin][data-mode='light'] .opt__input` 浅色覆盖，无 `--hue-bg-input`/`--text-primary` 残留。

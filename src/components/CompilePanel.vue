@@ -142,13 +142,19 @@ function confirm(): void {
 
       <div class="panel__opts">
         <div class="opt opt--title">
-          <label class="opt__label">{{ L.compileBookTitle }}</label>
-          <input
-            class="opt__input"
-            type="text"
-            v-model="title"
-            :placeholder="L.compileBookTitlePlaceholder"
-          />
+          <label class="opt__label" for="compile-title">{{ L.compileBookTitle }}</label>
+          <div class="field">
+            <Icon name="book" :size="13" class="field__icon" />
+            <input
+              id="compile-title"
+              class="opt__input"
+              type="text"
+              v-model="title"
+              :placeholder="L.compileBookTitlePlaceholder"
+              spellcheck="false"
+              autocomplete="off"
+            />
+          </div>
         </div>
 
         <div class="opt">
@@ -249,7 +255,7 @@ function confirm(): void {
 .panel__title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--hue-text-1, #e8e9e7);
 }
 .panel__count {
   font-size: 11px;
@@ -267,18 +273,18 @@ function confirm(): void {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--hue-text-2, #a3a7a5);
   cursor: pointer;
 }
 .panel__x:hover {
   background: var(--hue-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary);
+  color: var(--hue-text-1, #e8e9e7);
 }
 
 .panel__hint {
   margin: 0;
   font-size: 11.5px;
-  color: var(--text-secondary);
+  color: var(--hue-text-2, #a3a7a5);
   flex-shrink: 0;
 }
 
@@ -295,7 +301,7 @@ function confirm(): void {
   padding: 28px 12px;
   text-align: center;
   font-size: 12.5px;
-  color: var(--text-secondary);
+  color: var(--hue-text-2, #a3a7a5);
 }
 
 .list {
@@ -335,14 +341,14 @@ function confirm(): void {
 }
 .row__name {
   font-size: 12.5px;
-  color: var(--text-primary);
+  color: var(--hue-text-1, #e8e9e7);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .row__dir {
   font-size: 10.5px;
-  color: var(--text-secondary);
+  color: var(--hue-text-2, #a3a7a5);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -359,7 +365,7 @@ function confirm(): void {
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.1));
   border-radius: 6px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--hue-text-2, #a3a7a5);
   cursor: pointer;
 }
 .mini:hover:not(:disabled) {
@@ -386,28 +392,69 @@ function confirm(): void {
   gap: 8px;
 }
 .opt--title {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 200px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
 }
 .opt__label {
   font-size: 11.5px;
-  color: var(--text-secondary);
+  color: var(--hue-text-2, #a3a7a5);
   white-space: nowrap;
+}
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 120px;
+}
+.field__icon {
+  position: absolute;
+  left: 9px;
+  color: var(--hue-text-3, #8b908e);
+  pointer-events: none;
 }
 .opt__input {
   flex: 1;
-  min-width: 120px;
-  height: 26px;
-  padding: 0 9px;
-  font-size: 12px;
-  border-radius: 7px;
-  border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.12));
-  background: var(--hue-bg-input, rgba(255, 255, 255, 0.7));
-  color: var(--text-primary);
+  width: 100%;
+  height: 30px;
+  padding: 0 11px 0 30px;
+  font-size: 12.5px;
+  font-family: var(--font-ui);
+  color: var(--hue-text-1, #e8e9e7);
+  /* 凹陷玻璃：比面板更深一档，配合内阴影表达「刻入」层次（呼应 §10.1 Depth 原则） */
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--hue-border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 6px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
+  transition: border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+.opt__input::placeholder {
+  color: var(--hue-text-3, #8b908e);
+  opacity: 1;
 }
 .opt__input:focus {
   outline: none;
+  border-color: var(--hue-accent, #5fa8a0);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35),
+    0 0 0 3px rgba(var(--hue-tint-2, 95, 168, 160), 0.2);
+}
+/* 浅色：凹陷改为极淡墨调，避免白底浮在羊脂玉玻璃上 */
+[data-skin][data-mode='light'] .opt__input {
+  color: var(--hue-text-1, #1b1d1c);
+  background: rgba(20, 30, 28, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+[data-skin][data-mode='light'] .opt__input:focus {
   border-color: var(--hue-accent, #248077);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08),
+    0 0 0 3px rgba(36, 128, 119, 0.16);
 }
 .seg {
   display: flex;
@@ -439,7 +486,7 @@ function confirm(): void {
   align-items: center;
   gap: 6px;
   font-size: 11.5px;
-  color: var(--text-secondary);
+  color: var(--hue-text-2, #a3a7a5);
   cursor: pointer;
 }
 .switch input {
@@ -482,7 +529,7 @@ function confirm(): void {
   border-radius: 8px;
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.1));
   background: transparent;
-  color: var(--text-primary);
+  color: var(--hue-text-1, #e8e9e7);
   cursor: pointer;
 }
 .btn:hover {
