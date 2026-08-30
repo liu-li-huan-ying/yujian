@@ -1,19 +1,26 @@
-import mermaid from 'mermaid'
-
 /**
  * 把 Mermaid 图表渲染成内嵌 SVG，让导出产物**不依赖 CDN**、离线也能正确显示。
  * 编辑器内已用 mermaid（代码块预览），这里复用同一套能力，不新增依赖。
+ *
+ * mermaid 体积很大，惰性动态引入，不拖慢导出首屏（也避免被静态拽进主包）。
  *
  * 渲染失败时返回 null，调用方保留原始代码块——图表退化为代码，文档始终有效。
  */
 
 let counter = 0
+let mermaidPromise: Promise<typeof import('mermaid')['default']> | null = null
+
+async function loadMermaid() {
+  mermaidPromise ??= import('mermaid').then(({ default: m }) => m)
+  return mermaidPromise
+}
 
 /** 渲染一段 mermaid 源码为 SVG 字符串；失败返回 null */
 export async function renderMermaidSvg(code: string): Promise<string | null> {
   const text = code.trim()
   if (!text) return null
   try {
+    const mermaid = await loadMermaid()
     mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' })
     // id 必须唯一：mermaid 渲染期间会往文档临时挂节点，重名会互相干扰
     const { svg } = await mermaid.render(`yujian-mmd-${Date.now()}-${counter++}`, text)

@@ -189,7 +189,7 @@ typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「�
 | HTML | 网页 | 规范化 HTML 模板 | 无 |
 | PDF | 网页/打印 | 隐藏窗口 `printToPDF` | 无 |
 | LaTeX | 源码 | `markdownToLatex.ts` | 无 |
-| Word (docx) | 二进制 | `html-to-docx@1.8.0` | 纯 JS |
+| Word (docx) | 二进制 | 手写 OOXML + `jszip@3.10.1` | 纯 JS |
 | EPUB | 二进制 | `jszip@3.10.1` 手写 OPF | 纯 JS |
 | RTF | 二进制 | 零依赖手写 RTF 1.9 | 无 |
 | ODT | 二进制 | `jszip@3.10.1` 手写 ODF 1.2 | 纯 JS |
@@ -207,11 +207,14 @@ typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「�
 3. **类型层旧 union 残留**：`doExport` / `onCompile` 的 `kind` 仍为 `'html'|'pdf'|'latex'`，调 `doExport('md')` 报 TS2345。已拓宽为 `ExportKind`。
 4. **`separatorTitle` 误传 boolean**：`TitleBar` 里写成 `separatorTitle: true`，而 `MenuEntry.separatorTitle` 类型为 `string`，报 TS2322。已改为字符串分组标题。
 
+5. **DOCX 导出导致整窗漆黑（严重）**：初版 DOCX 用 `html-to-docx@1.8.0`，但其在模块顶层 `import crypto/fs/path/zlib/stream/http/url/https/events/util` 一整条 Node 内置模块；Vite 打包时 externalize 成浏览器空壳，**渲染进程启动即崩** → 窗口漆黑、什么都不渲染。Node 里烟雾测试能过是因为 Node 自带这些模块，浏览器没有。**已弃用该包**，改用 `jszip` 手写 OOXML（`src/export/docx.ts`：document/styles/numbering/rels/content-types 全拼装，标题/列表/表格/图片/超链接/代码块齐全），与已落地的 ODT/EPUB 同构，纯 JS、零 Node 依赖。
+
 ## 验证
-- `npm run typecheck` ✅（修复 4 处 TS 错误）；`npm run build` ✅（`✓ built in 26.57s`，无警告）。
-- 依赖：新增 `html-to-docx@1.8.0` + `jszip@3.10.1`（均纯 JS、无 node-gyp/fs/path 引用，可在 sandbox 渲染进程直接打包）。
+- `npm run typecheck` ✅；`npm run build` ✅（`✓ built in 18.94s`）。
+- 构建警告确认清除：原先 `crypto/fs/path/xmlbuilder2/@oozcitak/url/htmlparser2` 的 `externalized for browser compatibility` 警告、**整条 html-to-docx 依赖树**、以及 `mermaid dynamic/static import` 警告均消失。
+- 依赖：仅新增 `jszip@3.10.1`（EPUB / ODT / DOCX 打包），纯 JS、无 node-gyp/fs/path 引用，可在 sandbox 渲染进程直接打包；**已移除 `html-to-docx`**。
 - **待运行期验收**：深色模式下分别导出 9 种格式（尤其含 Mermaid 图表的文档导 docx/epub/rtf/odt），确认预览浮层、系统保存框、产物可正常打开（Word/EPUB 阅读器/LibreOffice）。
 
 ## 文件
-- 新增：`src/export/types.ts`、`src/export/domUtils.ts`、`src/export/docx.ts`、`src/export/epub.ts`、`src/export/rtf.ts`、`src/export/odt.ts`、`src/export/serialize.ts`、`src/export/html-to-docx.d.ts`（类型 shim）。
+- 新增：`src/export/types.ts`、`src/export/domUtils.ts`、`src/export/docx.ts`、`src/export/epub.ts`、`src/export/rtf.ts`、`src/export/odt.ts`、`src/export/serialize.ts`。
 - 改动：`src/App.vue`（`buildExportContent`/`writeExport`/`doExport`/`onCompile` 分派 + `BytesToBase64` + `kindLabel`/`mimeFor`）、`src/components/TitleBar.vue`、`src/components/TitleMenu.vue`、`src/components/CompilePanel.vue`、`src/components/ExportPreview.vue`、`electron/shared/ipc-channels.ts`（`ExportPayload.binaryBase64`/`mime`）、`electron/main/index.ts`（按 `binaryBase64` 写字节）、`src/i18n/locales/{zh-CN,en-US}.ts`。
