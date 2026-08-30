@@ -65,22 +65,27 @@ const api = {
   listVault: (root: string): Promise<FileNode[]> =>
     ipcRenderer.invoke(IPC.VAULT_LIST, root),
 
-  /** 全文搜索：在笔记库内递归检索所有 Markdown 文档内容，返回命中行（opts 支持区分大小写 / 全词匹配） */
+  /** 全文搜索：在笔记库内检索 Markdown 文档内容，返回命中行。
+      file 传入时只搜该单文件（左侧「本文档」范围），不传则递归全库（「全部」范围）。
+      opts 支持区分大小写 / 全词匹配；两种范围返回结构完全一致。 */
   searchVault: (
     root: string,
     query: string,
-    opts?: SearchOptions
+    opts?: SearchOptions,
+    file?: string
   ): Promise<SearchFileResult[]> =>
-    ipcRenderer.invoke(IPC.VAULT_SEARCH, root, query, opts),
+    ipcRenderer.invoke(IPC.VAULT_SEARCH, root, query, opts, file),
 
-  /** 全局替换：在搜索命中的文件范围内，把 query 全部替换为 replacement（匹配规则与 searchVault 一致） */
+  /** 替换：在搜索命中的文件范围内把 query 全部替换为 replacement（匹配规则与 searchVault 一致）。
+      file 传入时仅在单文档范围内替换，不传则全库命中文件范围。 */
   replaceInVault: (
     root: string,
     query: string,
     replacement: string,
-    opts?: SearchOptions
+    opts?: SearchOptions,
+    file?: string
   ): Promise<ReplaceResult> =>
-    ipcRenderer.invoke(IPC.VAULT_REPLACE, root, query, replacement, opts),
+    ipcRenderer.invoke(IPC.VAULT_REPLACE, root, query, replacement, opts, file),
 
   /** 链接健康检查：扫描 vault 内失效的 [[wikilink]] / 相对路径链接 / 图片，返回断链报告 */
   checkLinks: (root: string): Promise<BrokenLinkReport> =>

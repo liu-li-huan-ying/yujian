@@ -187,14 +187,22 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.VAULT_UNWATCH, () => stopWatching())
 
-  ipcMain.handle(IPC.VAULT_SEARCH, (_event, root: string, query: string, opts?: SearchOptions) =>
-    searchVault(root, query, opts)
+  ipcMain.handle(
+    IPC.VAULT_SEARCH,
+    (_event, root: string, query: string, opts?: SearchOptions, file?: string) =>
+      searchVault(root, query, opts, file)
   )
 
   ipcMain.handle(
     IPC.VAULT_REPLACE,
-    (_event, root: string, query: string, replacement: string, opts?: SearchOptions) =>
-      replaceInVault(root, query, replacement, opts)
+    (
+      _event,
+      root: string,
+      query: string,
+      replacement: string,
+      opts?: SearchOptions,
+      file?: string
+    ) => replaceInVault(root, query, replacement, opts, file)
   )
 
   ipcMain.handle(IPC.VAULT_CHECK_LINKS, async (_event, root: string) => checkLinks(root))

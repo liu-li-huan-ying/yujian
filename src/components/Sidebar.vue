@@ -12,7 +12,6 @@ import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import SearchResults from './SearchResults.vue'
 import Icon from './Icon.vue'
-import type { DocFindApi } from '../editor/docFindApi'
 
 const props = defineProps<{
   vaultPath: string | null
@@ -25,8 +24,6 @@ const props = defineProps<{
   refreshTree: () => Promise<void>
   /** 在编辑器打开指定文档 */
   openDoc: (path: string) => Promise<void>
-  /** 编辑器宿主（本文档内查找/替换引擎所在；vault 范围搜索不需要） */
-  editorHost?: DocFindApi | null
 }>()
 
 const { t } = useI18n()
@@ -63,11 +60,11 @@ const confirmState = ref<{ open: boolean; node: FileNode } | null>(null)
 const toast = ref<{ msg: string } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-/* ── 搜索：双范围（文件夹内全文 / 本文档内查找）──
-   两种范围共用一个搜索框与「区分大小写 / 全词匹配」选项：
-   - vault：调主进程 searchVault 递归全库，结果列表 + 跨文件批量替换；
-   - doc：复用编辑器引擎（EditorHost.find/findNext/…）在当前文档内查找/替换 + 命中导航。
-   二者语义不同但入口统一在左侧，避免重复造两套搜索 UI。 */
+/* ── 搜索：双范围（全部 / 本文档）共用同一套逻辑 ──
+   两种范围共用一个搜索框与「区分大小写 / 全词匹配」选项，且复用主进程同一套
+   searchVault / replaceInVault：区别只在范围——「本文档」把当前文档路径作为
+   file 参数传入（只搜该单文件、不递归），「全部」则递归全库。结果统一用
+   SearchResults 渲染、点击跳转定位行，无需为两种范围各写一套 UI。 */
 
 const searchScope = ref<'vault' | 'doc'>('vault')
 const searchQuery = ref('')
@@ -77,12 +74,16 @@ const caseSensitive = ref(false)
 const wholeWord = ref(false)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
-let docSearchTimer: ReturnType<typeof setTimeout> | null = null
 
-/** vault 范围：防抖全文搜索（选项贯穿大小写 / 全词） */
+/** 当前范围对应的检索文件：本文档范围传 activePath，全库范围不传（递归全库） */
+function scopeFile(): string | undefined {
+  return searchScope.value === 'doc' ? props.activePath ?? undefined : undefined
+}
+
+/** 防抖搜索：选项贯穿大小写 / 全词；file 参数决定范围（空串则跳过） */
 function runSearch(): void {
   const query = searchQuery.value.trim()
-  if (!query) {
+  if (!query || (searchScope.value === 'doc' && !props.activePath)) {
     searchResults.value = []
     isSearching.value = false
     return
@@ -93,10 +94,12 @@ function runSearch(): void {
   searchTimer = setTimeout(async () => {
     if (!props.vaultPath) return
     try {
-      searchResults.value = await window.api.searchVault(props.vaultPath, query, {
-        caseSensitive: caseSensitive.value,
-        wholeWord: wholeWord.value
-      })
+      searchResults.value = await window.api.searchVault(
+        props.vaultPath,
+        query,
+        { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
+        scopeFile()
+      )
     } catch (e) {
       showToast(errMsg(e))
       searchResults.value = []
@@ -106,72 +109,13 @@ function runSearch(): void {
   }, 300)
 }
 
-/** doc 范围：调用编辑器引擎查找当前文档（同步、无 IPC），据选项重建高亮 */
-function runDocFind(): void {
-  const host = props.editorHost
-  if (!host) return
-  const q = searchQuery.value
-  if (!q.trim()) {
-    host.clearFind()
-    return
-  }
-  host.find(q, { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value })
-}
-
-const docCurrent = computed(() => props.editorHost?.findCurrent ?? 0)
-const docTotal = computed(() => props.editorHost?.findTotal ?? 0)
-
-/** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑对应搜索，并清掉另一套的残留状态 */
+/** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑搜索 */
 watch(
   [searchQuery, caseSensitive, wholeWord, searchScope, () => props.activePath, () => props.vaultPath],
-  () => {
-    if (searchScope.value === 'doc') {
-      searchResults.value = []
-      if (docSearchTimer) clearTimeout(docSearchTimer)
-      docSearchTimer = setTimeout(runDocFind, 140)
-    } else {
-      props.editorHost?.clearFind()
-      runSearch()
-    }
-  }
+  () => runSearch()
 )
 
-/* ── 本文档：命中导航与替换（复用编辑器引擎）── */
-function docNext(): void {
-  props.editorHost?.findNext()
-}
-function docPrev(): void {
-  props.editorHost?.findPrev()
-}
-const docReplaceShow = ref(false)
-const docReplaceQuery = ref('')
-const docReplacing = ref(false)
-
-function docReplaceOne(): void {
-  const host = props.editorHost
-  if (!host || !docReplaceQuery.value || docReplacing.value) return
-  docReplacing.value = true
-  try {
-    host.replaceOne(docReplaceQuery.value)
-  } finally {
-    docReplacing.value = false
-  }
-}
-
-function docReplaceAll(): void {
-  const host = props.editorHost
-  if (!host || !docReplaceQuery.value || docReplacing.value) return
-  docReplacing.value = true
-  try {
-    host.replaceAll(docReplaceQuery.value)
-    docReplaceQuery.value = ''
-    docReplaceShow.value = false
-  } finally {
-    docReplacing.value = false
-  }
-}
-
-/* ── vault：全局替换（在搜索命中的文件范围内）── */
+/* ── 替换（双范围共用一套：file 参数决定范围）── */
 const showReplace = ref(false)
 const replaceQuery = ref('')
 const confirming = ref<number | null>(null)
@@ -185,7 +129,8 @@ function askReplace(): void {
   confirming.value = totalHits.value
 }
 
-/** 确认执行：在搜索命中文件范围内做字面量替换（选项与搜索一致），写回磁盘 */
+/** 确认执行：在搜索命中文件范围内做字面量替换（选项与搜索一致），写回磁盘；
+    file 参数随范围走——本文档只改当前文档，全库改全部命中文件 */
 async function doReplace(): Promise<void> {
   const n = confirming.value
   confirming.value = null
@@ -196,7 +141,8 @@ async function doReplace(): Promise<void> {
       props.vaultPath,
       searchQuery.value,
       replaceQuery.value,
-      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value }
+      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
+      scopeFile()
     )
     showToast(L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)))
     emit('replaced', res.paths)
@@ -214,24 +160,26 @@ function clearSearch(): void {
   searchQuery.value = ''
   searchResults.value = []
   isSearching.value = false
-  props.editorHost?.clearFind()
-  docReplaceShow.value = false
-  docReplaceQuery.value = ''
+  showReplace.value = false
+  replaceQuery.value = ''
+  confirming.value = null
 }
 
 function onOpenResult(path: string, line: number): void {
   emit('open-result', { path, line })
 }
 
-/** 聚焦搜索框（Ctrl+F 等快捷键调用）：默认切到全库范围 */
+/** 聚焦搜索框（Ctrl+F 等快捷键调用）：有打开的文档则默认切到「本文档」范围，
+    契合 Ctrl+F = 在当前文档查找的通用语义；否则落到「全部」 */
 function focusSearch(): void {
-  searchScope.value = 'vault'
+  searchScope.value = props.activePath ? 'doc' : 'vault'
   void nextTick(() => searchInput.value?.focus())
 }
 
-/* ── 本文件内回车：本文档范围跳到下一处命中 ── */
+/* ── 本文件内回车：有结果则跳到首个命中行 ── */
 function onSearchEnter(): void {
-  if (searchScope.value === 'doc') docNext()
+  const first = searchResults.value[0]
+  if (first?.hits.length) onOpenResult(first.path, first.hits[0].line)
 }
 
 const searchInput = ref<HTMLInputElement | null>(null)
@@ -302,7 +250,6 @@ watch(
     expanded.value = new Set()
     searchQuery.value = ''
     searchResults.value = []
-    props.editorHost?.clearFind()
   }
 )
 
@@ -562,7 +509,7 @@ function startDrag(e: PointerEvent): void {
         </button>
       </div>
 
-      <!-- 选项行：区分大小写 / 全词匹配（+ 本文档的命中导航） -->
+      <!-- 选项行：区分大小写 / 全词匹配（双范围共用） -->
       <div v-if="vaultPath && searchQuery.trim()" class="opts">
         <button
           class="chip"
@@ -584,57 +531,11 @@ function startDrag(e: PointerEvent): void {
         >
           <span class="chip__ww">⌗</span>
         </button>
-
-        <span v-if="searchScope === 'doc'" class="nav">
-          <button class="nav__btn" type="button" :disabled="!docTotal" :title="L.prev" @click="docPrev">‹</button>
-          <span class="nav__count">{{ docTotal ? docCurrent + 1 + '/' + docTotal : '0/0' }}</span>
-          <button class="nav__btn" type="button" :disabled="!docTotal" :title="L.next" @click="docNext">›</button>
-        </span>
       </div>
 
-      <!-- 替换区：两种范围各一套 -->
-      <template v-if="vaultPath && searchQuery.trim()">
-        <!-- 本文档替换 -->
-        <div v-if="searchScope === 'doc'" class="repl">
-          <button
-            class="repl__toggle"
-            type="button"
-            :class="{ 'repl__toggle--on': docReplaceShow }"
-            :disabled="!docTotal"
-            @click="docReplaceShow = !docReplaceShow"
-          >
-            {{ L.replace }}
-          </button>
-          <div v-if="docReplaceShow" class="repl__panel">
-            <input
-              v-model="docReplaceQuery"
-              class="repl__input"
-              type="text"
-              :placeholder="L.replacePlaceholder"
-              :disabled="docReplacing"
-              @keydown.enter="docReplaceOne"
-            />
-            <button
-              class="repl__go"
-              type="button"
-              :disabled="docReplacing || !docReplaceQuery || !docTotal"
-              @click="docReplaceOne"
-            >
-              {{ docReplacing ? '…' : L.replaceOne }}
-            </button>
-            <button
-              class="repl__go repl__go--ghost"
-              type="button"
-              :disabled="docReplacing || !docReplaceQuery || !docTotal"
-              @click="docReplaceAll"
-            >
-              {{ L.replaceAll }}
-            </button>
-          </div>
-        </div>
-
-        <!-- 全库替换 -->
-        <div v-else class="repl">
+      <!-- 替换区：双范围共用一套（file 参数决定范围） -->
+      <template v-if="vaultPath && searchQuery.trim() && !(searchScope === 'doc' && !activePath)">
+        <div class="repl">
           <button
             class="repl__toggle"
             type="button"
@@ -672,15 +573,9 @@ function startDrag(e: PointerEvent): void {
         </div>
       </template>
 
-      <!-- 结果区 -->
+      <!-- 结果区：双范围统一渲染（本文档范围隐藏文件名分组头） -->
       <template v-if="searchQuery.trim()">
-        <!-- 本文档：编辑器内高亮，侧栏只给状态 -->
-        <template v-if="searchScope === 'doc'">
-          <div v-if="!activePath" class="hint">{{ L.scopeDocHint }}</div>
-          <div v-else-if="docTotal === 0" class="empty">{{ L.noMatchInDoc.replace('{q}', searchQuery.trim()) }}</div>
-          <div v-else class="status">{{ L.docHits.replace('{n}', String(docTotal)) }}</div>
-        </template>
-        <!-- 全库：结果列表 / 进行中 / 无结果 -->
+        <div v-if="searchScope === 'doc' && !activePath" class="hint">{{ L.scopeDocHint }}</div>
         <template v-else>
           <div v-if="isSearching" class="searching">{{ L.searching }}</div>
           <SearchResults
@@ -689,6 +584,7 @@ function startDrag(e: PointerEvent): void {
             :query="searchQuery"
             :case-sensitive="caseSensitive"
             :active-path="activePath"
+            :single-file="searchScope === 'doc'"
             @open="onOpenResult"
           />
           <p v-else class="empty">{{ L.noResult.replace('{q}', searchQuery.trim()) }}</p>
@@ -1162,12 +1058,6 @@ function startDrag(e: PointerEvent): void {
   color: var(--hue-text-3);
 }
 
-.status {
-  padding: 8px 8px 10px;
-  font-size: 11.5px;
-  color: var(--hue-text-3);
-}
-
 .hint {
   padding: 8px;
   font-size: 11.5px;
@@ -1267,63 +1157,6 @@ function startDrag(e: PointerEvent): void {
 .chip__ww {
   font-size: 13px;
   line-height: 1;
-}
-
-.nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-}
-
-.nav__btn {
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--hue-border-subtle);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--hue-text-2);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
-}
-
-.nav__btn:hover:not(:disabled) {
-  color: var(--hue-text-1);
-  background: var(--bg-hover);
-}
-
-.nav__btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.nav__count {
-  min-width: 38px;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--hue-text-3);
-}
-
-/* 全库替换「全部替换」幽灵按钮（本文档范围用） */
-.repl__go--ghost {
-  background: transparent;
-  color: var(--hue-accent);
-  border: 1px solid var(--hue-accent);
-}
-
-.repl__go--ghost:hover:not(:disabled) {
-  background: var(--hue-active);
-}
-
-.repl__go--ghost:disabled {
-  opacity: 0.45;
-  border-color: var(--hue-border-subtle);
-  color: var(--hue-text-3);
 }
 
 /* 操作失败提示：固定在侧栏底部，自动消失 */

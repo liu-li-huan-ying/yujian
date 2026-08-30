@@ -248,13 +248,26 @@ function buildSearchRegex(query: string, opts?: SearchOptions): RegExp {
  * 递归全文搜索。规则与 listTree 一致：跳过点目录、node_modules、同名 `.assets`，
  * 仅搜索 Markdown 文档。为控制开销，单文件最多 20 个命中、总共最多 80 个文件。
  */
+/**
+ * 全文搜索。两种范围共用同一套逻辑，仅范围不同：
+ * - 全库：递归 root 下全部 Markdown 文档（默认）；
+ * - 单文档：传入 file 时只搜该文件（即左侧「本文档」范围），不递归。
+ * 选项（区分大小写 / 全词匹配）与命中行结构两种范围完全一致。
+ */
 export async function searchVault(
   root: string,
   query: string,
-  opts?: SearchOptions
+  opts?: SearchOptions,
+  file?: string
 ): Promise<SearchFileResult[]> {
   const q = query.trim()
   if (!q) return []
+
+  // 单文档范围：只检索引导文件，避免无谓的整库递归
+  if (file) {
+    const hits = await searchInFile(file, q, opts)
+    return hits.length ? [{ path: file, name: basename(file), hits }] : []
+  }
 
   const results: SearchFileResult[] = []
 
@@ -292,13 +305,21 @@ export async function replaceInVault(
   root: string,
   query: string,
   replacement: string,
-  opts?: SearchOptions
+  opts?: SearchOptions,
+  file?: string
 ): Promise<ReplaceResult> {
   const q = query.trim()
   if (!q) return { replaced: 0, files: 0, paths: [] }
 
-  const results = await searchVault(root, q, opts)
-  const targets = results.map((r) => r.path)
+  // 决定替换范围：单文档只取该文件，全库取搜索命中的文件（两种范围复用同一套匹配规则）
+  let targets: string[]
+  if (file) {
+    const hits = await searchInFile(file, q, opts)
+    targets = hits.length ? [file] : []
+  } else {
+    const results = await searchVault(root, q, opts)
+    targets = results.map((r) => r.path)
+  }
 
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = opts?.wholeWord ? `\\b${escaped}\\b` : escaped

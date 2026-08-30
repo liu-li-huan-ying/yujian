@@ -461,11 +461,15 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * `App.vue` 的 `filePath` 改为派生自 `tabs.activePath`；切换标签 = 先 `host.save()` 落盘脏数据，再改 `activePath`，由 `EditorHost` 单实例 `load(newPath)` —— 永远是「单实例换内容」，绝不每标签建实例。
 * 会话白名单 `SessionState` 新增 `openTabs?: string[]`（`electron/shared/ipc-channels.ts` + `session.ts` sanitize），启动 `restore(openTabs, activePath)` 恢复全部标签。
 
-**文件内查找 / 替换（零新增依赖）**
+**文件内查找 / 替换（与「全部」共用同一套引擎，零冗余，2026-08-30）**
 
-* 源码模式：`src/editor/find-source.ts` —— CodeMirror `StateField` + `Decoration` 高亮，从后往前替换避免偏移。
-* 所见即所得：`src/editor/find-wysiwyg.ts` —— ProseMirror `Decoration.inline` 插件（`createFindDecoPlugin`，经 `crepe.editor.use($prose(...))` 注册，与凝神插件同机制）**常驻高亮全部命中**，当前命中加 `pm-find--current` 强化；`applyFind` 合并「选区定位 + 装饰 meta + scrollIntoView」为单次 dispatch。装饰是视图层、不进文档，对 Markdown 往返保真零影响；文档变更时 ranges 经 `tr.mapping` 跟随。视觉与源码模式一致（普通命中强调色半透底、当前命中实强调色 + 反相文字，见 `editor.css` 的 `.pm-find` / `.cm-find`）。
-* 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`（契约见 `src/editor/docFindApi.ts` 的 `DocFindApi`）。该引擎的可见入口原本是标题栏 `search` 图标 + `Ctrl+F` 浮层，已于 2026-08-30 移除；**2026-08-30 已整合进左侧搜索框的「本文档」范围**——用户切到「本文档」即调用 `EditorHost.find` 在当前文档内查找 / 替换 + 命中导航，`App` 经 `editorHostApi` 把宿主适配为 `DocFindApi` 传给 `Sidebar`，与左侧「全部」（vault 全文搜索）共用一个输入框与「区分大小写 / 全词匹配」选项，避免两套重复搜索 UI。
+* **2026-08-30 重构**：原先「本文档」走的是独立的编辑器内查找引擎（`src/editor/find-source.ts` 的 CodeMirror 高亮、`src/editor/find-wysiwyg.ts` 的 ProseMirror 装饰、`src/editor/docFindApi.ts` 的 `DocFindApi` 契约、以及 `EditorHost` 的 `find/findNext/findPrev/replaceOne/replaceAll/clearFind` 暴露），已于本日整体删除，连同 `editor.css` 的 `.cm-find` / `.pm-find` 样式。原因：单文档查找与文件夹全文搜索本质是同一种「在文本中找匹配、返回命中行」操作，**仅范围不同**，分两套实现是代码冗余。
+* **统一方案**：主进程 `electron/main/vault.ts` 的 `searchVault(root, query, opts?, file?)` 与 `replaceInVault(root, query, replacement, opts?, file?)` 各加一个可选 `file` 参数——
+  * 传 `file`：只对这一单个文件查找（不递归），即「本文档」范围；
+  * 不传 `file`：对整个 vault 递归，即「全部」范围。
+  后端其余逻辑（按行切分命中、替换回写、原子写）两范围完全共用。IPC 通道 `VAULT_SEARCH` / `VAULT_REPLACE` 与 preload 的 `searchVault / replaceInVault` 签名同步透传 `file`。
+* **前端 `Sidebar`**：只保留一个搜索框 + 一个 `SearchResults` 渲染器 + 一个替换面板。`scopeFile()` 在「本文档」范围返回 `props.activePath`、在「全部」返回 `undefined`，作为第 4/5 实参传入 `searchVault / replaceInVault`；命中结果一律**点击跳转**（复用既有 `onOpenResult(path, line)` → `EditorHost.revealLine`），不再有 ‹ › 逐个步进。结果元信息用 `SearchResults` 的 `singleFile` 属性区分：`本文档` 显示「N 处命中」，`全部` 显示「N 处命中 · M 个文件」。
+* **取舍**：放弃了编辑器内逐命中常驻高亮 + ‹ › 步进（即用户最初觉得「所见即所得下只是跳转不够直观」那部分体验），换来零代码冗余与两种范围完全一致的交互。命中定位仍可靠（点击命中行即跳到源码模式对应行并精确滚动）。
 
 ### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）
 

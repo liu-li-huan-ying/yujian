@@ -1,28 +1,33 @@
-# 搜索整合：双范围（全部 / 本文档）
+# 搜索重构：单引擎双范围（全部 / 本文档）
 
 ## 做了什么
-把原本"被移除 UI 入口、仅留引擎"的**本文档内查找/替换**，重新整合进**左侧搜索框**，与"文件夹内全文搜索"统一为一个精细化的搜索入口，消除此前"两套搜索"的重复感。
+把「单文档查找」与「文件夹全文搜索」**统一为同一套检索引擎**，仅靠「范围」区分，彻底删除独立的编辑器内查找实现，消除代码冗余。
 
-左侧搜索框现在提供两种范围（玉质分段控件，默认「全部」）：
+- **主进程 `electron/main/vault.ts`**：`searchVault(root, query, opts?, file?)` 与 `replaceInVault(root, query, replacement, opts?, file?)` 各加可选 `file` 参数。
+  - 传 `file` → 只搜这一个文件（不递归）=「本文档」范围；
+  - 不传 `file` → 递归整个 vault =「全部」范围。
+  - 后端按行切分命中、替换回写、原子写两套范围完全共用。IPC `VAULT_SEARCH`/`VAULT_REPLACE` 与 preload 签名同步透传 `file`。
+- **前端 `Sidebar`**：只保留一个搜索框 + 一个 `SearchResults` 渲染器 + 一个替换面板。`scopeFile()` 在「本文档」返回 `props.activePath`、在「全部」返回 `undefined`，作为第 4/5 实参传入。命中结果一律**点击跳转**（复用 `onOpenResult(path, line)` → `EditorHost.revealLine`）。
 
-- **全部（文件夹内）**：主进程 `searchVault` 递归全库全文搜索，结果列表点击定位命中行，支持跨文件「全局替换」（确认弹窗）。
-- **本文档**：复用 `EditorHost` 查找引擎（见 `src/editor/docFindApi.ts` 的 `DocFindApi` 契约），在当前文档内查找/替换，侧栏显示命中计数 `current/total` + `‹ ›` 逐个跳转 + 替换/全部替换，编辑器内高亮当前命中（所见即所得与源码双模式）。
-
-两种范围共用「区分大小写 / 全词匹配」选项（后端 `SearchOptions` 贯通 `searchVault`/`replaceInVault`，vault 正则与文档引擎高亮一致）。
+## 删除的部分（2026-08-30）
+- `src/editor/find-source.ts`（CodeMirror 高亮）、`src/editor/find-wysiwyg.ts`（ProseMirror 装饰）、`src/editor/docFindApi.ts`（`DocFindApi` 契约）三个文件已删除。
+- `EditorHost` 的 `find/findNext/findPrev/replaceOne/replaceAll/clearFind/findCurrent/findTotal` 暴露与内部状态全部移除；`SourceEditor.getView()`、`MilkdownEditor` 的 `createFindDecoPlugin` 注册一并移除。
+- `editor.css` 的 `.cm-find` / `.pm-find` 高亮样式（33 行）已删除。
+- i18n 删除不再使用的 `docHits` / `noMatchInDoc` 键；指南第 3 节改为描述「共用同一套检索逻辑、命中点击即跳转」。
 
 ## 外观与交互细节
-- `.scope` 玉质胶囊分段控件；`.chip` 选项芯片（Aa / ⌗）；`.nav` 命中导航（‹ 计数 ›）；`.status`/`.hint` 状态行，整体延续玉质/玻璃设计令牌。
-- `Ctrl+F` 重新接线 → 聚焦左侧搜索框（不再唤起已删除的浮层）。
-- 切换范围/清空搜索会正确清掉另一套的残留状态（本文档高亮 vs vault 结果）。
+- `.scope` 玉质胶囊分段控件（全部 / 本文档）；`.chip` 选项芯片（Aa / ⌗）；`.status`/`.hint` 状态行，延续玉质/玻璃设计令牌。
+- `Ctrl+F` 接线 → 聚焦左侧搜索框（默认范围：有打开文档时「本文档」，否则「全部」）。
+- `SearchResults` 用 `singleFile` 属性区分元信息：「本文档」显示「N 处命中」，「全部」显示「N 处命中 · M 个文件」。
+- 回车（`onSearchEnter`）跳到第一条命中。
 
 ## 文档与辅助面板
-- 快捷键面板新增「搜索」分组（Ctrl+F 聚焦搜索）；使用指南第 3 节改写为双范围说明。
-- `scFind` 由"查找/替换"改为"聚焦搜索"；README 全文搜索与文件内查找两段同步；ARCHITECTURE §5.9 更新。
+- 使用指南第 3 节改写为统一检索；README「搜索（双范围）」与「文件内查找 / 替换」两段同步为「共用同一套引擎、仅范围不同」；ARCHITECTURE §5.9 改写为单引擎 file 范围。
+- `scFind` 为「聚焦搜索」；快捷键面板含「搜索」分组（Ctrl+F）。
+
+## 取舍
+放弃编辑器内逐命中常驻高亮 + ‹ › 步进（即最初"所见即所得下只跳转不够直观"的体验），换来**零代码冗余**与两种范围完全一致的交互；命中定位仍可靠（点击命中行即跳到源码模式对应行并精确滚动）。
 
 ## 验证
-- `npm run typecheck` ✅、`npm run build` ✅
-- 新主块含 `scopeVault/scopeDoc/docCurrent/docTotal/searchScope/focusSearch` 与引擎方法 `findNext/replaceOne/clearFind`；主进程 `wholeWord` 选项已贯通。
-- 网络仍不通，连同前几轮共 4 个提交（`7f93c87` 写作辅助 / `75fc116` 时区+链接 / `6502f56` 去重 / 本轮）本地待推。
-
-## 待运行期验收
-打开笔记库后：在左侧搜索框切「全部」搜全库、切「本文档」搜当前文档并 `‹ ›` 跳转、试区分大小写/全词匹配、Ctrl+F 聚焦；确认无重复搜索入口、外观与交互顺手。
+- `npm run typecheck` + `npm run build` 预期通过（本任务末执行）。
+- 网络仍不通：完成本地 commit，暂不 push。

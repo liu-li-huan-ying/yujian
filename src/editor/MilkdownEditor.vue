@@ -11,7 +11,6 @@ import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
 import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
-import { createFindDecoPlugin } from './find-wysiwyg'
 
 const props = withDefaults(
   defineProps<{
@@ -196,8 +195,6 @@ async function init(defaultValue?: string): Promise<void> {
 
   // 凝神模式装饰插件：开关由 EditorHost 经模块级状态控制，空事务触发重算，零侵入。
   crepe.editor.use($prose(() => createZenPlugin()))
-  // 所见即所得查找装饰插件：常驻高亮全部命中（当前命中强化），由 EditorHost 经 meta 驱动。
-  crepe.editor.use($prose(() => createFindDecoPlugin()))
 
   await crepe.create()
   crepe.setReadonly(props.readonly)

@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import EditorHost from './editor/EditorHost.vue'
-import type { DocFindApi } from './editor/docFindApi'
 import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
 import PreferencesSettings from './components/PreferencesSettings.vue'
@@ -36,10 +35,6 @@ const filePath = computed(() => tabs.activePath)
 const requestedMode = ref<EditorMode>('wysiwyg')
 const host = ref<InstanceType<typeof EditorHost> | null>(null)
 const sidebarRef = ref<InstanceType<typeof Sidebar> | null>(null)
-/** 把编辑器宿主适配为「本文档查找」契约，传给侧栏搜索的「本文档」范围 */
-const editorHostApi = computed<DocFindApi | null>(
-  () => (host.value as unknown as DocFindApi | null)
-)
 const lastSavedAt = ref<number | null>(null)
 
 /* ── 笔记库 ── */
@@ -673,7 +668,6 @@ onBeforeUnmount(() => {
         :visible="sidebarShown && !focusMode"
         :refresh-tree="refreshTree"
         :open-doc="openPath"
-        :editor-host="editorHostApi"
         @select="onSelect"
         @open-vault="openVault"
         @new-doc="newDoc"
