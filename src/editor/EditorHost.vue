@@ -16,7 +16,8 @@ import {
 } from './find-source'
 import {
   findMatchesInDoc,
-  selectMatch,
+  applyFind,
+  clearFindDeco,
   replaceMatch,
   replaceAllInDoc,
   type WysiwygMatch
@@ -397,10 +398,11 @@ function clear(): void {
   stopLoading()
 }
 
-/* ── 文件内查找 / 替换（批次一）──────────────────
+/* ── 文件内查找 / 替换（批次一 + 所见即所得高亮增强）───────────
    两种模式各有一套查找实现，这里统一分派：
-   - 源码：CodeMirror Decoration 高亮 + 替换（find-source.ts）
-   - 所见即所得：ProseMirror 原生选区高亮当前命中 + 替换（find-wysiwyg.ts）
+   - 源码：CodeMirror Decoration 高亮全部命中 + 当前强化 + 替换（find-source.ts）
+   - 所见即所得：ProseMirror Decoration 高亮全部命中 + 当前强化 + 替换（find-wysiwyg.ts）
+   两者视觉语义一致：普通命中强调色半透底，当前命中实强调色 + 反相文字。
    单实例红线不变：永远只操作当前激活文档的 view。 */
 const findQuery = ref('')
 const findOpts = ref<FindOptions>({})
@@ -432,7 +434,7 @@ function find(query: string, opts: FindOptions): number {
   const matches = findMatchesInDoc(v, query, opts)
   wysiwygMatches.value = matches
   findTotal.value = matches.length
-  if (matches.length) selectMatch(v, matches[0])
+  applyFind(v, matches, 0)
   return matches.length
 }
 
@@ -442,7 +444,7 @@ function applyCurrent(): void {
     if (v) gotoInView(v, findQuery.value, findOpts.value, findCurrent.value)
   } else {
     const v = milkdownView()
-    if (v && wysiwygMatches.value[findCurrent.value]) selectMatch(v, wysiwygMatches.value[findCurrent.value])
+    if (v) applyFind(v, wysiwygMatches.value, findCurrent.value)
   }
 }
 
@@ -497,12 +499,15 @@ function replaceAll(repl: string): number {
   wysiwygMatches.value = []
   findTotal.value = 0
   findCurrent.value = 0
+  clearFindDeco(v)
   return n
 }
 
 function clearFind(): void {
   const sv = sourceView()
   if (sv) clearFindInView(sv)
+  const mv = milkdownView()
+  if (mv) clearFindDeco(mv)
   findQuery.value = ''
   findOpts.value = {}
   findCurrent.value = 0

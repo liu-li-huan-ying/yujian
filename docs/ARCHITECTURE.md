@@ -464,7 +464,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 **文件内查找 / 替换（零新增依赖）**
 
 * 源码模式：`src/editor/find-source.ts` —— CodeMirror `StateField` + `Decoration` 高亮，从后往前替换避免偏移。
-* 所见即所得：`src/editor/find-wysiwyg.ts` —— ProseMirror 原生 `TextSelection` 选中当前命中（编辑器天然高亮选区）+ `scrollIntoView`，**不注入任何 decoration plugin**，对文档结构零侵入。
+* 所见即所得：`src/editor/find-wysiwyg.ts` —— ProseMirror `Decoration.inline` 插件（`createFindDecoPlugin`，经 `crepe.editor.use($prose(...))` 注册，与凝神插件同机制）**常驻高亮全部命中**，当前命中加 `pm-find--current` 强化；`applyFind` 合并「选区定位 + 装饰 meta + scrollIntoView」为单次 dispatch。装饰是视图层、不进文档，对 Markdown 往返保真零影响；文档变更时 ranges 经 `tr.mapping` 跟随。视觉与源码模式一致（普通命中强调色半透底、当前命中实强调色 + 反相文字，见 `editor.css` 的 `.pm-find` / `.cm-find`）。
 * 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`（契约见 `src/editor/docFindApi.ts` 的 `DocFindApi`）。该引擎的可见入口原本是标题栏 `search` 图标 + `Ctrl+F` 浮层，已于 2026-08-30 移除；**2026-08-30 已整合进左侧搜索框的「本文档」范围**——用户切到「本文档」即调用 `EditorHost.find` 在当前文档内查找 / 替换 + 命中导航，`App` 经 `editorHostApi` 把宿主适配为 `DocFindApi` 传给 `Sidebar`，与左侧「全部」（vault 全文搜索）共用一个输入框与「区分大小写 / 全词匹配」选项，避免两套重复搜索 UI。
 
 ### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）

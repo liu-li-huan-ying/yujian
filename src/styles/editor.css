@@ -522,6 +522,25 @@
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
+/* ── 文件内查找高亮（ProseMirror Decoration，所见即所得）──
+   与上方 CodeMirror 视觉语义完全一致：普通命中强调色半透底 + 微圆角，
+   当前命中实强调色底 + 反相文字。`::selection` 透明化避免原生选区色
+   与强调色叠加，保证当前命中呈干净的纯色块。仅作用于 .milkdown 内部。 */
+.milkdown .pm-find {
+  background: rgba(var(--hue-tint-2), 0.32);
+  border-radius: 2px;
+}
+.milkdown .pm-find--current {
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.milkdown .pm-find--current::selection {
+  background: transparent;
+  color: var(--hue-on-accent);
+}
+
 /* ── 凝神 2.0（打字机 + 禅 融合）──
    当前文本块青瓷微光底衬；其余文本块按「文本块距」五档衰减（.zen-dim-1..5）——
    列表项 / 引用 / 表格单元格内的嵌套文本块也逐块淡出（装饰按文档序遍历全部文本块，
