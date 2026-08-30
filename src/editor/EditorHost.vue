@@ -301,6 +301,8 @@ function switchTo(next: EditorMode): void {
         // 渲染恢复后重算大纲高亮
         computeActiveHeading(true)
       })
+        // 切回所见即所得后重新下发搜索高亮（setMarkdown 重渲染可能重置插件状态）
+        reapplyFindHighlight()
       } catch (e) {
         failLoading(`渲染失败：${errMsg(e)}`)
         return
@@ -358,6 +360,8 @@ function onReady(): void {
   ready.value = true
   // 语言切换导致重挂后，恢复之前的滚动位置（避免回顶）
   requestAnimationFrame(restoreScroll)
+  // 视图就绪后重新下发搜索高亮（若重挂前已有搜索，保证所见即所得高亮恢复）
+  reapplyFindHighlight()
   // 语言切换导致重挂后，新实例默认 readonly=false；
   // 若当前在源码模式，需立即恢复只读（避免用户误编辑所见即所得实例）
   if (mode.value === 'source') {
@@ -400,12 +404,18 @@ function revealLine(line: number): void {
  * - 源码模式：经 SourceEditor 的 CodeMirror Decoration 常驻高亮全部命中；
  * - 所见即所得：经 MilkdownEditor 的 ProseMirror Decoration 对称高亮全部命中。
  * currentLine 标记当前结果行强化显示；传空 query 即两端同时清空。
+ * 记录 lastFind，供视图就绪 / 切回所见即所得时重新下发，避免时序导致高亮丢失。
  */
+let lastFind:
+  | { query?: string; opts?: { caseSensitive?: boolean; wholeWord?: boolean }; currentLine?: number }
+  | null = null
+
 function setFindHighlight(
   query?: string,
   opts?: { caseSensitive?: boolean; wholeWord?: boolean },
   currentLine?: number
 ): void {
+  lastFind = query && query.trim() ? { query: query.trim(), opts, currentLine } : null
   source.value?.setFind(query, opts, currentLine)
   if (query && query.trim()) {
     milkdown.value?.setFind({
@@ -417,6 +427,11 @@ function setFindHighlight(
   } else {
     milkdown.value?.setFind(null)
   }
+}
+
+/** 重新下发最近一次高亮请求（视图就绪 / 切回所见即所得后调用，确保高亮到位） */
+function reapplyFindHighlight(): void {
+  if (lastFind) setFindHighlight(lastFind.query, lastFind.opts, lastFind.currentLine)
 }
 
 /**

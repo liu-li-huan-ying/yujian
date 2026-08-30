@@ -14,6 +14,9 @@ import type { Node as PMNode } from '@milkdown/prose/model'
  *
  * 文档被编辑 / 切换文档（setMarkdown 重渲染）时，tr.docChanged 命中 → 用存储的 query
  * 重新扫描当前文档，高亮自动跟随最新内容（currentLine 也重新映射）。
+ *
+ * 模块级 findState 作为「真相源」：即使某些事务路径把 meta 剥离或插件 value.fs 丢失，
+ * 也能在 meta 事务 / 文档变更时自愈重建装饰，杜绝「偶尔不显示」的时序/复位问题。
  */
 export interface WysiwygFindState {
   query: string
@@ -28,6 +31,14 @@ interface FindPluginValue {
 }
 
 export const findKey = new PluginKey<FindPluginValue | null>('yujian-find-wysiwyg')
+
+/** 模块级高亮真相源（与 zen 的 zenState 同策略，保证跨事务/重渲染自愈） */
+let findState: WysiwygFindState | null = null
+
+/** 外部（milkdown.setFind）写入当前高亮状态，供 apply 回退 / 自愈使用 */
+export function setFindState(fs: WysiwygFindState | null): void {
+  findState = fs && fs.query ? fs : null
+}
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -55,26 +66,35 @@ function lineOfPos(doc: PMNode, pos: number): number {
 /** 扫描整个文档文本节点，给每个命中区间打上 .pm-find；当前结果行的命中额外加 .pm-find--current */
 function buildDecos(doc: PMNode, fs: WysiwygFindState): DecorationSet {
   if (!fs.query) return DecorationSet.empty
-  const re = buildRegex(fs.query, fs.caseSensitive, fs.wholeWord)
-  const decos: Decoration[] = []
-  doc.descendants((node, pos) => {
-    if (!node.isText || !node.text) return
-    const t = node.text
-    let m: RegExpExecArray | null
-    re.lastIndex = 0
-    while ((m = re.exec(t))) {
-      const from = pos + m.index
-      const to = from + m[0].length
-      const isCurrent = fs.currentLine !== undefined && fs.currentLine === lineOfPos(doc, from)
-      decos.push(
-        Decoration.inline(from, to, {
-          class: isCurrent ? 'pm-find pm-find--current' : 'pm-find'
-        })
-      )
-      if (m[0].length === 0) re.lastIndex++ // 零宽匹配防护，避免死循环
-    }
-  })
-  return DecorationSet.create(doc, decos)
+  // 部分复杂节点的文本范围可能让内联装饰计算异常；容错包裹，避免单次失败拖垮整条事务
+  try {
+    const re = buildRegex(fs.query, fs.caseSensitive, fs.wholeWord)
+    const decos: Decoration[] = []
+    doc.descendants((node, pos) => {
+      if (!node.isText || !node.text) return
+      const t = node.text
+      let m: RegExpExecArray | null
+      re.lastIndex = 0
+      while ((m = re.exec(t))) {
+        const from = pos + m.index
+        const to = from + m[0].length
+        // 零宽匹配：仅推进指针，不生成装饰（ProseMirror 不允许零长内联装饰）
+        if (to <= from) {
+          re.lastIndex++
+          continue
+        }
+        const isCurrent = fs.currentLine !== undefined && fs.currentLine === lineOfPos(doc, from)
+        decos.push(
+          Decoration.inline(from, to, {
+            class: isCurrent ? 'pm-find pm-find--current' : 'pm-find'
+          })
+        )
+      }
+    })
+    return DecorationSet.create(doc, decos)
+  } catch {
+    return DecorationSet.empty
+  }
 }
 
 export function createFindDecoPlugin(): Plugin {
@@ -89,9 +109,9 @@ export function createFindDecoPlugin(): Plugin {
           if (!meta || !meta.query) return { fs: null, decos: DecorationSet.empty }
           return { fs: meta, decos: buildDecos(tr.doc, meta) }
         }
-        // 文档被编辑 / 切换文档：保持 query，按最新内容重算装饰
-        if (value.fs && value.fs.query && tr.docChanged) {
-          return { fs: value.fs, decos: buildDecos(tr.doc, value.fs) }
+        // 文档被编辑 / 切换文档：meta 被剥离或 value.fs 丢失时，回退模块级真相源自愈重建
+        if (findState && findState.query && tr.docChanged) {
+          return { fs: findState, decos: buildDecos(tr.doc, findState) }
         }
         return value
       }

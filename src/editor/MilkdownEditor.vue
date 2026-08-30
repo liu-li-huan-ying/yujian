@@ -11,7 +11,7 @@ import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
 import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
-import { createFindDecoPlugin, findKey, type WysiwygFindState } from './find-wysiwyg'
+import { createFindDecoPlugin, findKey, setFindState, type WysiwygFindState } from './find-wysiwyg'
 
 const props = withDefaults(
   defineProps<{
@@ -202,6 +202,8 @@ async function init(defaultValue?: string): Promise<void> {
   await crepe.create()
   crepe.setReadonly(props.readonly)
   setupImageResolver()
+  // 视图就绪后补发可能在就绪前到达的高亮请求（首次搜索早于 crepe.create 完成时）
+  flushPendingFind()
   emit('ready')
 }
 
@@ -247,16 +249,33 @@ function getEditorView(): EditorView | null {
   return crepe.editor.action((ctx) => ctx.get(editorViewCtx)) as unknown as EditorView
 }
 
+/** 视图就绪前到达的高亮请求先暂存，crepe.create 完成后由 flushPendingFind 补发 */
+let pendingFind: WysiwygFindState | null | undefined = undefined
+
+/** 视图就绪后补发暂存的高亮（首次搜索可能早于 crepe.create 完成） */
+function flushPendingFind(): void {
+  if (pendingFind === undefined) return
+  const fs = pendingFind
+  pendingFind = undefined
+  setFind(fs)
+}
+
 /**
  * 驱动所见即所得模式搜索命中高亮（对称于源码模式）：传 WysiwygFindState 即按统一
- * query/选项高亮全部命中并映射 currentLine；传 null 清空。经 meta 事务必定触发
- * plugin.apply → 重建装饰，稳定生效。视图未就绪时静默返回（文档加载后 docChanged
- * 会按存储的 query 自行重算，不丢高亮）。
+ * query/选项高亮全部命中并映射 currentLine；传 null 清空。写入模块级真相源以保证
+ * 跨事务/重渲染自愈，再经 meta 事务触发 plugin.apply → 重建装饰，稳定生效。视图未
+ * 就绪时暂存，待 crepe.create 完成后补发，避免「首次搜索早于视图就绪 → 高亮丢失」。
  */
 function setFind(fs: WysiwygFindState | null): void {
+  setFindState(fs)
+  pendingFind = fs
   const view = getEditorView()
   if (!view) return
-  view.dispatch(view.state.tr.setMeta(findKey, fs))
+  try {
+    view.dispatch(view.state.tr.setMeta(findKey, fs))
+  } catch {
+    // 极端情况下事务异常不应中断搜索交互；装饰会在下次文档变更时自愈
+  }
 }
 
 defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, getEditorView, setFind })
