@@ -7,6 +7,9 @@
  *   离线则优雅降级（数学走 MathML、mermaid 退化为代码块），文档始终有效。
  */
 
+import { enhanceFootnotes, replaceEmojiInHtml, replaceInlineMarkupInHtml, parseHtml } from './domUtils'
+import { renderLatexContent } from '../editor/features/mathjax'
+
 export interface ExportOptions {
   /** 引入 KaTeX CSS，让公式排版更精细（默认 true） */
   math?: boolean
@@ -128,6 +131,33 @@ thead th { background: var(--yj-quote); font-weight: 600; }
 tbody tr:nth-child(even) { background: #faf9f6; }
 .katex { font-size: 1.05em; }
 .mermaid { margin: 1.2em 0; text-align: center; }
+/* ── 导出的 LaTeX 代码块：已由 MathJax 渲染成 SVG/文档，居中、过宽可滚动 ── */
+.latex-export { margin: 1.2em 0; text-align: center; overflow-x: auto; }
+.latex-export .latex-doc { text-align: left; }
+.latex-export svg { max-width: 100%; height: auto; }
+/* ── 内联标记：==高亮== / ^上标^ / ~下标~ / <kbd>键</kbd> ──
+   导出用独立青瓷色板（与编辑器 --hue-* 解耦），这里用半透强调色 + 内陷发丝边，
+   与编辑区高亮观感一致、不抢眼。 */
+mark {
+  background: rgba(36, 128, 119, 0.16);
+  color: inherit;
+  padding: 0.05em 0.28em;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(36, 128, 119, 0.3);
+}
+sup, sub { line-height: 0; font-size: 0.78em; }
+kbd {
+  font-family: var(--yj-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.84em;
+  background: #ffffff;
+  color: #1b1d1c;
+  border: 1px solid rgba(20, 30, 28, 0.18);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0.06em 0.42em;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(20, 30, 28, 0.18);
+}
 /* ── 封面页与目录（PDF 分页导出用；HTML 中目录同样可点击跳转）── */
 .yujian-cover {
   min-height: 70vh;
@@ -237,6 +267,16 @@ export function buildExportHtml(bodyHtml: string, title: string, opts: ExportOpt
     body = built.html
     toc = tocHtml(built.entries)
   }
+
+  // 脚注双向跳转：注入锚点与回跳链接（仅作用于导出副本，绝不触碰编辑器 DOM）
+  const fnDoc = parseHtml(`<div id="yj-fn-root">${body}</div>`)
+  const fnRoot = fnDoc.getElementById('yj-fn-root')
+  if (fnRoot) {
+    enhanceFootnotes(fnRoot)
+    replaceEmojiInHtml(fnRoot)
+    replaceInlineMarkupInHtml(fnRoot)
+    body = fnRoot.innerHTML
+  }
   // 封面：标题 / 作者 / 日期，缺省项不渲染
   const cover = opts.cover
     ? coverHtml({ title: docTitle, author: meta.author, date: meta.date })
@@ -287,4 +327,25 @@ ${cover}${toc}${body}
 </article>
 </body>
 </html>`
+}
+
+/**
+ * 把导出 HTML 里的 ```latex 代码块替换为 MathJax 渲染结果（SVG / 文档），
+ * 让导出的文章里公式不再是原始源码（避免 \require / \ce 等以字面量出现）。
+ * 只处理导出产物副本，绝不触碰编辑器内文档。渲染失败时保留原代码块。
+ */
+export async function renderLatexBlocksInExport(html: string): Promise<string> {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const blocks = Array.from(doc.querySelectorAll('pre code.language-latex'))
+  for (const code of blocks) {
+    const pre = code.parentElement
+    if (!pre) continue
+    const rendered = await renderLatexContent(code.textContent ?? '')
+    if (!rendered) continue
+    const holder = doc.createElement('div')
+    holder.className = 'latex-export'
+    holder.innerHTML = rendered
+    pre.parentNode?.replaceChild(holder, pre)
+  }
+  return doc.documentElement.outerHTML
 }

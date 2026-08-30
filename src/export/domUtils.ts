@@ -4,6 +4,15 @@
  * 这些函数操作由 DOMParser 解析出的独立 Document，绝不触碰编辑器内真实文档。
  */
 
+import emojiData from 'markdown-it-emoji/lib/data/full.mjs'
+import { i18n } from '../i18n'
+
+/** name（不含冒号）→ emoji 字符，来自 markdown-it-emoji 全量词典 */
+export const EMOJI_MAP: Record<string, string> = emojiData as unknown as Record<string, string>
+
+/** 短代码名称：字母数字下划线加号减号 */
+const EMOJI_NAME_RE = /[a-z0-9_+-]{1,50}/
+
 /** 把一段 HTML 解析为可操作的独立 Document */
 export function parseHtml(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html')
@@ -123,6 +132,130 @@ export function escapeXml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
+}
+
+/**
+ * 脚注双向跳转（导出 HTML 用）：在离屏副本 DOM 上注入真实锚点与回跳链接。
+ * - 正文引用 <sup data-type="footnote_reference" data-label="N"> → id + 包一层 <a href="#fn-N">
+ * - 底部定义 <dl data-type="footnote_definition" data-label="N"> → id="fn-N" + 末尾追加 <a href="#fnref-N-0">↩</a>
+ * 同一脚注多处引用时 id 带序号，回跳指向第一处引用。仅作用于副本，绝不触碰编辑器 DOM。
+ */
+export function enhanceFootnotes(root: ParentNode): void {
+  const refs = Array.from(root.querySelectorAll('sup[data-type="footnote_reference"]'))
+  const defs = Array.from(root.querySelectorAll('dl[data-type="footnote_definition"]'))
+
+  refs.forEach((ref, i) => {
+    const el = ref as HTMLElement
+    const label = el.getAttribute('data-label') ?? ''
+    const id = `fnref-${label}-${i}`
+    el.setAttribute('id', id)
+    const a = document.createElement('a')
+    a.setAttribute('href', `#fn-${label}`)
+    a.className = 'footnote-ref-link'
+    a.textContent = el.textContent ?? ''
+    el.textContent = ''
+    el.appendChild(a)
+  })
+
+  defs.forEach((def) => {
+    const el = def as HTMLElement
+    const label = el.getAttribute('data-label') ?? ''
+    el.setAttribute('id', `fn-${label}`)
+    if (el.querySelector(':scope > .footnote-backref')) return
+    const back = document.createElement('a')
+    back.setAttribute('href', `#fnref-${label}-0`)
+    back.className = 'footnote-backref'
+    back.textContent = '↩'
+    back.setAttribute('title', i18n.ui.footnoteBackref)
+    el.appendChild(back)
+  })
+}
+
+/**
+ * 导出副本处理：把 `:name:` emoji 短代码替换为 emoji 字符。
+ * 跳过 <code>/<pre> 内的文本，避免破坏代码块里的字面量。
+ * 与编辑器内 emoji 装饰/输入规则共用 EMOJI_MAP。
+ */
+export function replaceEmojiInHtml(root: ParentNode): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      let el = node.parentElement
+      while (el) {
+        const tag = el.tagName
+        if (tag === 'CODE' || tag === 'PRE') return NodeFilter.FILTER_REJECT
+        el = el.parentElement
+      }
+      return NodeFilter.FILTER_ACCEPT
+    }
+  })
+  const targets: Text[] = []
+  let cur: Node | null
+  while ((cur = walker.nextNode())) targets.push(cur as Text)
+
+  const re = new RegExp(`:(${EMOJI_NAME_RE.source}):`, 'g')
+  for (const t of targets) {
+    const value = t.nodeValue ?? ''
+    if (!re.test(value)) continue
+    re.lastIndex = 0
+    const span = document.createElement('span')
+    span.innerHTML = value.replace(re, (_full, name: string) => EMOJI_MAP[name] ?? _full)
+    t.replaceWith(span)
+  }
+}
+
+/**
+ * 导出副本处理：把所见即所得里由装饰呈现的 `==高亮==` / `^上标^` / `~下标~` / `<kbd>键</kbd>`
+ * 转换为语义标签 <mark> / <sup> / <sub> / <kbd>。
+ *
+ * 为什么需要这一步：编辑区只做"装饰显示"，源码里的 `==…==` 等原样保留（保证 Markdown 往返保真），
+ * 因此导出的 view DOM 里这些片段仍是字面文本包裹在 .yj-* 装饰 span 中；这里按内容模式匹配并落地为
+ * 真正的语义标签。跳过 <code>/<pre>/<svg>/<mark>/<sup>/<sub>/<kbd> 以免误处理代码、公式 SVG 与已转换节点。
+ */
+export function replaceInlineMarkupInHtml(root: ParentNode): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      let el = node.parentElement
+      while (el) {
+        const tag = el.tagName
+        if (
+          tag === 'CODE' ||
+          tag === 'PRE' ||
+          tag === 'SVG' ||
+          tag === 'MARK' ||
+          tag === 'SUP' ||
+          tag === 'SUB' ||
+          tag === 'KBD'
+        ) {
+          return NodeFilter.FILTER_REJECT
+        }
+        el = el.parentElement
+      }
+      return NodeFilter.FILTER_ACCEPT
+    }
+  })
+  const targets: Text[] = []
+  let cur: Node | null
+  while ((cur = walker.nextNode())) targets.push(cur as Text)
+
+  const quick =
+    /==[^\n=]+==|\^[^^\n ]+\^|(?<!~)~[^~\n]+~(?!~)|<kbd>[^<]+<\/kbd>/
+  const hl = /==([^\n=]{1,200}?)==/g
+  const sup = /\^([^\^\n ]{1,200}?)\^/g
+  const sub = /(?<!~)~([^~\n]{1,200}?)~(?!~)/g
+  const kbd = /<kbd>([^<]{1,200}?)<\/kbd>/g
+
+  for (const t of targets) {
+    const value = t.nodeValue ?? ''
+    if (!quick.test(value)) continue
+    const html = value
+      .replace(hl, '<mark>$1</mark>')
+      .replace(sup, '<sup>$1</sup>')
+      .replace(sub, '<sub>$1</sub>')
+      .replace(kbd, '<kbd>$1</kbd>')
+    const span = document.createElement('span')
+    span.innerHTML = html
+    t.replaceWith(span)
+  }
 }
 
 /** 把任意「Blob / Buffer / ArrayBuffer / TypedArray」统一成 Uint8Array */

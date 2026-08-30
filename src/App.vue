@@ -21,7 +21,7 @@ import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult, ExportPayload } from '../electron/shared/ipc-channels'
-import { buildExportHtml } from './export/docTemplate'
+import { buildExportHtml, renderLatexBlocksInExport } from './export/docTemplate'
 import { inlineImages } from './export/imageInline'
 import { embedMermaidSvg } from './export/mermaidSvg'
 import { parseFrontmatter } from './editor/frontmatter'
@@ -346,6 +346,8 @@ function onPreferences(): void {
 
 const showHelp = ref(false)
 const helpTab = ref<'shortcuts' | 'guide'>('shortcuts')
+/** 应用版本号（来自主进程，动态显示，避免「关于」面板硬编码过时版本） */
+const appVersion = ref('1.0.0')
 
 function onHelp(tab: 'shortcuts' | 'guide' = 'shortcuts'): void {
   helpTab.value = tab
@@ -378,9 +380,7 @@ const stats = computed<TextStats>(
   () => host.value?.stats ?? { han: 0, words: 0, chars: 0, charsNoSpace: 0, readingMinutes: 0 }
 )
 
-/* ⚠️ 快照功能：实现但未测试（implemented but NOT yet tested）。
-   以下恢复/删除/开关逻辑已落地但未做运行期人工验证，暂不体验，待后续专项审查补验收。 */
-/** 打开/关闭快照面板：打开时刷新当前文档快照列表 */
+/** 打开/关闭快照面板：打开时刷新当前文档快照列表（快照功能已于 2026-08-30 经用户运行期验证可用） */
 function onToggleSnapshot(): void {
   snapshotOpen.value = !snapshotOpen.value
   if (snapshotOpen.value) void snapshots.refresh(vaultPath.value, filePath.value)
@@ -737,6 +737,8 @@ async function buildExportContent(
       finalized = await inlineImages(finalized, filePath.value, readAsDataUrl)
     }
     finalized = await embedMermaidSvg(finalized)
+    // LaTeX 代码块：导出前用 MathJax 渲染成 SVG（编辑器预览已支持，导出保持一致）
+    finalized = await renderLatexBlocksInExport(finalized)
   }
 
   if (isBinary(kind)) {
@@ -1011,6 +1013,9 @@ onMounted(async () => {
   zenPrefs.value = { ...zenPrefs.value, ...(session.zenPrefs ?? {}) }
   setZenPrefs(zenPrefs.value)
 
+  // 动态获取真实应用版本（打包后取 package.json 的 version），展示在「关于」面板
+  window.api.appVersion().then((v) => { if (v) appVersion.value = v }).catch(() => {})
+
   // 启动偏好为「全新页面」时不恢复上次笔记库/文档，打开即空白
   if (session.startupMode !== 'fresh') {
     if (session.vaultPath) await useVault(session.vaultPath)
@@ -1237,6 +1242,7 @@ onBeforeUnmount(() => {
     <HelpPanel
       v-if="showHelp"
       :initial="helpTab"
+      :version="appVersion"
       @close="showHelp = false"
     />
 

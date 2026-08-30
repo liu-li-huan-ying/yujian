@@ -218,3 +218,127 @@ typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「�
 ## 文件
 - 新增：`src/export/types.ts`、`src/export/domUtils.ts`、`src/export/docx.ts`、`src/export/epub.ts`、`src/export/rtf.ts`、`src/export/odt.ts`、`src/export/serialize.ts`。
 - 改动：`src/App.vue`（`buildExportContent`/`writeExport`/`doExport`/`onCompile` 分派 + `BytesToBase64` + `kindLabel`/`mimeFor`）、`src/components/TitleBar.vue`、`src/components/TitleMenu.vue`、`src/components/CompilePanel.vue`、`src/components/ExportPreview.vue`、`electron/shared/ipc-channels.ts`（`ExportPayload.binaryBase64`/`mime`）、`electron/main/index.ts`（按 `binaryBase64` 写字节）、`src/i18n/locales/{zh-CN,en-US}.ts`。
+
+---
+
+# 全文档与软件内快捷键/介绍同步 + 废弃清理（2026-08-30）
+
+## 做了什么
+按用户要求，把**软件内（UI）与所有文档**的快捷键、功能介绍同步到最新状态，并筛查删除无用的过时/废弃文件。
+
+### 软件内（renderer）
+- `src/App.vue`：移除 `onToggleSnapshot` 上方"⚠ 实现但未测试"陈旧注释；新增 `appVersion` ref，`onMounted` 经 `window.api.appVersion()` 动态取**真实版本号**，传给 `<HelpPanel :version>`（根治硬编码过时版本）。
+- `src/components/HelpPanel.vue`：新增 `version?` prop；使用指南「关于」节追加「{{ aboutVersion }} {{ version }}」。
+- `src/i18n/locales/{zh-CN,en-US}.ts`：新增 `aboutVersion` 键；`aboutBody` 去掉硬编码"版本 1.1"（改由运行时版本动态显示）。
+
+### 文档
+- `README.md`：快照说明改为"2026-08-30 经用户运行期验证可用，已无未测试标注"。
+- `docs/PHASE2-PLAN.md` §2：FindPanel 入口改为"已于 2026-08-30 移除，`Ctrl/Cmd+F` 现聚焦左侧搜索框"。
+- `docs/UI-DESIGN.md`：§5.6 标题标"⚠️ 设计中，尚未实现"；§5.2/§430 注明 `Ctrl+K` 命令面板未实现、`Ctrl+F` 为实际键位。
+- `docs/PHASE2-BATCH1-UI-PLAN.md`：状态块补"⚠️ 功能变更(2026-08-30)：FindPanel 已移除"注记。
+- `docs/PHASE2-BATCH2-UI-PLAN.md`：5 处 `FindPanel` 定位语言引用改为 `.glass` 浮起层规范（FindPanel 已删，避免指向死组件）。
+- `docs/preview/{theme-yujian,style-report-v1}.html`：2 处"命令面板"加"设计目标，当前尚未实现，见 F1"注记。
+
+## 废弃清理（Part B）
+- 删除 4 个 gitignored 根目录残留：`.1788052741701.tmp`、`electron.vite.config.1788055056509.mjs`、`electron.vite.config.1788090960032.mjs`、`electron.vite.config.1788091055277.mjs`（均匹配 `.gitignore` 的 `.*.tmp` / `electron.vite.config.*.mjs`）。**保留**真正的 `electron.vite.config.ts`。
+- 确认 `src/editor/find-source.ts` / `find-wysiwyg.ts` 仍被左侧搜索高亮使用，非死代码，不删。
+
+## 验证
+- `npm run typecheck` ✅；`npm run build` ✅（先 `rm -rf out` 清 EPERM 残留再重建）。
+- 产物核验：renderer bundle 无残留"版本 1.1"，`aboutVersion`/`appVersion` 已打进；`find-source`/`find-wysiwyg` 仍在 bundle（高亮保留）。
+- 待运行期验收：F1 帮助「关于」显示真实版本号（非硬编码 1.1）。
+
+## 快捷键事实来源（2026-08-30 核实）
+`main` 进程**不建原生 Menu 加速器**，全部快捷键由 `src/App.vue` `onKeydown` 窗口监听分发，这是唯一事实来源。当前 8 条：
+`F1` 帮助 · `Ctrl/Cmd+O` 打开 · `Ctrl/Cmd+S` 保存 · `Ctrl/Cmd+\` 切侧栏 · `Ctrl/Cmd+Shift+\` 切大纲 · `Ctrl/Cmd+/` 切渲染/源码 · `Ctrl/Cmd+F` 聚焦左侧搜索框 · `Esc` 凝神状态机。
+
+---
+
+# Markdown 渲染问题修复（2026-08-30 晚）
+
+用户提交 9 项渲染问题，确认 4 个方向后**全部落地**，typecheck ✅ + clean build ✅（`✓ built in 14.92s`）。
+
+## 已修
+
+| # | 问题 | 处理 |
+|---|------|------|
+| 1 | 粗体高亮不明显 | `editor.css`：`strong` 由 `font-weight:500`（与正文同色同重）改 `700` |
+| 2 | Ctrl+链接无法跳转 | 新增 IPC `app:openExternal`（main 用 `shell.openExternal`，仅放行 http(s)）；编辑器点击委托，仅 Ctrl/⌘ 拦截，普通点击照常可编辑 |
+| 3 | 互联网图片不显示 | `src/index.html` CSP `img-src` 补 `https:`（原仅 `'self' data:`） |
+| 4 | Mermaid/甘特图/饼图不渲染 | 编辑区改为**默认直接显示图表**（§5.3.1） |
+| 5 | 脚注不能跳回正文 | 编辑区点击双向跳转 + 导出注入回跳锚点 |
+| 6 | Emoji 短代码不转换 | `:smile:` 输入自动转换 + 只读装饰显示 + 导出替换 |
+| 7 | LaTeX 公式能力不足 | **KaTeX → MathJax**：支持 `\ce` / `\require` / `\label` / `\eqref` |
+
+## 关键设计取舍
+
+**Mermaid 编辑区默认渲染**：`previewOnlyByDefault` 是全局布尔，直接设 true 会让*所有*代码块变只读预览。
+解法是靠 `renderPreview` 返回值天然分流——非 mermaid/latex 返回 `null`（预览面板不渲染、编辑器不加 `hidden`，
+**普通代码块行为完全不变**），命中图表类则默认显示渲染结果、点 Edit 仍可改源码。零 schema 改动、零副作用。
+
+**MathJax 只换渲染层**：保留 Crepe 的 Latex Feature（schema + `remark-math` 解析），
+让「Markdown 往返保真」红线继续由已验证实现承担。
+- 行内 `$…$`：`math_inline` 原子节点，Crepe 渲染写在 `toDOM` 里调 katex 但**未注册 nodeView**
+  → 补 `props.nodeViews.math_inline` 插件即可无冲突接管。
+- 块级 `$$…$`：`language='latex'` 代码块走 `renderPreview`，Crepe 的 Latex Feature 会拦截，
+  必须用 `editor.config(ctx => ctx.update(codeBlockConfig.key, …))` 在**其之后**覆盖
+  （`featureConfigs` 不行——包裹发生在 Crepe 构造期）。
+- 沙箱安全：用 `liteAdaptor`，实测**无任何 document/window 全局**也能渲染，
+  不会重蹈 mermaid 缺 `Buffer` 的覆辙；输出 SVG(`fontCache:'none'`) 自包含，不依赖外部 CSS。
+
+**脚注不做 DOM 注入**：编辑区只用点击委托 + CSS `↩` 提示，避免与 ProseMirror 托管 DOM 打架；
+仅在导出副本（离屏）注入真实 `<a>` 锚点。
+
+## 新增依赖
+- `mathjax-full@^3.2.2`（CJS，Vite commonjs 插件正常转换；分块 AllPackages 375kB / svg 1.5MB）
+- `markdown-it-emoji@^3.1.0`（**只用其 `lib/data/full.mjs` 词典**，不用其 markdown-it 插件）
+
+## 新增文件
+`src/editor/features/mathjax.ts`、`src/editor/features/emoji.ts`、`src/types/markdown-it-emoji-data.d.ts`
+
+## 待运行期（GUI）验收
+mermaid / 公式在编辑区的默认渲染观感；行内数学编辑浮层（Crepe `inlineLatexTooltip`）与自研 nodeView 的兼容性；
+emoji 输入规则的触发时机；Ctrl+点击外链跳转。
+
+## 说明：整篇 LaTeX 文档
+`\documentclass…\begin{document}` 这类**完整 LaTeX 文稿**不属于 MathJax 的能力范围
+（MathJax 渲染"数学"，不渲染 article 文档类）。行内/行间数学已全部支持；
+若确有整篇文稿渲染需求，需另行引入 LaTeX.js 之类的方案。
+
+---
+
+# Markdown 渲染问题修复 · 第二轮（2026-08-30 晚）
+
+用户对第一轮改动做运行期复验并补充新需求。本轮定位并修复确定 bug + 落地 4 类新内联语法。
+
+## 关键修复：块级数学被 katex 覆盖（根因 bug）
+上一轮块级 `$$…$$` 的 MathJax 覆盖用 `editor.config(...)` 写在 `create()` 之前，而 Crepe 的 Latex
+特性在 `create()` 期间也会 `ctx.update(codeBlockConfig.key, …)` 用 katex 包裹，且排在前面 → 我的覆盖被盖掉，
+`\label \eqref \ce \require` 以字面量出现。
+
+**修复**：改用 `crepe.editor.use((ctx) => () => ctx.update(...))` —— `.use()` 特性排在构造函数里
+`loadFeature` 注册的内部特性之后，`create()` 时 runner 按注册顺序执行，MathJax 包装成为**最外层**，
+`latex` 语言最终命中 MathJax。（详见 `docs/ARCHITECTURE.md` §5.3.2 修订）
+
+## mermaid 复验
+带 polyfill 的 jsdom 无头测试确认 mermaid 11.17.2 在 `securityLevel:'strict'` 下
+**flow / sequence / pie / gantt 全部成功出 SVG** —— 渲染能力本身没问题，编辑区默认渲染（§5.3.1）逻辑正确。
+用户报"时序图/甘特图/饼图渲染不出来"疑为旧构建或源码模式，需 GUI 实跑确认。
+
+## 新增：内联标记（§5.3.5）
+`==高亮==` / `^上标^` / `~下标~` / `<kbd>` 在所见即所得以对应样式呈现。复用 emoji 的
+「装饰 + 导出后处理」模式，**不引入新 schema**，源码一字不改、Markdown 往返保真红线稳保：
+- `src/editor/features/inlineMarkup.ts`：`inlineMarkupDecorationPlugin` 给命中片段加 `.yj-*` 装饰（跳过代码/公式块）
+- `src/export/domUtils.ts`：`replaceInlineMarkupInHtml` 导出时把片段落为 `<mark>/<sup>/<sub>/<kbd>`
+- `src/export/docTemplate.ts` + `src/styles/editor.css`：接入导出流程并补样式
+
+下标用单 `~`（避开 GFM `~~删除线~~`）；上标 `^…^` 内部禁空格/^，避免误吞行首锚点/公式。
+
+## 验证
+typecheck ✅ + clean build ✅（`✓ built in 14.50s`）。
+**待 GUI 验收**：块级数学是否真走 MathJax（覆盖顺序无法无头验证）、mermaid 实跑观感、内联标记手感、kbd 导出。
+
+## 说明：整篇 LaTeX 文档
+`\documentclass…\begin{document}` 是**完整 LaTeX 文档**而非数学。放进 ```latex 围栏走块级数学时，MathJax
+对 `\documentclass`/`\begin{document}` 报错 → 降级显示源码 + 提示。MathJax 渲染"数学"不渲染"文档类"；
+若需整篇文档渲染需另引 LaTeX.js（待你拍板是否做）。

@@ -69,6 +69,8 @@ const enUS = {
     exportEpub: 'EPUB',
     exportRtf: 'RTF',
     exportOdt: 'ODF',
+    /** Tooltip for footnote back-reference links in exported HTML */
+    footnoteBackref: 'Back to reference',
     imgHost: 'Img Host',
     modeWysiwyg: 'WYSIWYG',
     modeSource: 'Source',
@@ -322,6 +324,7 @@ const enUS = {
     tabGuide: 'Guide',
     close: '×',
     aboutTitle: 'About 玉笺',
+    aboutVersion: 'Version',
     scFile: 'File',
     scOpen: 'Open file',
     scSave: 'Save document',
@@ -374,7 +377,7 @@ const enUS = {
       }
     ],
     aboutBody:
-      '玉笺 · Jade Markdown Editor\nVersion 1.1 · Electron + Vue 3 + Milkdown\nLocal-first · Faithful round-trip · No cloud tracking'
+      '玉笺 · Jade Markdown Editor\nElectron + Vue 3 + Milkdown\nLocal-first · Faithful round-trip · No cloud tracking'
   }
 }
 

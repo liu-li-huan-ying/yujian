@@ -69,6 +69,8 @@ const zhCN = {
     exportEpub: 'EPUB',
     exportRtf: 'RTF',
     exportOdt: 'ODF',
+    /** 导出 HTML 中脚注回跳链接的提示 */
+    footnoteBackref: '返回引用处',
     imgHost: '图床',
     modeWysiwyg: '渲染模式',
     modeSource: '源码',
@@ -321,6 +323,7 @@ const zhCN = {
     tabGuide: '使用指南',
     close: '×',
     aboutTitle: '关于 玉笺',
+    aboutVersion: '版本',
     scFile: '文件',
     scOpen: '打开文件',
     scSave: '保存文档',
@@ -373,7 +376,7 @@ const zhCN = {
       }
     ],
     aboutBody:
-      '玉笺 · 玉质 Markdown 编辑器\n版本 1.1 · Electron + Vue 3 + Milkdown\n本地优先 · 往返保真 · 无云端追踪'
+      '玉笺 · 玉质 Markdown 编辑器\nElectron + Vue 3 + Milkdown\n本地优先 · 往返保真 · 无云端追踪'
   }
 }
 

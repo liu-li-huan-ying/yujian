@@ -6,12 +6,20 @@ import { editorViewCtx, parserCtx, schemaCtx, serializerCtx } from '@milkdown/co
 import { TextSelection } from '@milkdown/prose/state'
 import { DOMSerializer } from '@milkdown/prose/model'
 import type { EditorView } from '@milkdown/prose/view'
-import { $prose, replaceAll } from '@milkdown/utils'
+import { $prose, $inputRule, replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 import 'katex/dist/katex.min.css'
 import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
+import { emojiInputRule, emojiDecorationPlugin } from './features/emoji'
+import { inlineMarkupDecorationPlugin } from './features/inlineMarkup'
+import { htmlInlineSchema, remarkHtmlInline } from './features/htmlInline'
+import {
+  mathInlineNodeViewPlugin,
+  renderMathBlockPreview
+} from './features/mathjax'
+import { codeBlockConfig } from '@milkdown/kit/component/code-block'
 import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
 import {
@@ -145,6 +153,58 @@ function setupImageResolver(): void {
   })
 }
 
+/**
+ * Ctrl/⌘+点击链接 → 用系统默认浏览器打开（普通点击不拦截，保持可编辑）。
+ * 仅处理 http(s) 链接；锚点 / 文档内跳转 / 相对路径交由编辑器自身处理。
+ */
+function onEditorClick(e: MouseEvent): void {
+  if (!e.ctrlKey && !e.metaKey) return
+  const target = e.target as HTMLElement | null
+  const anchor = target?.closest('a')
+  if (!anchor) return
+  const href = anchor.getAttribute('href') ?? ''
+  if (!/^https?:\/\//i.test(href)) return
+  e.preventDefault()
+  void window.api.openExternal(href)
+}
+
+/**
+ * 脚注双向跳转（零 DOM 注入，避免与 ProseMirror 托管 DOM 冲突）：
+ * - 点正文里的引用 <sup data-type="footnote_reference"> → 滚到底部定义
+ * - 点底部定义的 <dt>（带 ↩ 提示）→ 滚回正文第一个引用
+ * 锚点与回跳 <a> 在「导出 HTML」时由 enhanceFootnotes 注入；编辑区内仅用滚动导航。
+ */
+function onFootnoteClick(e: MouseEvent): void {
+  const target = e.target as HTMLElement | null
+  if (!target) return
+  const ref = target.closest('sup[data-type="footnote_reference"]') as HTMLElement | null
+  if (ref) {
+    const label = ref.getAttribute('data-label') ?? ''
+    const def = host.value?.querySelector(
+      `dl[data-type="footnote_definition"][data-label="${cssAttr(label)}"]`
+    ) as HTMLElement | null
+    def?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  const def = target.closest('dl[data-type="footnote_definition"]') as HTMLElement | null
+  if (def) {
+    const dt = def.querySelector(':scope > dt') as HTMLElement | null
+    if (dt && (target === dt || dt.contains(target))) {
+      const label = def.getAttribute('data-label') ?? ''
+      const back = host.value?.querySelector(
+        `sup[data-type="footnote_reference"][data-label="${cssAttr(label)}"]`
+      ) as HTMLElement | null
+      back?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+}
+
+/** 属性选择器里转义特殊字符（脚注 label 通常为数字，但兼容任意字符串） */
+function cssAttr(value: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value)
+  return value.replace(/["\\]/g, '\\$&')
+}
+
 async function init(defaultValue?: string): Promise<void> {
   if (!host.value) return
 
@@ -172,6 +232,10 @@ async function init(defaultValue?: string): Promise<void> {
       [Crepe.Feature.CodeMirror]: {
         languages,
         renderPreview,
+        // mermaid 代码块默认即显示渲染后的图表（预览优先），普通代码块仍走默认编辑视图。
+        // 机制：renderPreview 对非 mermaid 返回 null → 预览面板不渲染、CodeMirror 编辑器照常显示；
+        // 对 mermaid 返回 SVG → 预览面板渲染且编辑器默认隐藏（点击 Edit 仍可编辑源码）。
+        previewOnlyByDefault: true,
         previewLabel: L.codeMirror.previewLabel,
         previewLoading: L.codeMirror.previewLoading,
         searchPlaceholder: L.codeMirror.searchPlaceholder,
@@ -208,10 +272,40 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.editor.use($prose(() => createZenPlugin()))
   // 所见即所得搜索命中高亮插件：与源码模式对称，由统一搜索 query/选项驱动。
   crepe.editor.use($prose(() => createFindDecoPlugin()))
+  // Emoji 短代码：输入 `:smile:` 自动转 emoji + 已有短代码只读显示为 emoji
+  crepe.editor.use($inputRule(() => emojiInputRule))
+  crepe.editor.use($prose(() => emojiDecorationPlugin()))
+  // 内联标记装饰：==高亮== / ^上标^ / ~下标~ 在编辑区以对应样式呈现（源码不变）
+  crepe.editor.use($prose(() => inlineMarkupDecorationPlugin()))
+  // 内联原始 HTML（<kbd>键</kbd> / <sub> / <sup> / <mark> …）：remark 改写 + 节点渲染，
+  // 标签不显示、只显示渲染结果，且 Markdown 往返保真（导出写回原样 HTML）
+  crepe.editor.use(remarkHtmlInline)
+  crepe.editor.use(htmlInlineSchema)
+  // 行内数学 $…$ 改由 MathJax 渲染（接管 math_inline 节点显示）
+  crepe.editor.use($prose(() => mathInlineNodeViewPlugin()))
+  // 块级数学 $$…$$ 走 renderPreview（language='latex'）。Crepe 的 Latex 特性会在 create()
+  // 期间用 katex 覆盖 codeBlockConfig.renderPreview，普通 editor.config 调用排在它之前会被盖掉；
+  // 故这里用 .use() 特性（排到内部特性之后）再覆盖一次，让 MathJax 最终胜出，
+  // 从而支持 \ce / \require / \label / \eqref。mermaid 等其它语言仍交回上一级处理。
+  crepe.editor.use((ctx) => () => {
+    ctx.update(codeBlockConfig.key, (prev) => ({
+      ...prev,
+      renderPreview: (language, content, applyPreview) => {
+        if (String(language).toLowerCase() === 'latex') {
+          return renderMathBlockPreview(content, applyPreview)
+        }
+        return prev.renderPreview(language, content, applyPreview)
+      }
+    }))
+  })
 
   await crepe.create()
   crepe.setReadonly(props.readonly)
   setupImageResolver()
+  // Ctrl/⌘+点击链接跳转：普通点击保持可编辑，仅修饰键按下时打开外部浏览器
+  host.value?.addEventListener('click', onEditorClick)
+  // 脚注双向跳转（点引用跳定义、点定义 dt 跳回引用）
+  host.value?.addEventListener('click', onFootnoteClick)
   // 视图就绪后补发可能在就绪前到达的高亮请求（首次搜索早于 crepe.create 完成时）
   flushPendingFind()
   emit('ready')
@@ -224,6 +318,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   imgObserver?.disconnect()
   imgObserver = null
+  host.value?.removeEventListener('click', onEditorClick)
+  host.value?.removeEventListener('click', onFootnoteClick)
   void crepe?.destroy()
   crepe = null
 })

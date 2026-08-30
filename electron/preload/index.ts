@@ -34,6 +34,10 @@ const api = {
   setNativeTheme: (mode: 'dark' | 'light' | 'system'): Promise<void> =>
     ipcRenderer.invoke(IPC.APP_SET_NATIVE_THEME, mode),
 
+  /** 用系统默认浏览器打开外部链接（Ctrl/⌘+点击编辑器内链接跳转） */
+  openExternal: (url: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.APP_OPEN_EXTERNAL, url),
+
   readFile: (filePath: string): Promise<string> =>
     ipcRenderer.invoke(IPC.FILE_READ, filePath),
 
