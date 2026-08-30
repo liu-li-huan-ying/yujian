@@ -5,6 +5,7 @@ import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import { useSnapshotsStore } from '../store/snapshots'
 import { diffLines } from 'diff'
 import { useI18n } from '../i18n'
+import { formatDateTime, localTimeZone } from '../utils/time'
 
 const { t } = useI18n()
 const L = t.ui
@@ -94,10 +95,10 @@ function onMenuSelect(action: string): void {
   else if (action === 'delete') emit('delete', id)
 }
 
+const tz = localTimeZone()
+
 function fmtTime(ts: number): string {
-  const d = new Date(ts)
-  const p = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  return formatDateTime(ts)
 }
 </script>
 
@@ -141,7 +142,7 @@ function fmtTime(ts: number): string {
           @click="snapshots.selectedId = item.id"
           @contextmenu="onContext($event, item.id)"
         >
-          <span class="row__time">{{ fmtTime(item.createdAt) }}</span>
+          <span class="row__time" :title="tz ? L.snapshotTimezone.replace('{tz}', tz) : ''">{{ fmtTime(item.createdAt) }}</span>
           <span v-if="item.note" class="row__note">{{ item.note }}</span>
           <span class="row__delta">{{ deltaChars(item.charCount) }}</span>
         </button>
