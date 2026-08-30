@@ -42,7 +42,7 @@ const emit = defineEmits<{
   (e: 'open-result', payload: { path: string; line: number }): void
   /** 全局替换完成：把被改写的文件列表抛给 App，便于重载正在编辑的文档 */
   (e: 'replaced', paths: string[]): void
-  /** 源码模式命中高亮状态：本文档范围有查询时把 query/选项/当前行交给编辑器高亮 */
+  /** 双范围命中高亮状态：有查询且已打开文档时把 query/选项/当前行交给编辑器（源码 + 所见即所得两端高亮） */
   (e: 'find-highlight', payload: {
     query: string
     opts: { caseSensitive: boolean; wholeWord: boolean }
@@ -90,12 +90,13 @@ function scopeFile(): string | undefined {
 }
 
 /**
- * 驱动源码模式命中高亮：仅「本文档」范围 + 有查询 + 已打开文档时，把 query/选项/当前行
- * 抛给编辑器（EditorHost → SourceEditor 的 CodeMirror Decoration 常驻高亮全部命中）；
- * 其余情况（全库范围 / 无查询 / 无文档）抛 null 清空高亮。本地计算无需等 IPC 结果，即时生效。
+ * 驱动两端命中高亮：只要有查询且已打开文档，就把 query/选项/当前行抛给编辑器
+ * （EditorHost 同时转发给源码模式 CodeMirror 装饰 + 所见即所得 ProseMirror 装饰，
+ * 两种范围都高亮——全库范围也会高亮当前打开文档内的全部命中）；
+ * 其余情况（无查询 / 无文档）抛 null 清空高亮。本地计算无需等 IPC 结果，即时生效。
  */
 function syncFindHighlight(): void {
-  if (searchScope.value === 'doc' && searchQuery.value.trim() && props.activePath) {
+  if (searchQuery.value.trim() && props.activePath) {
     emit('find-highlight', {
       query: searchQuery.value.trim(),
       opts: { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
@@ -106,33 +107,35 @@ function syncFindHighlight(): void {
   }
 }
 
-/** 防抖搜索：选项贯穿大小写 / 全词；file 参数决定范围（空串则跳过） */
-function runSearch(): void {
+/** 执行真正的 IPC 搜索（无防抖，供输入防抖与替换后即时刷新复用） */
+async function executeSearch(): Promise<void> {
   const query = searchQuery.value.trim()
-  if (!query || (searchScope.value === 'doc' && !props.activePath)) {
+  if (!query || (searchScope.value === 'doc' && !props.activePath) || !props.vaultPath) {
     searchResults.value = []
     isSearching.value = false
     return
   }
   isSearching.value = true
+  try {
+    searchResults.value = await window.api.searchVault(
+      props.vaultPath,
+      query,
+      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
+      scopeFile()
+    )
+  } catch (e) {
+    showToast(errMsg(e))
+    searchResults.value = []
+  } finally {
+    isSearching.value = false
+  }
+}
+
+/** 输入防抖搜索：连续输入不每次重扫整个库 */
+function runSearch(): void {
   if (searchTimer) clearTimeout(searchTimer)
   // 防抖：连续输入不每次重扫整个库
-  searchTimer = setTimeout(async () => {
-    if (!props.vaultPath) return
-    try {
-      searchResults.value = await window.api.searchVault(
-        props.vaultPath,
-        query,
-        { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
-        scopeFile()
-      )
-    } catch (e) {
-      showToast(errMsg(e))
-      searchResults.value = []
-    } finally {
-      isSearching.value = false
-    }
-  }, 300)
+  searchTimer = setTimeout(() => void executeSearch(), 300)
 }
 
 /** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑搜索并同步源码高亮 */
@@ -175,7 +178,10 @@ async function doReplace(): Promise<void> {
     )
     showToast(L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)))
     emit('replaced', res.paths)
-    runSearch() // 刷新结果，反映替换后状态
+    // 立即刷新结果（不走输入防抖），反映替换后状态
+    await executeSearch()
+    // 替换可能引发行号偏移 → 让 currentLine 跟随到替换后仍有效的命中，避免残留过期行号
+    rederiveCurrentLine()
     replaceQuery.value = ''
     showReplace.value = false
   } catch {
@@ -196,9 +202,22 @@ function clearSearch(): void {
   syncFindHighlight()
 }
 
+/**
+ * 替换后重新推导当前命中行：替换可能引发行号整体偏移，旧的 currentLine 已不可靠。
+ * 优先取当前活动文档的首个命中行；否则取首个文件的首个命中行；都没有则清空。
+ * 确保 currentLine 指向替换后仍有效的命中，高亮 current 标记不残留过期位置。
+ */
+function rederiveCurrentLine(): void {
+  const path = props.activePath
+  const fileRes = path ? searchResults.value.find((r) => r.path === path) : undefined
+  const target = fileRes ?? searchResults.value[0]
+  currentFindLine.value = target && target.hits.length ? target.hits[0].line : undefined
+  syncFindHighlight()
+}
+
 function onOpenResult(path: string, line: number): void {
-  // 本文档范围：记录当前结果行，让源码模式高亮强化该行命中
-  if (searchScope.value === 'doc') currentFindLine.value = line
+  // 双范围都记录当前结果行，供源码模式 + 所见即所得对称高亮强化该命中
+  currentFindLine.value = line
   syncFindHighlight()
   emit('open-result', { path, line })
 }
