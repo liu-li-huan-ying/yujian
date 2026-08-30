@@ -53,7 +53,9 @@ const enUS = {
     previewLoading: 'Rendering…',
     searchPlaceholder: 'Search language',
     noResultText: 'No match',
-    copyText: 'Copy'
+    copyText: 'Copy',
+    editLabel: 'Edit',
+    hideLabel: 'Hide'
   },
 
   /* ── App UI ── */

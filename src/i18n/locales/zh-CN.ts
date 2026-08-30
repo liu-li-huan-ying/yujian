@@ -53,7 +53,9 @@ const zhCN = {
     previewLoading: '渲染中…',
     searchPlaceholder: '搜索语言',
     noResultText: '无匹配语言',
-    copyText: '复制'
+    copyText: '复制',
+    editLabel: '编辑',
+    hideLabel: '隐藏'
   },
 
   /* ── 应用 UI ── */
