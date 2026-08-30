@@ -26,7 +26,7 @@
 - `scFind` 为「聚焦搜索」；快捷键面板含「搜索」分组（Ctrl+F）。
 
 ## 取舍
-放弃编辑器内逐命中常驻高亮 + ‹ › 步进（即最初"所见即所得下只跳转不够直观"的体验），换来**零代码冗余**与两种范围完全一致的交互；命中定位仍可靠（点击命中行即跳到源码模式对应行并精确滚动）。
+放弃 ‹ › 步进与所见即所得装饰，换来**零代码冗余**与两种范围完全一致的交互。但**源码模式下保留了 CodeMirror `Decoration` 常驻高亮全部命中**（用户认可该体验），新增 `src/editor/find-source.ts` 的 `sourceFindField`：按统一 `query/opts` 全文扫描命中打 `.cm-find`、当前结果行打 `.cm-find--current`；经 `Sidebar → App → EditorHost.setFindHighlight → SourceEditor.setFind` 驱动，仅在「本文档」范围生效。所见即所得模式不恢复内嵌高亮（点击命中即跳源码对应行）。命中定位仍可靠（点击命中行即跳到源码模式对应行并精确滚动）。
 
 ## 验证
 - `npm run typecheck` + `npm run build` 预期通过（本任务末执行）。

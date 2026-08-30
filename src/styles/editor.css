@@ -430,6 +430,21 @@
   background: var(--hue-active) !important;
 }
 
+/* ── 源码模式搜索命中常驻高亮（本文档范围，复用统一搜索 query）──
+   普通命中：青瓷强调色半透底；当前结果所在行命中：实强调色 + 反相文字。
+   纯视图装饰，不进文档、对 Markdown 往返保真零影响。 */
+.cm-editor .cm-find {
+  background: var(--hue-active);
+  border-radius: 2px;
+}
+.cm-editor .cm-find--current {
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
+}
+.cm-editor .cm-find--current ::selection {
+  background: transparent;
+}
+
 /* ── Mermaid 图表预览区 ───────────────────── */
 .milkdown .preview-panel {
   border-top: 1px solid var(--hue-border-subtle);

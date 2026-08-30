@@ -42,6 +42,12 @@ const emit = defineEmits<{
   (e: 'open-result', payload: { path: string; line: number }): void
   /** 全局替换完成：把被改写的文件列表抛给 App，便于重载正在编辑的文档 */
   (e: 'replaced', paths: string[]): void
+  /** 源码模式命中高亮状态：本文档范围有查询时把 query/选项/当前行交给编辑器高亮 */
+  (e: 'find-highlight', payload: {
+    query: string
+    opts: { caseSensitive: boolean; wholeWord: boolean }
+    currentLine?: number
+  } | null): void
 }>()
 
 /** 目录默认折叠，展开状态提升到此处，方便会话恢复时自动展开祖先链 */
@@ -75,9 +81,29 @@ const wholeWord = ref(false)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
+/** 当前结果高亮所在行（点结果时更新，用于源码模式强化当前命中）；undefined 表示无 */
+const currentFindLine = ref<number | undefined>(undefined)
+
 /** 当前范围对应的检索文件：本文档范围传 activePath，全库范围不传（递归全库） */
 function scopeFile(): string | undefined {
   return searchScope.value === 'doc' ? props.activePath ?? undefined : undefined
+}
+
+/**
+ * 驱动源码模式命中高亮：仅「本文档」范围 + 有查询 + 已打开文档时，把 query/选项/当前行
+ * 抛给编辑器（EditorHost → SourceEditor 的 CodeMirror Decoration 常驻高亮全部命中）；
+ * 其余情况（全库范围 / 无查询 / 无文档）抛 null 清空高亮。本地计算无需等 IPC 结果，即时生效。
+ */
+function syncFindHighlight(): void {
+  if (searchScope.value === 'doc' && searchQuery.value.trim() && props.activePath) {
+    emit('find-highlight', {
+      query: searchQuery.value.trim(),
+      opts: { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
+      currentLine: currentFindLine.value
+    })
+  } else {
+    emit('find-highlight', null)
+  }
 }
 
 /** 防抖搜索：选项贯穿大小写 / 全词；file 参数决定范围（空串则跳过） */
@@ -109,10 +135,13 @@ function runSearch(): void {
   }, 300)
 }
 
-/** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑搜索 */
+/** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑搜索并同步源码高亮 */
 watch(
   [searchQuery, caseSensitive, wholeWord, searchScope, () => props.activePath, () => props.vaultPath],
-  () => runSearch()
+  () => {
+    runSearch()
+    syncFindHighlight()
+  }
 )
 
 /* ── 替换（双范围共用一套：file 参数决定范围）── */
@@ -163,9 +192,14 @@ function clearSearch(): void {
   showReplace.value = false
   replaceQuery.value = ''
   confirming.value = null
+  currentFindLine.value = undefined
+  syncFindHighlight()
 }
 
 function onOpenResult(path: string, line: number): void {
+  // 本文档范围：记录当前结果行，让源码模式高亮强化该行命中
+  if (searchScope.value === 'doc') currentFindLine.value = line
+  syncFindHighlight()
   emit('open-result', { path, line })
 }
 
