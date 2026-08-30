@@ -465,7 +465,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 * 源码模式：`src/editor/find-source.ts` —— CodeMirror `StateField` + `Decoration` 高亮，从后往前替换避免偏移。
 * 所见即所得：`src/editor/find-wysiwyg.ts` —— ProseMirror 原生 `TextSelection` 选中当前命中（编辑器天然高亮选区）+ `scrollIntoView`，**不注入任何 decoration plugin**，对文档结构零侵入。
-* 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`；玻璃浮层 `FindPanel.vue` 由标题栏 `search` 图标或 `Ctrl+F` 唤起。
+* 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`（查找引擎保留为可复用能力；其可见入口——标题栏 `search` 图标按钮与 `Ctrl+F`——已于 2026-08-30 按用户要求移除，仅保留左侧文件树全局搜索框，避免与全局搜索重复）。
 
 ### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）
 
@@ -515,7 +515,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **轻退栏 + 设置面板 + 偏好**
 
-* `ZenRetreatBar.vue`：32px 玻璃胶囊（`position:fixed` 不占布局），文件名 · 字数 · 相对保存时间（30s 自刷新）｜⚙ 设置 / 切换文档（复用标签激活）/ 退出凝神。Esc 状态机在 `App.onKeydown`（设置面板优先、`.find` 来源甄别交还 FindPanel、轻退栏可关）。
+* `ZenRetreatBar.vue`：32px 玻璃胶囊（`position:fixed` 不占布局），文件名 · 字数 · 相对保存时间（30s 自刷新）｜⚙ 设置 / 切换文档（复用标签激活）/ 退出凝神。Esc 状态机在 `App.onKeydown`（设置面板优先、轻退栏可关）。
 * `ZenSettings.vue`：玻璃模态，锚点（1/3·黄金分割·正中）/ 雾化（快中慢）/ 滚动（跟手·平滑·极平滑）/ 自动全屏 / 轻退栏，改即生效并 `patchSession({ zenPrefs })`。`SessionState.zenPrefs` 经 `session.ts sanitizeZenPrefs` 逐字段校验。设置入口：轻退栏 ⚙ + 标题栏「更多」菜单（`zen-settings`）。
 * 凝神下源码模式居中列：`.shell[data-zen] .source-host .cm-scroller` 对称内边距 `max(0, 50% − var(--w-column-zen)/2)`，行号 + 代码整体收进 640px 居中列（行号随列移动），修复 CodeMirror 宽窗整屏贴左。
 * 自动全屏走新 IPC `win:setFullscreen`（preload `window.api.setFullscreen`）；只还原自己转的全屏（`zenAutoFullscreen` 标记），不碰用户手动 F11。

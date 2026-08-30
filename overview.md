@@ -1,25 +1,26 @@
-# 本轮交付概览（2026-08-30）
+# 移除顶部搜索（去重）· 交付概览
 
-针对用户反馈的三处问题，完成修复与打磨（Phase 2 批次三 §3.7 链接检查 + 快照时区）。
+## 背景
+用户指出：早先要求「删除顶部搜索、只保留左侧列表搜索」，但标题栏顶部 `search` 图标按钮仍在且可点击——它唤起的是 `FindPanel`（文档内查找替换），与左侧文件树全局搜索（`searchVault`）是**重复的两套搜索入口**。
 
-## 1. 快照时区修复（根因在存储端）
-- **根因**：`snapshots.ts` 的 `nowIso()` 用 `toISOString()` 取 UTC 墙钟存文件名，`isoToDate()` 又按本地解析 → 东八区整差 8 小时。
-- **修复**：`nowIso()` 改用本机时区 `getFullYear/getHours/...`；新增 `src/utils/time.ts`（`formatDateTime` 走本机时区 + `localTimeZone()` 经 `Intl.DateTimeFormat` 自动取电脑时区）；`SnapshotPanel` 时间戳加「本机时区：{IANA}」tooltip。
-- **注意**：此前已落盘的旧快照文件名仍是 UTC 数字，读回偏 8h；新快照已正确。
-
-## 2. 链接检查跳转到具体行（之前只跳页面）
-- `BrokenLinkItem` 新增 `context`（断链所在行原文）。
-- 点击行 emit 整个 item → `App.onOpenBrokenLink`：打开文档（已是当前文档则跳过早返回）→ 切源码模式 → `revealLine(line)` 精确定位（与全文搜索结果定位同一套逻辑）。
-
-## 3. 面板细节打磨
-- 行内展示**所在行原文预览**（等宽、左侧竖线、截断）。
-- 顶部「全部 / Wiki / 链接 / 图片」类型筛选（带计数、零项禁用）。
-- 汇总按类型拆分计数（Wiki a · 链接 b · 图片 c）。
-- 入场动画 + `Esc` 关闭；加载态旋转图标；空/错状态图标（对勾 / 断链）。
-- `Icon.vue` 新增 `loader` 旋转图标。
+## 本次改动
+- **彻底移除顶部搜索入口**：
+  - 标题栏 `search` 图标按钮 + `find` emit（`TitleBar.vue`）
+  - 隐藏入口 Ctrl+F（`App.vue` onKeydown）与帮助面板 Ctrl+F 快捷键项（`HelpPanel.vue`）
+  - `FindPanel.vue` 组件文件（`git rm`）及其在 `App.vue` 的全部接线（import / 绑定 / 模板块 / 查找状态与处理函数 / `openPath` 的 clearFind 重跑 / Esc 状态机里的 `.find` 甄别）
+- **保留左侧文件树全局搜索**（`Sidebar.vue` → `searchVault`，含全局替换）——即唯一保留的搜索能力。
+- **未破坏其他功能**：`EditorHost` 查找引擎方法（find/findNext/replaceOne/clearFind…）作为可复用能力保留，仅去掉 UI 入口；`SnapshotPanel` / `LinkCheckPanel` / 写作辅助等不受影响。
+- 文档同步：`ARCHITECTURE.md §5.9`、Esc 描述、`PHASE2-PLAN.md` 文件树说明均标注「顶部搜索入口已移除，仅留左侧全局搜索」。
 
 ## 验证
-- `npm run typecheck` ✅（首轮因 zh/en 漏逗号报 TS1005，已补）；`npm run build` ✅。
-- 产物已含 `本机时区`/`Intl.DateTimeFormat`/`linkCheckBreakdown`/`row__ctx`/`context:`，main 包 `toISOString` 计数为 0（UTC 路径已清除）。
-- 文档同步：README 功能项、ARCHITECTURE §5.10/§5.12、PHASE2-PLAN §3.7。
-- 运行期验收待做：开含断链 vault 实测跳行；GitHub 当前不可达，本地已提交待推送。
+- `npm run typecheck` ✅
+- `npm run build` ✅
+- 新主块 `index-CbZSl95c.js` 中 `FindPanel` 计数 = 0；`findOpen` 仅命中第三方解析库内部函数（误报，非本功能残留）。
+- 源码 grep 确认无 `FindPanel` / `openFind` / `findOpen` / `@find` 残留。
+
+## 状态
+- 已本地提交（待 GitHub 恢复推送）。连同前两轮未推提交：写作辅助 `7f93c87`、时区/链接修复 `75fc116`、本轮去重。
+
+## 后续建议
+- 运行期验收：打开软件，确认标题栏已无搜索图标、Ctrl+F 不再弹出查找栏，且左侧文件树「搜索文档内容…」全局搜索正常工作。
+- 若日后确需要「文档内查找/替换」能力，引擎已就绪，仅需重新加一个入口（建议复用左侧搜索框的同一交互范式，避免再次造成"两套搜索"的观感）。
