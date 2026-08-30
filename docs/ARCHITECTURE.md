@@ -520,7 +520,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**）；玻璃 `SnapshotPanel.vue`（锚定 `.editor` 右上）：备注输入 + 保存、列表（时间 + 备注 + 字数差 `deltaChars`）、选中→`snapshotRestore` 只读返回→`diffLines`（`diff@^7.0.0`）摊平逐行 add/del/ctx 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
 * 行级 diff 库选型修正：原计划写 `jsdiff`，但 `jsdiff@1.1.1` 实为「JSON 对象 diff」库（装配错误）；正确库是 `diff@^7.0.0`（`diffLines`），已在 `package.json` 落地，`jsdiff` 已卸载；无类型的 `diff@7` 在 `src/types/diff.d.ts` 补了环境声明。
 * 自动快照策略（防抖保存 + 定时）已留接口；批次二先落地「手动留档 + 行级 diff 预览 + 回滚」闭环，自动策略在后续打磨中接入同一 `snapshotCreate`。
-* ⚠️ **状态：实现但未测试（implemented but NOT yet tested）**：快照逻辑（主进程 `.yujian-history/` 存储 + `snapshot:*` 通道 + 行级 diff 预览 + 回滚标脏不覆盖磁盘）已完整落地，但**尚未在运行期人工验证**（存/看 diff/恢复/删除的实际交互与边界：大文档、空文档、并发、断电均未体验）。暂不提供体验入口，待后续专项审查补运行期测试与验收标准；前端 `SnapshotPanel.vue` 顶部已加统一「⚠ 实现但未测试」标注。
+* ✅ **状态：已于 2026-08-30 由用户运行期验证可用**：快照逻辑（主进程 `.yujian-history/` 存储 + `snapshot:*` 通道 + 行级 diff 预览 + 回滚标脏不覆盖磁盘）完整落地，且存 / 看 diff / 恢复 / 删除的实际交互经用户实测正常。原「⚠ 实现但未测试」标注已从 `SnapshotPanel.vue` 代码注释、面板 UI 横幅与本小节移除。
 
 **写作统计（纯函数，零依赖）**
 

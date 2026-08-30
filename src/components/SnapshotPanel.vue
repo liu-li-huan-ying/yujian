@@ -11,11 +11,9 @@ const { t } = useI18n()
 const L = t.ui
 
 /*
- * ⚠️ 快照功能：实现但未测试（implemented but NOT yet tested）。
- * 代码逻辑（主进程 .yujian-history/ 存储 + snapshot:list/create/restore(只读)/delete 通道、
- * 行级 diff 预览、回滚标脏不覆盖磁盘）已完整落地，但尚未在运行期人工验证：
- * 存快照 / 看 diff / 恢复 / 删除 的实际交互与边界（大文档、空文档、并发、断电）均未体验。
- * 暂不体验，待后续专项审查（批次三）补运行期测试与验收标准。
+ * 版本快照：主进程 .yujian-history/ 存储 + snapshot:list/create/restore(只读)/delete 通道、
+ * 行级 diff 预览、回滚标脏不覆盖磁盘。已于 2026-08-30 经用户运行期验证可用
+ * （存快照 / 看 diff / 恢复 / 删除 交互正常），原「未测试」标注已移除。
  */
 
 const props = defineProps<{
@@ -171,9 +169,6 @@ function fmtTime(ts: number): string {
         {{ L.snapshotDelete }}
       </button>
     </div>
-
-    <!-- ⚠️ 快照功能：实现但未测试，暂不体验，待后续专项审查 -->
-    <p class="snap__untested">⚠ 快照功能已实现但未测试，暂不体验，待后续审查</p>
 
     <ContextMenu
       v-if="menu"
@@ -401,17 +396,5 @@ function fmtTime(ts: number): string {
   background: rgba(243, 79, 69, 0.12);
   border-color: var(--hue-danger);
   color: var(--hue-danger);
-}
-
-/* ⚠️ 快照功能：实现但未测试 提示（克制、不抢视觉） */
-.snap__untested {
-  margin: 0;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  background: rgba(var(--hue-tint-2, 120, 180, 170), 0.12);
-  border: 1px dashed var(--hue-border-subtle);
-  font-size: 10.5px;
-  line-height: 1.5;
-  color: var(--hue-text-3);
 }
 </style>

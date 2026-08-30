@@ -569,3 +569,23 @@
     opacity var(--dur-fast) var(--ease),
     background var(--dur-fast) var(--ease);
 }
+
+/* ── 数学公式（KaTeX）：随玉质主题着色，块级公式不溢出 720 列 ──
+   Crepe.Feature.Latex 用 KaTeX 渲染数学，但 katex 的 CSS 需消费方自行引入
+   （本项目此前漏引，导致公式节点生成后缺少排版样式、显示异常）。引入后公式的
+   字号 / 间距 / 上下标 / 分式 / 根号 / 矩阵均正常；并随明暗主题用 --hue-text-1 着色，
+   深色模式下不再发白或不可读。块级公式（$$...$$）长式子横向可滚动，不撑破内容列。 */
+.milkdown .katex {
+  color: var(--hue-text-1);
+  font-size: 1.05em;
+}
+.milkdown .katex-display {
+  margin: 16px 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+/* 公式里的链接（\href）沿用强调色，避免默认蓝在玉质暗色下发脏 */
+.milkdown .katex a {
+  color: var(--hue-accent);
+}
