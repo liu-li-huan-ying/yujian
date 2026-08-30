@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import EditorHost from './editor/EditorHost.vue'
+import type { DocFindApi } from './editor/docFindApi'
 import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
 import PreferencesSettings from './components/PreferencesSettings.vue'
@@ -34,6 +35,11 @@ const tabs = useTabsStore()
 const filePath = computed(() => tabs.activePath)
 const requestedMode = ref<EditorMode>('wysiwyg')
 const host = ref<InstanceType<typeof EditorHost> | null>(null)
+const sidebarRef = ref<InstanceType<typeof Sidebar> | null>(null)
+/** 把编辑器宿主适配为「本文档查找」契约，传给侧栏搜索的「本文档」范围 */
+const editorHostApi = computed<DocFindApi | null>(
+  () => (host.value as unknown as DocFindApi | null)
+)
 const lastSavedAt = ref<number | null>(null)
 
 /* ── 笔记库 ── */
@@ -249,6 +255,12 @@ function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'F1') {
     e.preventDefault()
     onHelp('shortcuts')
+    return
+  }
+  // Ctrl/Cmd+F：聚焦左侧搜索框（顶栏搜索已移除，统一在侧栏搜索，支持全库 / 本文档双范围）
+  if (e.key.toLowerCase() === 'f' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    sidebarRef.value?.focusSearch()
     return
   }
   // Esc 状态机（凝神 2.0）：设置面板开着先关面板；否则凝神中 Esc = 掀帘/收帘（轻退栏可在设置中关闭）。
@@ -653,6 +665,7 @@ onBeforeUnmount(() => {
 
     <div class="body">
       <Sidebar
+        ref="sidebarRef"
         :vault-path="vaultPath"
         :nodes="tree"
         :active-path="filePath"
@@ -660,6 +673,7 @@ onBeforeUnmount(() => {
         :visible="sidebarShown && !focusMode"
         :refresh-tree="refreshTree"
         :open-doc="openPath"
+        :editor-host="editorHostApi"
         @select="onSelect"
         @open-vault="openVault"
         @new-doc="newDoc"

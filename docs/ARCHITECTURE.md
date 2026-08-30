@@ -465,7 +465,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 * 源码模式：`src/editor/find-source.ts` —— CodeMirror `StateField` + `Decoration` 高亮，从后往前替换避免偏移。
 * 所见即所得：`src/editor/find-wysiwyg.ts` —— ProseMirror 原生 `TextSelection` 选中当前命中（编辑器天然高亮选区）+ `scrollIntoView`，**不注入任何 decoration plugin**，对文档结构零侵入。
-* 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`（查找引擎保留为可复用能力；其可见入口——标题栏 `search` 图标按钮与 `Ctrl+F`——已于 2026-08-30 按用户要求移除，仅保留左侧文件树全局搜索框，避免与全局搜索重复）。
+* 统一入口在 `EditorHost`：按当前模式分派两套实现，暴露 `find / findNext / findPrev / replaceOne / replaceAll / clearFind / selectionCount / findCurrent / findTotal`（契约见 `src/editor/docFindApi.ts` 的 `DocFindApi`）。该引擎的可见入口原本是标题栏 `search` 图标 + `Ctrl+F` 浮层，已于 2026-08-30 移除；**2026-08-30 已整合进左侧搜索框的「本文档」范围**——用户切到「本文档」即调用 `EditorHost.find` 在当前文档内查找 / 替换 + 命中导航，`App` 经 `editorHostApi` 把宿主适配为 `DocFindApi` 传给 `Sidebar`，与左侧「全部」（vault 全文搜索）共用一个输入框与「区分大小写 / 全词匹配」选项，避免两套重复搜索 UI。
 
 ### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）
 
@@ -495,7 +495,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 **全局替换（左侧文件树搜索增强，打磨项）**
 
 * 左侧 `Sidebar.vue` 搜索框在「有搜索命中」时展开一个玉质 `.repl` 区块：开关 `.repl__toggle`（复用 `t.ui.replace`）→ 输入替换串 → 确认框展示「将替换全部 {n} 处」→ 执行。
-* 范围限定为**当前搜索命中的文件**：`window.api.replaceInVault(root, query, replacement, false)`（不区分大小写，与搜索一致），仅对命中文件做字面量替换并写回磁盘；返回 `{replaced, files, paths}`，前端 toast 反馈并刷新搜索；若当前编辑文档在 `paths` 中则自动从磁盘重载。
+* 范围限定为**当前搜索命中的文件**：`window.api.replaceInVault(root, query, replacement, { caseSensitive, wholeWord })`（匹配选项与搜索一致，贯穿大小写 / 全词），仅对命中文件做字面量替换并写回磁盘；返回 `{replaced, files, paths}`，前端 toast 反馈并刷新搜索；若当前编辑文档在 `paths` 中则自动从磁盘重载。
 * IPC：新增通道 `vault:replace`（`ReplaceResult` 接口），main 侧 `replaceInVault` 复用 `searchVault` 取命中文件、正则转义后替换、仅内容变化时写回；`electron/shared/ipc-channels.ts` 集中定义，preload 暴露 `window.api.replaceInVault`。
 
 ### 5.11 凝神 2.0：雾与纸（2026-08-29，设计稿 docs/FOCUS-MODE-2.0-DESIGN.md）

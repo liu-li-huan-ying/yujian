@@ -41,6 +41,10 @@ const groups = computed(() => [
     ]
   },
   {
+    title: H.scSearch,
+    items: [{ keys: ['Ctrl', 'F'], desc: H.scFind }]
+  },
+  {
     title: H.scFocus,
     items: [{ keys: ['Esc'], desc: H.scFocusEsc }]
   },

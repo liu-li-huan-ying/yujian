@@ -107,6 +107,14 @@ export interface SearchLineHit {
   text: string
 }
 
+/** 搜索 / 替换的匹配选项（左侧搜索框「区分大小写 / 全词匹配」贯穿 vault 与本文档两种范围） */
+export interface SearchOptions {
+  /** 区分大小写（默认 false，即不区分） */
+  caseSensitive?: boolean
+  /** 全词匹配（默认 false） */
+  wholeWord?: boolean
+}
+
 export interface SearchFileResult {
   /** 文档绝对路径 */
   path: string

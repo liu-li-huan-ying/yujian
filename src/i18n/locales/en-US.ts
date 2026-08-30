@@ -157,6 +157,14 @@ const enUS = {
     selection: 'Sel',
     tabPos: 'Current / total',
     moreTabs: '{n} tabs',
+    /* ── Search (dual scope: all / this doc) ── */
+    scopeVault: 'All',
+    scopeDoc: 'This doc',
+    scopeDocHint: 'Open a document first',
+    docHits: 'This doc: {n} match(es) · use ‹ › to jump',
+    noResult: 'No results for “{q}”',
+    noMatchInDoc: 'No match for “{q}” in this document',
+    searching: 'Searching…',
     /* ── Version snapshots (Batch 2) ── */
     snapshots: 'Snapshots',
     snapshotSave: 'Save snapshot',
@@ -277,8 +285,9 @@ const enUS = {
     scOpen: 'Open file',
     scSave: 'Save document',
     scEdit: 'Edit',
-    scFind: 'Find / Replace',
+    scFind: 'Focus search',
     scView: 'View',
+    scSearch: 'Search',
     scSidebar: 'Show / hide sidebar',
     scOutline: 'Show / hide outline',
     scMode: 'Toggle WYSIWYG / Source',
@@ -299,8 +308,8 @@ const enUS = {
         p: 'The "＋" in the title bar creates a document in the vault; open several docs at once from the tree and switch on the tab bar. The body is WYSIWYG by default; switch to precise editing via the "WYSIWYG / Source" segment or Ctrl+/.'
       },
       {
-        h: '3 · Find & replace',
-        p: 'Ctrl+F finds / replaces within the document; the sidebar search box scans the whole vault with one-click batch replace across hits. The tree and outline panels toggle independently (Ctrl+\\ / Ctrl+Shift+\\) and auto-collapse on narrow windows.'
+        h: '3 · Search & replace',
+        p: 'The sidebar search box unifies retrieval: switch to “All” to full-text search the whole vault (one-click batch replace on hits); switch to “This doc” to find / replace within the current document only, jumping between matches with ‹ ›. Both scopes support “Match case / Whole word”. Ctrl+F focuses the search box.'
       },
       {
         h: '4 · Snapshots & stats',

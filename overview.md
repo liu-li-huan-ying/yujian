@@ -1,26 +1,28 @@
-# 移除顶部搜索（去重）· 交付概览
+# 搜索整合：双范围（全部 / 本文档）
 
-## 背景
-用户指出：早先要求「删除顶部搜索、只保留左侧列表搜索」，但标题栏顶部 `search` 图标按钮仍在且可点击——它唤起的是 `FindPanel`（文档内查找替换），与左侧文件树全局搜索（`searchVault`）是**重复的两套搜索入口**。
+## 做了什么
+把原本"被移除 UI 入口、仅留引擎"的**本文档内查找/替换**，重新整合进**左侧搜索框**，与"文件夹内全文搜索"统一为一个精细化的搜索入口，消除此前"两套搜索"的重复感。
 
-## 本次改动
-- **彻底移除顶部搜索入口**：
-  - 标题栏 `search` 图标按钮 + `find` emit（`TitleBar.vue`）
-  - 隐藏入口 Ctrl+F（`App.vue` onKeydown）与帮助面板 Ctrl+F 快捷键项（`HelpPanel.vue`）
-  - `FindPanel.vue` 组件文件（`git rm`）及其在 `App.vue` 的全部接线（import / 绑定 / 模板块 / 查找状态与处理函数 / `openPath` 的 clearFind 重跑 / Esc 状态机里的 `.find` 甄别）
-- **保留左侧文件树全局搜索**（`Sidebar.vue` → `searchVault`，含全局替换）——即唯一保留的搜索能力。
-- **未破坏其他功能**：`EditorHost` 查找引擎方法（find/findNext/replaceOne/clearFind…）作为可复用能力保留，仅去掉 UI 入口；`SnapshotPanel` / `LinkCheckPanel` / 写作辅助等不受影响。
-- 文档同步：`ARCHITECTURE.md §5.9`、Esc 描述、`PHASE2-PLAN.md` 文件树说明均标注「顶部搜索入口已移除，仅留左侧全局搜索」。
+左侧搜索框现在提供两种范围（玉质分段控件，默认「全部」）：
+
+- **全部（文件夹内）**：主进程 `searchVault` 递归全库全文搜索，结果列表点击定位命中行，支持跨文件「全局替换」（确认弹窗）。
+- **本文档**：复用 `EditorHost` 查找引擎（见 `src/editor/docFindApi.ts` 的 `DocFindApi` 契约），在当前文档内查找/替换，侧栏显示命中计数 `current/total` + `‹ ›` 逐个跳转 + 替换/全部替换，编辑器内高亮当前命中（所见即所得与源码双模式）。
+
+两种范围共用「区分大小写 / 全词匹配」选项（后端 `SearchOptions` 贯通 `searchVault`/`replaceInVault`，vault 正则与文档引擎高亮一致）。
+
+## 外观与交互细节
+- `.scope` 玉质胶囊分段控件；`.chip` 选项芯片（Aa / ⌗）；`.nav` 命中导航（‹ 计数 ›）；`.status`/`.hint` 状态行，整体延续玉质/玻璃设计令牌。
+- `Ctrl+F` 重新接线 → 聚焦左侧搜索框（不再唤起已删除的浮层）。
+- 切换范围/清空搜索会正确清掉另一套的残留状态（本文档高亮 vs vault 结果）。
+
+## 文档与辅助面板
+- 快捷键面板新增「搜索」分组（Ctrl+F 聚焦搜索）；使用指南第 3 节改写为双范围说明。
+- `scFind` 由"查找/替换"改为"聚焦搜索"；README 全文搜索与文件内查找两段同步；ARCHITECTURE §5.9 更新。
 
 ## 验证
-- `npm run typecheck` ✅
-- `npm run build` ✅
-- 新主块 `index-CbZSl95c.js` 中 `FindPanel` 计数 = 0；`findOpen` 仅命中第三方解析库内部函数（误报，非本功能残留）。
-- 源码 grep 确认无 `FindPanel` / `openFind` / `findOpen` / `@find` 残留。
+- `npm run typecheck` ✅、`npm run build` ✅
+- 新主块含 `scopeVault/scopeDoc/docCurrent/docTotal/searchScope/focusSearch` 与引擎方法 `findNext/replaceOne/clearFind`；主进程 `wholeWord` 选项已贯通。
+- 网络仍不通，连同前几轮共 4 个提交（`7f93c87` 写作辅助 / `75fc116` 时区+链接 / `6502f56` 去重 / 本轮）本地待推。
 
-## 状态
-- 已本地提交（待 GitHub 恢复推送）。连同前两轮未推提交：写作辅助 `7f93c87`、时区/链接修复 `75fc116`、本轮去重。
-
-## 后续建议
-- 运行期验收：打开软件，确认标题栏已无搜索图标、Ctrl+F 不再弹出查找栏，且左侧文件树「搜索文档内容…」全局搜索正常工作。
-- 若日后确需要「文档内查找/替换」能力，引擎已就绪，仅需重新加一个入口（建议复用左侧搜索框的同一交互范式，避免再次造成"两套搜索"的观感）。
+## 待运行期验收
+打开笔记库后：在左侧搜索框切「全部」搜全库、切「本文档」搜当前文档并 `‹ ›` 跳转、试区分大小写/全词匹配、Ctrl+F 聚焦；确认无重复搜索入口、外观与交互顺手。

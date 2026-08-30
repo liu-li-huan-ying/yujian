@@ -9,7 +9,8 @@ import type {
   VaultChangeKind,
   ReplaceResult,
   BrokenLinkItem,
-  BrokenLinkReport
+  BrokenLinkReport,
+  SearchOptions
 } from '../shared/ipc-channels'
 
 const MD_EXT = new Set(['.md', '.markdown'])
@@ -207,19 +208,23 @@ export function stopWatching(): void {
 const MAX_HITS_PER_FILE = 20
 const MAX_RESULT_FILES = 80
 
-/** 单文件内按行匹配（不区分大小写），返回命中行（已截断） */
-async function searchInFile(file: string, query: string): Promise<SearchLineHit[]> {
+/** 单文件内按行匹配（默认不区分大小写；支持区分大小写 / 全词匹配），返回命中行（已截断） */
+async function searchInFile(
+  file: string,
+  query: string,
+  opts?: SearchOptions
+): Promise<SearchLineHit[]> {
   let content: string
   try {
     content = await readFile(file, 'utf-8')
   } catch {
     return []
   }
-  const lower = query.toLowerCase()
   const hits: SearchLineHit[] = []
   const lines = content.split('\n')
+  const re = buildSearchRegex(query, opts)
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].toLowerCase().includes(lower)) {
+    if (re.test(lines[i])) {
       hits.push({ line: i + 1, text: lines[i].trim().slice(0, 240) })
       if (hits.length >= MAX_HITS_PER_FILE) break
     }
@@ -227,11 +232,27 @@ async function searchInFile(file: string, query: string): Promise<SearchLineHit[
   return hits
 }
 
+/** 构造行级匹配正则：转义 + 全词边界 + 大小写开关（仅判定命中，用非全局标志） */
+function buildSearchRegex(query: string, opts?: SearchOptions): RegExp {
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = opts?.wholeWord ? `\\b${escaped}\\b` : escaped
+  const flags = opts?.caseSensitive ? '' : 'i'
+  try {
+    return new RegExp(pattern, flags)
+  } catch {
+    return new RegExp(escaped, flags)
+  }
+}
+
 /**
  * 递归全文搜索。规则与 listTree 一致：跳过点目录、node_modules、同名 `.assets`，
  * 仅搜索 Markdown 文档。为控制开销，单文件最多 20 个命中、总共最多 80 个文件。
  */
-export async function searchVault(root: string, query: string): Promise<SearchFileResult[]> {
+export async function searchVault(
+  root: string,
+  query: string,
+  opts?: SearchOptions
+): Promise<SearchFileResult[]> {
   const q = query.trim()
   if (!q) return []
 
@@ -250,7 +271,7 @@ export async function searchVault(root: string, query: string): Promise<SearchFi
         if (shouldSkipDir(entry.name)) continue
         await walk(full)
       } else if (entry.isFile() && isMarkdown(entry.name)) {
-        const hits = await searchInFile(full, q)
+        const hits = await searchInFile(full, q, opts)
         if (hits.length) results.push({ path: full, name: entry.name, hits })
       }
       if (results.length >= MAX_RESULT_FILES) return
@@ -262,24 +283,27 @@ export async function searchVault(root: string, query: string): Promise<SearchFi
 }
 
 /**
- * 全局替换：在「当前搜索命中文件」范围内，把 query（字面量、不区分大小写，与 searchVault 一致）
- * 全部替换为 replacement，写回磁盘（仅内容真正变化时落盘）。返回替换总数与被修改文件数。
- * 范围限定为搜索命中的文件，避免误伤无关文档；绝不触碰图片/资源，只处理 Markdown 源文本。
+ * 全局替换：在「当前搜索命中文件」范围内，把 query（字面量，匹配规则与 searchVault 一致：
+ * 支持区分大小写 / 全词匹配）全部替换为 replacement，写回磁盘（仅内容真正变化时落盘）。
+ * 返回替换总数与被修改文件数。范围限定为搜索命中的文件，避免误伤无关文档；
+ * 绝不触碰图片/资源，只处理 Markdown 源文本。
  */
 export async function replaceInVault(
   root: string,
   query: string,
   replacement: string,
-  caseSensitive: boolean
+  opts?: SearchOptions
 ): Promise<ReplaceResult> {
   const q = query.trim()
   if (!q) return { replaced: 0, files: 0, paths: [] }
 
-  const results = await searchVault(root, q)
+  const results = await searchVault(root, q, opts)
   const targets = results.map((r) => r.path)
 
-  const flags = caseSensitive ? 'g' : 'gi'
-  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = opts?.wholeWord ? `\\b${escaped}\\b` : escaped
+  const flags = opts?.caseSensitive ? 'g' : 'gi'
+  const re = new RegExp(pattern, flags)
 
   let replaced = 0
   let files = 0
