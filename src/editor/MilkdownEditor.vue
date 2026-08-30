@@ -287,8 +287,37 @@ function setFind(fs: WysiwygFindState | null): void {
 }
 
 /**
- * 定位到指定行（搜索结果 / 断链跳转）：反查行号 → 文档位置，设置光标并滚动到视口。
- * 与源码模式对称，使所见即所得模式下也能直接跳转，无需被迫切到源码。
+/**
+ * 找到承载编辑器滚动的容器：从 .ProseMirror 向上找第一个 overflow 可滚动祖先
+ * （玉笺里是 `.milkdown-host`，overflow:hidden 但仍可 scrollTop 滚动）。
+ */
+function getScroller(dom: HTMLElement): HTMLElement {
+  let el: HTMLElement | null = dom
+  while (el) {
+    const s = getComputedStyle(el)
+    if (/auto|scroll|hidden/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 1) return el
+    el = el.parentElement
+  }
+  return dom
+}
+
+/**
+ * 把指定文档位置滚到视口中央，与源码模式 `EditorView.scrollIntoView(from, { y: 'center' })` 对称。
+ * ProseMirror 的 scrollIntoView 事务只保证选区「可见」、不保证居中；这里用 coordsAtPos
+ * 取目标在视口中的像素坐标，再按视口中心（0.5）微调滚动容器的 scrollTop。
+ */
+function scrollPosToCenter(view: EditorView, pos: number): void {
+  const coords = view.coordsAtPos(pos)
+  const targetY = (coords.top + coords.bottom) / 2
+  const scroller = getScroller(view.dom as HTMLElement)
+  const rect = scroller.getBoundingClientRect()
+  const anchor = rect.top + rect.height * 0.5
+  scroller.scrollTo({ top: scroller.scrollTop + (targetY - anchor), behavior: 'smooth' })
+}
+
+/**
+ * 定位到指定行（搜索结果 / 断链跳转）：反查行号 → 文档位置，设置光标并居中滚动。
+ * 与源码模式对称，使所见即所得模式下也能直接跳转并停在视口中央，无需被迫切到源码。
  */
 function revealLine(line: number): void {
   const view = getEditorView()
@@ -300,7 +329,9 @@ function revealLine(line: number): void {
   const raw = findPosByText(doc, srcLine) ?? findPosOfLine(doc, line)
   if (raw == null) return
   const pos = Math.max(0, Math.min(raw, doc.content.size))
-  view.dispatch(view.state.tr.setSelection(TextSelection.near(doc.resolve(pos))).scrollIntoView())
+  // 先落光标（选区存在），再精确居中——不用事务的 scrollIntoView（只保证可见）
+  view.dispatch(view.state.tr.setSelection(TextSelection.near(doc.resolve(pos))))
+  scrollPosToCenter(view, pos)
   view.focus()
 }
 

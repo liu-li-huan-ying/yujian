@@ -42,7 +42,7 @@
 
 **统一口径**：改用源码行文本匹配消除偏差——
 - `find-wysiwyg.ts` 新增 `stripMd(line)` 与 `findPosByText(doc, needle)`（片段逐级缩短匹配，容忍语法差异，找不到返回 `null`）；
-- `MilkdownEditor.revealLine(line)`：先按源码第 `line` 行文本走 `findPosByText`，匹配不到回退 `findPosOfLine`（行号反查留作兜底），命中后 `setSelection(TextSelection.near(...)).scrollIntoView()` + `view.focus()`；
+- `MilkdownEditor.revealLine(line)`：先按源码第 `line` 行文本走 `findPosByText`，匹配不到回退 `findPosOfLine`（行号反查留作兜底），命中后 `setSelection(TextSelection.near(...))` 落光标，再经 `scrollPosToCenter()` 把命中行滚到**视口中央**（与源码模式 `EditorView.scrollIntoView(y:'center')` 对称；ProseMirror 事务的 `scrollIntoView` 只保证可见不居中，故改用 `coordsAtPos` 取目标像素坐标、手动调滚动容器 `scrollTop`，中心锚点 0.5）+ `view.focus()`；
 - `WysiwygFindState` 新增 `currentLineText`，由 `EditorHost.setFindHighlight` 从 `fidelity.currentText` 取该行原文传入，使 `current` 强化标记与源码行号严格对齐。
 
 ## 验证
