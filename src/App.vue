@@ -20,12 +20,15 @@ import CompilePanel from './components/CompilePanel.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
-import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult } from '../electron/shared/ipc-channels'
+import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult, ExportPayload } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
 import { inlineImages } from './export/imageInline'
 import { embedMermaidSvg } from './export/mermaidSvg'
 import { parseFrontmatter } from './editor/frontmatter'
 import { markdownToLatex } from './export/markdownToLatex'
+import { isBinary, kindExt, kindFilter, type ExportKind } from './export/types'
+import { serializeBinary } from './export/serialize'
+import { htmlToPlainText } from './export/domUtils'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
 import { useTabsStore } from './store/tabs'
@@ -580,10 +583,16 @@ async function readAsDataUrl(absPath: string): Promise<string | null> {
  */
 /** 构建好的导出产物（尚未写盘 / 打印） */
 interface BuiltExport {
+  /** 落盘文本（md/txt/html/latex）；二进制格式的预览用 HTML 也暂存此处 */
   content: string
+  /** 二进制格式（docx/epub/rtf/odt）的成品字节；存在时主进程按字节写盘 */
+  binary?: Uint8Array
+  /** 二进制产物的 MIME */
+  mime?: string
+  /** 默认文件名（含扩展名） */
   defaultName: string
   filters?: { name: string; extensions: string[] }[]
-  kind: 'html' | 'pdf' | 'latex'
+  kind: ExportKind
 }
 
 /** 导出前预览状态 */
@@ -599,7 +608,7 @@ const previewState = ref<BuiltExport | null>(null)
  *                 forceInline 为 true 时（合订）强制内联图片与图表，确保跨目录自包含。
  */
 async function buildExportContent(
-  kind: 'html' | 'pdf' | 'latex',
+  kind: ExportKind,
   scope: 'all' | 'selection' = 'all',
   override?: {
     title?: string
@@ -620,11 +629,60 @@ async function buildExportContent(
   const useSel = !isCompile && (scope === 'selection' || exportPrefs.value.selection)
 
   let content = ''
+  let binary: Uint8Array | undefined
+  let mime: string | undefined
   let defaultName = ''
   let filters: { name: string; extensions: string[] }[] | undefined
 
+  // ── Markdown：直接透传正文（无需经过 HTML 渲染）──
+  if (kind === 'md') {
+    let md = override?.markdown ?? ''
+    if (!isCompile) {
+      md = useSel ? host.value?.getSelectionMarkdown() ?? '' : ''
+      if (useSel && !md.trim()) {
+        showToast(U.toastNoSelection, 'info')
+        md = host.value?.getMarkdown() ?? ''
+      } else if (!useSel) {
+        md = host.value?.getMarkdown() ?? ''
+      }
+    }
+    if (!md.trim()) {
+      showToast(U.toastNoContent, 'err')
+      return null
+    }
+    content = md
+    defaultName = base + '.md'
+    filters = [kindFilter('md')]
+    return { content, defaultName, filters, kind }
+  }
+
+  // ── 纯文本：取正文 HTML 后剥离标签 ──
+  if (kind === 'txt') {
+    let body = override?.bodyHtml ?? ''
+    if (!isCompile) {
+      body = useSel ? host.value?.getSelectionHTML() ?? '' : ''
+      if (useSel && !body) {
+        showToast(U.toastNoSelection, 'info')
+        body = (await host.value?.getHTML()) ?? ''
+      } else if (!useSel) {
+        body = (await host.value?.getHTML()) ?? ''
+      }
+    }
+    if (!body) {
+      showToast(U.toastNoContent, 'err')
+      return null
+    }
+    let html = buildExportHtml(body, base, { math: false, mermaid: false, toc: false, cover: false, meta })
+    // 只取正文 <article> 内容做纯文本化，避免把封面 / 样式噪声带进去
+    const artMatch = /<article[^>]*>([\s\S]*?)<\/article>/.exec(html)
+    content = htmlToPlainText(artMatch ? artMatch[1] : html)
+    defaultName = base + '.txt'
+    filters = [kindFilter('txt')]
+    return { content, defaultName, filters, kind }
+  }
+
+  // ── LaTeX：由 Markdown 原文转换 ──
   if (kind === 'latex') {
-    // LaTeX 由 Markdown 原文转换：公式与代码块原样保留，转义不会破坏它们
     let md = override?.markdown ?? ''
     if (!isCompile) {
       md = useSel ? host.value?.getSelectionMarkdown() ?? '' : ''
@@ -641,52 +699,126 @@ async function buildExportContent(
     }
     content = markdownToLatex(md, { meta })
     defaultName = base + '.tex'
-    filters = [{ name: 'LaTeX 源文件', extensions: ['tex'] }]
-  } else {
-    // 正文：选中范围优先；无选区回退整篇（明确提示，避免用户以为导出失败）
-    let body = override?.bodyHtml ?? ''
-    if (!isCompile) {
-      body = useSel ? host.value?.getSelectionHTML() ?? '' : ''
-      if (useSel && !body) {
-        showToast(U.toastNoSelection, 'info')
-        body = (await host.value?.getHTML()) ?? ''
-      } else if (!useSel) {
-        body = (await host.value?.getHTML()) ?? ''
-      }
+    filters = [kindFilter('latex')]
+    return { content, defaultName, filters, kind }
+  }
+
+  // ── HTML / PDF / 二进制（docx/epub/rtf/odt）：共用「规范化 HTML」作为中间表示 ──
+  let body = override?.bodyHtml ?? ''
+  if (!isCompile) {
+    body = useSel ? host.value?.getSelectionHTML() ?? '' : ''
+    if (useSel && !body) {
+      showToast(U.toastNoSelection, 'info')
+      body = (await host.value?.getHTML()) ?? ''
+    } else if (!useSel) {
+      body = (await host.value?.getHTML()) ?? ''
     }
-    if (!body) {
-      showToast(U.toastNoContent, 'err')
+  }
+  if (!body) {
+    showToast(U.toastNoContent, 'err')
+    return null
+  }
+
+  // 二进制格式：强制内联图片与图表（保证自包含），且不走 PDF 的那套选项
+  const embed = kind === 'pdf' || exportPrefs.value.inline || isBinary(kind) || override?.forceInline === true
+  const doc = buildExportHtml(body, base, {
+    math: true,
+    mermaid: !embed,
+    // PDF 恒带自动目录（纸质阅读需要导航）；二进制格式自建目录，故关闭 HTML 内目录；
+    // HTML 由选项决定。封面统一由选项控制。
+    toc: kind === 'pdf' || (kind === 'html' && exportPrefs.value.toc),
+    cover: exportPrefs.value.cover,
+    meta
+  })
+  let finalized = doc
+  if (embed) {
+    // 合订的图片已在拼接前按各自文档目录内联过，此处不二次处理
+    if (!isCompile && filePath.value) {
+      finalized = await inlineImages(finalized, filePath.value, readAsDataUrl)
+    }
+    finalized = await embedMermaidSvg(finalized)
+  }
+
+  if (isBinary(kind)) {
+    // 序列化前先把标题锚点补上（二进制格式各自建目录用），再转字节
+    try {
+      binary = await serializeBinary(kind, finalized, {
+        title: meta.title || base,
+        author: meta.author,
+        date: meta.date
+      })
+    } catch (e) {
+      console.error('[export] 序列化二进制格式失败：', e)
+      showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
       return null
     }
-    // PDF 经隐藏窗口加载临时文件，相对路径图片与 CDN 脚本都取不到 → 必须内嵌；
-    // HTML 是否内联由选项决定；合订（forceInline）跨目录引用，必须强制内联保证自包含。
-    // 内嵌图表后不再需要 CDN 的 mermaid 脚本。
-    const embed = kind === 'pdf' || exportPrefs.value.inline || override?.forceInline === true
-    let doc = buildExportHtml(body, base, {
-      math: true,
-      mermaid: !embed,
-      // PDF 恒带自动目录（纸质阅读需要导航），HTML 由选项决定；封面同样由选项控制
-      toc: kind === 'pdf' || exportPrefs.value.toc,
-      cover: exportPrefs.value.cover,
-      meta
-    })
-    if (embed) {
-      // 合订的图片已在拼接前按各自文档目录内联过，此处不二次处理
-      if (!isCompile && filePath.value) {
-        doc = await inlineImages(doc, filePath.value, readAsDataUrl)
-      }
-      doc = await embedMermaidSvg(doc)
-    }
-    content = doc
-    defaultName = base + (kind === 'html' ? '.html' : '.pdf')
-    filters = kind === 'html' ? [{ name: 'HTML 网页', extensions: ['html', 'htm'] }] : undefined
+    // 预览用：渲染同一份规范化 HTML（图片内联、Mermaid 已是 SVG）
+    content = finalized
+    mime = mimeFor(kind)
+    defaultName = base + '.' + kindExt(kind)
+    filters = [kindFilter(kind)]
+    return { content, binary, mime, defaultName, filters, kind }
   }
+
+  // HTML / PDF：直接落盘文本
+  content = finalized
+  defaultName = base + (kind === 'html' ? '.html' : '.pdf')
+  filters = kind === 'html' ? [kindFilter('html')] : undefined
   return { content, defaultName, filters, kind }
+}
+
+/** 二进制格式的 MIME（写入 .odt/.docx 等需要，主要用于日志与未来扩展） */
+function mimeFor(kind: ExportKind): string {
+  switch (kind) {
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    case 'epub':
+      return 'application/epub+zip'
+    case 'rtf':
+      return 'application/rtf'
+    case 'odt':
+      return 'application/vnd.oasis.opendocument.text'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+/** 导出格式 → 简短中文标签（toast / 按钮使用） */
+function kindLabel(kind: ExportKind): string {
+  return (
+    {
+      md: U.exportMd,
+      txt: U.exportTxt,
+      html: U.exportHtml,
+      pdf: U.exportPdf,
+      latex: U.exportLatex,
+      docx: U.exportDocx,
+      epub: U.exportEpub,
+      rtf: U.exportRtf,
+      odt: U.exportOdt
+    } as Record<ExportKind, string>
+  )[kind]
+}
+
+/** Uint8Array → base64（避免大数组一次性 String.fromCharCode 爆栈） */
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)))
+  }
+  return btoa(bin)
 }
 
 /** 写盘 / 打印：与构建分离，预览确认后直接复用已构建的内容 */
 async function writeExport(built: BuiltExport): Promise<void> {
-  const payload = { content: built.content, defaultName: built.defaultName, filters: built.filters }
+  const payload: ExportPayload = {
+    content: built.content,
+    defaultName: built.defaultName,
+    filters: built.filters,
+    binaryBase64: built.binary ? bytesToBase64(built.binary) : undefined,
+    mime: built.mime
+  }
   let res: ExportResult
   try {
     res =
@@ -714,14 +846,14 @@ async function writeExport(built: BuiltExport): Promise<void> {
  * @param scope all 整篇 / selection 当前选中（无选区时回退整篇）
  */
 async function doExport(
-  kind: 'html' | 'pdf' | 'latex',
+  kind: ExportKind,
   scope: 'all' | 'selection' = 'all'
 ): Promise<void> {
   if (!filePath.value) {
     showToast(U.toastNoDoc, 'err')
     return
   }
-  const label = kind === 'html' ? U.exportHtml : kind === 'pdf' ? U.exportPdf : U.exportLatex
+  const label = kindLabel(kind)
   showToast(`${U.toastExporting}${label}…`, 'info')
 
   try {
@@ -776,7 +908,7 @@ async function onCompile(payload: {
   files: string[]
   title: string
   newPagePerDoc: boolean
-  kind: 'html' | 'pdf' | 'latex'
+  kind: ExportKind
   preview: boolean
 }): Promise<void> {
   if (!vaultPath.value) {
@@ -788,8 +920,7 @@ async function onCompile(payload: {
     return
   }
   showCompile.value = false
-  const label =
-    payload.kind === 'html' ? U.exportHtml : payload.kind === 'pdf' ? U.exportPdf : U.exportLatex
+  const label = kindLabel(payload.kind)
   showToast(`${U.toastExporting}${label}…`, 'info')
 
   try {
@@ -915,9 +1046,15 @@ onBeforeUnmount(() => {
       @switch-vault="openVault"
       @update:mode="requestedMode = $event"
       :export-prefs="exportPrefs"
+      @export-md="doExport('md')"
+      @export-txt="doExport('txt')"
       @export-html="doExport('html')"
       @export-pdf="doExport('pdf')"
       @export-latex="doExport('latex')"
+      @export-docx="doExport('docx')"
+      @export-epub="doExport('epub')"
+      @export-rtf="doExport('rtf')"
+      @export-odt="doExport('odt')"
       @export-compile="showCompile = true"
       @export-option="toggleExportPref"
       @appearance="onAppearance"

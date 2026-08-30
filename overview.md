@@ -74,7 +74,7 @@
 typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「公式 / 代码 / 链接 URL 不被转义」）。
 
 ## 待办
-docx（`docx` 包）与 ePub（`jszip` 手写 OPF / NCX）。（多文件合订、导出前预览已于 2026-08-30 落地。）
+~~docx / ePub / RTF / ODT~~ —— 已于 2026-08-30 全部落地（见下方「导出格式全集扩展」一节）。（多文件合订、导出前预览已于 2026-08-30 落地。）
 
 ---
 
@@ -173,3 +173,45 @@ docx（`docx` 包）与 ePub（`jszip` 手写 OPF / NCX）。（多文件合订�
 
 ## 验证
 - `npm run typecheck` ✅、`npm run build` ✅；产物 CSS 确认含凹陷阴影、强调焦点环、`[data-skin][data-mode='light'] .opt__input` 浅色覆盖，无 `--hue-bg-input`/`--text-primary` 残留。
+
+---
+
+# 导出格式全集扩展（9 种，2026-08-30）
+
+## 需求
+用户在已落地的 HTML / PDF / LaTeX 之上，要求**尽量把能纯 JS / WASM 实现的导出格式都加上**，明确不依赖 pandoc 等外部二进制。
+
+## 最终格式集（9 种）
+| 格式 | 类别 | 实现 | 关键依赖 |
+| --- | --- | --- | --- |
+| Markdown | 文本（透传） | `getMarkdown()` 直出 | 无 |
+| 纯文本 | 文本 | `htmlToPlainText(article)` | 无 |
+| HTML | 网页 | 规范化 HTML 模板 | 无 |
+| PDF | 网页/打印 | 隐藏窗口 `printToPDF` | 无 |
+| LaTeX | 源码 | `markdownToLatex.ts` | 无 |
+| Word (docx) | 二进制 | `html-to-docx@1.8.0` | 纯 JS |
+| EPUB | 二进制 | `jszip@3.10.1` 手写 OPF | 纯 JS |
+| RTF | 二进制 | 零依赖手写 RTF 1.9 | 无 |
+| ODT | 二进制 | `jszip@3.10.1` 手写 ODF 1.2 | 纯 JS |
+
+## 架构要点
+- **文本类（md/txt/html/latex）与 PDF** 直接走通用 `export:file` IPC 写文本 / 打印。
+- **二进制类（docx/epub/rtf/odt）** 在**渲染进程**序列化为 `Uint8Array`，经 `ExportPayload.binaryBase64` 以 base64 传给主进程，`writeFile(Buffer.from(b64,'base64'))` 精确写盘——规避 sandbox 下主进程无法访问渲染层 DOM，也避免文本编码损坏。
+- `buildExportContent(kind, scope, override?)` 按 `ExportKind` 分派：md 透传、txt 取 article 纯文本、latex 走转换、其余先建规范化 HTML（二进制 / PDF / 强制内联时内联图片与 Mermaid），再调 `serializeBinary(kind, html, ctx)`。
+- Mermaid `<svg>` 在 DOCX/RTF/ODT 经 `rasterizeSvgToImg` 用 canvas 光栅化为 PNG 嵌入；EPUB 保留内联 SVG。
+- 导出菜单用 `MenuEntry.separatorTitle` 分「文本 / 排版·网页 / 办公·电子书」三组，合订面板下拉同步 9 选项；i18n 中/英双语补全（zh-CN/en-US）。
+
+## 关键坑与修复（本轮）
+1. **RTF 中文乱码**：RTF 的 `\u` 转义要求是**带符号 16 位**（-32768~32767）。初版直接输出原始码点，导致 ≥ U+8000 的常见汉字（如 中 0x4E2D 正常，但 語/裡等大量字 ≥ 0x8000）产生 >32767 的值，严格 RTF 解析器会坏。已改为 `c >= 0x8000 ? c - 0x10000 : c` 转带符号值；辅助平面（emoji）拆 UTF-16 代理对各发一个带符号 `\u`。
+2. **ODT 标题无样式**：初版 `<text:h>` 只设 `outline-level` 未引用段落样式，LibreOffice 虽进导航但无字号/加粗。已改用 `text:style-name="Heading1..6"` 关联 STYLES_XML 中的 `Heading1–6`。
+3. **类型层旧 union 残留**：`doExport` / `onCompile` 的 `kind` 仍为 `'html'|'pdf'|'latex'`，调 `doExport('md')` 报 TS2345。已拓宽为 `ExportKind`。
+4. **`separatorTitle` 误传 boolean**：`TitleBar` 里写成 `separatorTitle: true`，而 `MenuEntry.separatorTitle` 类型为 `string`，报 TS2322。已改为字符串分组标题。
+
+## 验证
+- `npm run typecheck` ✅（修复 4 处 TS 错误）；`npm run build` ✅（`✓ built in 26.57s`，无警告）。
+- 依赖：新增 `html-to-docx@1.8.0` + `jszip@3.10.1`（均纯 JS、无 node-gyp/fs/path 引用，可在 sandbox 渲染进程直接打包）。
+- **待运行期验收**：深色模式下分别导出 9 种格式（尤其含 Mermaid 图表的文档导 docx/epub/rtf/odt），确认预览浮层、系统保存框、产物可正常打开（Word/EPUB 阅读器/LibreOffice）。
+
+## 文件
+- 新增：`src/export/types.ts`、`src/export/domUtils.ts`、`src/export/docx.ts`、`src/export/epub.ts`、`src/export/rtf.ts`、`src/export/odt.ts`、`src/export/serialize.ts`、`src/export/html-to-docx.d.ts`（类型 shim）。
+- 改动：`src/App.vue`（`buildExportContent`/`writeExport`/`doExport`/`onCompile` 分派 + `BytesToBase64` + `kindLabel`/`mimeFor`）、`src/components/TitleBar.vue`、`src/components/TitleMenu.vue`、`src/components/CompilePanel.vue`、`src/components/ExportPreview.vue`、`electron/shared/ipc-channels.ts`（`ExportPayload.binaryBase64`/`mime`）、`electron/main/index.ts`（按 `binaryBase64` 写字节）、`src/i18n/locales/{zh-CN,en-US}.ts`。

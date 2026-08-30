@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
 import type { FileNode } from '../../electron/shared/ipc-channels'
+import type { ExportKind } from '../export/types'
 
 const { t } = useI18n()
 const L = t.ui
@@ -23,7 +24,7 @@ const emit = defineEmits<{
       files: string[]
       title: string
       newPagePerDoc: boolean
-      kind: 'html' | 'pdf' | 'latex'
+      kind: ExportKind
       preview: boolean
     }
   ]
@@ -58,7 +59,7 @@ const rows = ref<Row[]>(all.map((f) => ({ ...f, checked: true })))
 
 const title = ref('')
 const newPage = ref(true)
-const kind = ref<'html' | 'pdf' | 'latex'>('pdf')
+const kind = ref<ExportKind>('pdf')
 const preview = ref(props.preview)
 
 const selectedCount = computed(() => rows.value.filter((r) => r.checked).length)
@@ -159,31 +160,18 @@ function confirm(): void {
 
         <div class="opt">
           <label class="opt__label">{{ L.compileFormat }}</label>
-          <div class="seg">
-            <button
-              class="seg__item"
-              :class="{ 'seg__item--on': kind === 'html' }"
-              type="button"
-              @click="kind = 'html'"
-            >
-              HTML
-            </button>
-            <button
-              class="seg__item"
-              :class="{ 'seg__item--on': kind === 'pdf' }"
-              type="button"
-              @click="kind = 'pdf'"
-            >
-              PDF
-            </button>
-            <button
-              class="seg__item"
-              :class="{ 'seg__item--on': kind === 'latex' }"
-              type="button"
-              @click="kind = 'latex'"
-            >
-              LaTeX
-            </button>
+          <div class="select-wrap">
+            <select v-model="kind" class="select" :title="L.compileFormat">
+              <option value="md">{{ L.exportMenuMd }}</option>
+              <option value="txt">{{ L.exportMenuTxt }}</option>
+              <option value="html">{{ L.exportMenuHtml }}</option>
+              <option value="pdf">{{ L.exportMenuPdf }}</option>
+              <option value="latex">{{ L.exportMenuLatex }}</option>
+              <option value="docx">{{ L.exportMenuDocx }}</option>
+              <option value="epub">{{ L.exportMenuEpub }}</option>
+              <option value="rtf">{{ L.exportMenuRtf }}</option>
+              <option value="odt">{{ L.exportMenuOdt }}</option>
+            </select>
           </div>
         </div>
 
@@ -456,30 +444,41 @@ function confirm(): void {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08),
     0 0 0 3px rgba(36, 128, 119, 0.16);
 }
-.seg {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.12));
-  border-radius: 8px;
-  background: var(--hue-highlight);
+.select-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 140px;
 }
-.seg__item {
-  border: none;
-  background: transparent;
-  font-size: 11.5px;
-  padding: 3px 10px;
-  color: var(--hue-text-3);
-  border-radius: var(--radius-sm);
+.select {
+  width: 100%;
+  height: 30px;
+  padding: 0 28px 0 9px;
+  font-size: 12.5px;
+  font-family: var(--font-ui, inherit);
+  color: var(--hue-text-1);
+  border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.12));
+  border-radius: var(--radius-md);
+  /* 深色：凹陷玻璃质感，与书名输入框统一 */
+  background: rgba(0, 0, 0, 0.22)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23a3a7a5' stroke-width='1.4' stroke-linecap='round'/></svg>")
+    no-repeat right 10px center;
+  -webkit-appearance: none;
+  appearance: none;
   cursor: pointer;
 }
-.seg__item:hover {
-  color: var(--hue-text-1);
+.select:focus {
+  outline: none;
+  border-color: var(--hue-accent, #248077);
+  box-shadow: 0 0 0 3px rgba(var(--hue-tint-2, 36, 128, 119), 0.22);
 }
-.seg__item--on {
-  background: var(--hue-accent);
-  color: var(--hue-on-accent);
-  font-weight: 500;
+.select option {
+  color: #1c1e1f;
+  background: #fcfcfb;
+}
+[data-skin][data-mode='light'] .select {
+  background: rgba(20, 30, 28, 0.05)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%235b6266' stroke-width='1.4' stroke-linecap='round'/></svg>")
+    no-repeat right 10px center;
 }
 .switch {
   display: flex;

@@ -34,9 +34,15 @@ const emit = defineEmits<{
   (e: 'open'): void
   (e: 'switch-vault'): void
   (e: 'update:mode', value: EditorMode): void
+  (e: 'export-md'): void
+  (e: 'export-txt'): void
   (e: 'export-html'): void
   (e: 'export-pdf'): void
   (e: 'export-latex'): void
+  (e: 'export-docx'): void
+  (e: 'export-epub'): void
+  (e: 'export-rtf'): void
+  (e: 'export-odt'): void
   (e: 'export-compile'): void
   (e: 'export-option', key: 'toc' | 'cover' | 'inline' | 'selection' | 'preview'): void
   (e: 'appearance'): void
@@ -74,15 +80,25 @@ const mark = (on: boolean | undefined): string => (on ? '☑ ' : '☐ ')
 
 const exportItems = (): MenuEntry[] => {
   const p = props.exportPrefs
+  const item = (action: string, label: string): MenuEntry => ({
+    action,
+    label,
+    icon: 'file',
+    disabled: !props.canExport
+  })
   return [
-    { action: 'export-html', label: L.exportMenuHtml, icon: 'file', disabled: !props.canExport },
-    { action: 'export-pdf', label: L.exportMenuPdf, icon: 'file', disabled: !props.canExport },
-    {
-      action: 'export-latex',
-      label: L.exportMenuLatex,
-      icon: 'file',
-      disabled: !props.canExport
-    },
+    { separatorTitle: '文本' },
+    item('export-md', L.exportMenuMd),
+    item('export-txt', L.exportMenuTxt),
+    { separatorTitle: '排版 / 网页' },
+    item('export-html', L.exportMenuHtml),
+    item('export-pdf', L.exportMenuPdf),
+    item('export-latex', L.exportMenuLatex),
+    { separatorTitle: '办公 / 电子书' },
+    item('export-docx', L.exportMenuDocx),
+    item('export-epub', L.exportMenuEpub),
+    item('export-rtf', L.exportMenuRtf),
+    item('export-odt', L.exportMenuOdt),
     { separator: true },
     { action: 'toggle-toc', label: mark(p?.toc) + L.exportOptToc },
     { action: 'toggle-cover', label: mark(p?.cover) + L.exportOptCover },
@@ -95,9 +111,7 @@ const exportItems = (): MenuEntry[] => {
 }
 
 function onExportSelect(action: string): void {
-  if (action === 'export-html') emit('export-html')
-  else if (action === 'export-pdf') emit('export-pdf')
-  else if (action === 'export-latex') emit('export-latex')
+  if (action.startsWith('export-')) emit(action as any)
   else if (action === 'export-compile') emit('export-compile')
   else if (action === 'toggle-toc') emit('export-option', 'toc')
   else if (action === 'toggle-cover') emit('export-option', 'cover')
