@@ -19,7 +19,7 @@ import ZenSettings from './components/ZenSettings.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
-import type { FileNode, VaultChange, StartupMode, ZenPrefs } from '../electron/shared/ipc-channels'
+import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
@@ -162,6 +162,19 @@ async function onOpenResult(payload: { path: string; line: number }): Promise<vo
     await nextTick()
   }
   host.value?.revealLine(payload.line)
+}
+
+/** 链接健康检查：点击断链 → 打开文档并定位到断链所在行（源码模式可精确定位，与全文搜索一致） */
+async function onOpenBrokenLink(item: BrokenLinkItem): Promise<void> {
+  // 已经是当前文档则跳过「打开」步骤（openPath 对同路径会提前返回，导致后续定位不执行）
+  if (item.file !== tabs.activePath) await openPath(item.file)
+  if (requestedMode.value !== 'source') {
+    requestedMode.value = 'source'
+    await nextTick()
+  }
+  // 切到源码后视图重建，多等一拍确保 CodeMirror 实例就绪再定位
+  await nextTick()
+  host.value?.revealLine(item.line)
 }
 
 /** 全局替换完成：若当前正在编辑的文档在改写范围内，从磁盘重载以反映新内容 */
@@ -773,7 +786,7 @@ onBeforeUnmount(() => {
           v-if="linkCheckOpen"
           :vault-path="vaultPath"
           @close="linkCheckOpen = false"
-          @open="openPath"
+          @open="onOpenBrokenLink"
         />
 
         <WritingAidsPanel

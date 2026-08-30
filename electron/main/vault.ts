@@ -382,7 +382,7 @@ export async function checkLinks(root: string): Promise<BrokenLinkReport> {
             ? byRel.get(key.toLowerCase())
             : byBase.get(basename(key).toLowerCase())
         if (!match) {
-          items.push({ file, line: lineNo, raw: m[0], target, kind: 'wikilink' })
+          items.push({ file, line: lineNo, raw: m[0], target, kind: 'wikilink', context: line })
           if (items.length >= MAX_ITEMS) return { scanned: allMd.length, total: items.length, items }
         }
       }
@@ -409,7 +409,8 @@ export async function checkLinks(root: string): Promise<BrokenLinkReport> {
             line: lineNo,
             raw: m[0],
             target,
-            kind: isImage ? 'image' : 'mdlink'
+            kind: isImage ? 'image' : 'mdlink',
+            context: line
           })
           if (items.length >= MAX_ITEMS) return { scanned: allMd.length, total: items.length, items }
         }

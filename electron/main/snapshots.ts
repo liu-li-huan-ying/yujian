@@ -42,9 +42,18 @@ export function displayTime(iso: string): string {
   )}:${p(d.getSeconds())}`
 }
 
-/** 当前时间的 ISO 文件名片段（用 - 替代 :） */
+/**
+ * 当前时间的 ISO 文件名片段（用 - 替代 :）。
+ * ⚠️ 必须用「本地时区」墙钟数字：toISOString() 永远是 UTC，会与 isoToDate() 的本地解析错位
+ * （东八区用户存的快照会被当成 UTC 数字、再被当本地时间读出，整差 8 小时）。
+ * 这里取操作系统本地时区的年/月/日/时/分/秒，文件名即所见即所得的本地时间。
+ */
 function nowIso(): string {
-  return new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+  const d = new Date()
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}-${p(
+    d.getMinutes()
+  )}-${p(d.getSeconds())}`
 }
 
 /** 备注清洗：仅保留中英文字符、数字、空格与少量标点，限长 40，避免污染文件名 */

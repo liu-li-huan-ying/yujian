@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
-import type { BrokenLinkItem, BrokenLinkReport } from '../../electron/shared/ipc-channels'
+import type { BrokenLinkItem, BrokenLinkKind, BrokenLinkReport } from '../../electron/shared/ipc-channels'
 
 const { t } = useI18n()
 const L = t.ui
@@ -13,21 +13,48 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'open', path: string): void
+  (e: 'open', item: BrokenLinkItem): void
 }>()
 
 const report = ref<BrokenLinkReport | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const filter = ref<'all' | BrokenLinkKind>('all')
 
 const hasResult = computed(() => report.value !== null)
 
 const summary = computed(() => {
   const r = report.value
   if (!r) return ''
-  return L.linkCheckSummary
-    .replace('{n}', String(r.scanned))
-    .replace('{m}', String(r.total))
+  return L.linkCheckSummary.replace('{n}', String(r.scanned)).replace('{m}', String(r.total))
+})
+
+/** 按类型统计，用于汇总拆分展示 */
+const counts = computed<Record<BrokenLinkKind, number>>(() => {
+  const c: Record<BrokenLinkKind, number> = { wikilink: 0, mdlink: 0, image: 0 }
+  if (report.value) for (const it of report.value.items) c[it.kind]++
+  return c
+})
+
+const breakdown = computed(() => {
+  const c = counts.value
+  return L.linkCheckBreakdown
+    .replace('{w}', String(c.wikilink))
+    .replace('{l}', String(c.mdlink))
+    .replace('{i}', String(c.image))
+})
+
+const filters = computed(() => [
+  { key: 'all' as const, label: L.linkCheckFilterAll, count: report.value?.total ?? 0 },
+  { key: 'wikilink' as const, label: L.linkKindWiki, count: counts.value.wikilink },
+  { key: 'mdlink' as const, label: L.linkKindLink, count: counts.value.mdlink },
+  { key: 'image' as const, label: L.linkKindImage, count: counts.value.image }
+])
+
+const filtered = computed<BrokenLinkItem[]>(() => {
+  const r = report.value
+  if (!r) return []
+  return filter.value === 'all' ? r.items : r.items.filter((it) => it.kind === filter.value)
 })
 
 const kindLabel: Record<BrokenLinkItem['kind'], string> = {
@@ -44,6 +71,9 @@ function fileDir(p: string): string {
   const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
   return i >= 0 ? p.slice(0, i) : ''
 }
+function rowTitle(it: BrokenLinkItem): string {
+  return `${it.raw}\n${L.linkCheckContext}：${it.context}\n${L.linkCheckLocate.replace('{n}', String(it.line))}`
+}
 
 async function run(): Promise<void> {
   if (!props.vaultPath) {
@@ -54,6 +84,7 @@ async function run(): Promise<void> {
   error.value = null
   try {
     report.value = await window.api.checkLinks(props.vaultPath)
+    filter.value = 'all'
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -61,7 +92,15 @@ async function run(): Promise<void> {
   }
 }
 
-onMounted(run)
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape') emit('close')
+}
+
+onMounted(() => {
+  void run()
+  window.addEventListener('keydown', onKey)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
@@ -84,26 +123,57 @@ onMounted(run)
       </button>
     </div>
 
-    <p v-if="loading" class="lc__empty">{{ L.linkCheckScanning }}</p>
-    <p v-else-if="error" class="lc__empty lc__empty--err">{{ error }}</p>
-    <p v-else-if="hasResult && report!.total === 0" class="lc__empty">{{ L.linkCheckEmpty }}</p>
+    <!-- 类型筛选 -->
+    <div v-if="hasResult && !loading && report!.total > 0" class="lc__filters">
+      <button
+        v-for="f in filters"
+        :key="f.key"
+        type="button"
+        class="fchip"
+        :class="{ 'fchip--on': filter === f.key }"
+        :disabled="f.count === 0"
+        @click="filter = f.key"
+      >
+        {{ f.label }}
+        <span class="fchip__n">{{ f.count }}</span>
+      </button>
+    </div>
+
+    <p v-if="loading" class="lc__empty">
+      <Icon name="loader" :size="16" class="lc__spin" />
+      {{ L.linkCheckScanning }}
+    </p>
+    <p v-else-if="error" class="lc__empty lc__empty--err">
+      <Icon name="unlink" :size="16" />
+      {{ error }}
+    </p>
+    <p v-else-if="hasResult && report!.total === 0" class="lc__empty lc__empty--ok">
+      <Icon name="check" :size="16" />
+      {{ L.linkCheckEmpty }}
+    </p>
 
     <template v-else-if="hasResult">
-      <p class="lc__summary">{{ summary }}</p>
+      <div class="lc__summary">
+        <span>{{ summary }}</span>
+        <span class="lc__break">{{ breakdown }}</span>
+      </div>
       <div class="lc__list">
         <button
-          v-for="(it, i) in report!.items"
+          v-for="(it, i) in filtered"
           :key="i"
           type="button"
           class="row"
-          :title="`${it.raw}\n${it.file}`"
-          @click="emit('open', it.file)"
+          :title="rowTitle(it)"
+          @click="emit('open', it)"
         >
           <span class="row__kind" :class="`row__kind--${it.kind}`">{{ kindLabel[it.kind] }}</span>
-          <span class="row__main">
-            <span class="row__file">{{ fileBase(it.file) }}</span>
-            <span class="row__line">:{{ it.line }}</span>
+          <span class="row__body">
+            <span class="row__top">
+              <span class="row__file">{{ fileBase(it.file) }}</span>
+              <span class="row__line">:{{ it.line }}</span>
+            </span>
             <span class="row__target">{{ it.target }}</span>
+            <span class="row__ctx">{{ it.context }}</span>
           </span>
           <span class="row__dir">{{ fileDir(it.file) }}</span>
         </button>
@@ -119,7 +189,7 @@ onMounted(run)
   top: 10px;
   right: 16px;
   z-index: 30;
-  width: 360px;
+  width: 372px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
   padding: 12px;
@@ -127,6 +197,17 @@ onMounted(run)
   display: flex;
   flex-direction: column;
   gap: 10px;
+  animation: lc-in 0.18s var(--ease, ease) both;
+}
+@keyframes lc-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .lc__head {
@@ -173,7 +254,7 @@ onMounted(run)
 }
 .lc__rerun:hover:not(:disabled),
 .lc__x:hover {
-  background: var(--bg-hover);
+  background: var(--bg-hover, rgba(128, 128, 128, 0.14));
   color: var(--hue-text-1);
 }
 .lc__rerun:disabled {
@@ -181,7 +262,53 @@ onMounted(run)
   cursor: default;
 }
 
+/* 类型筛选 */
+.lc__filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--hue-text-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast, 0.12s) var(--ease, ease),
+    color var(--dur-fast, 0.12s) var(--ease, ease),
+    border-color var(--dur-fast, 0.12s) var(--ease, ease);
+}
+.fchip:hover:not(:disabled) {
+  border-color: var(--hue-accent);
+  color: var(--hue-text-1);
+}
+.fchip--on {
+  background: var(--hue-accent);
+  border-color: var(--hue-accent);
+  color: var(--hue-on-accent);
+}
+.fchip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.fchip__n {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
 .lc__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   font-size: 12px;
   color: var(--hue-text-3);
   text-align: center;
@@ -191,11 +318,28 @@ onMounted(run)
 .lc__empty--err {
   color: var(--hue-danger, #f34f45);
 }
+.lc__empty--ok {
+  color: #6fcf97;
+}
+.lc__spin {
+  animation: lc-spin 0.9s linear infinite;
+}
+@keyframes lc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .lc__summary {
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 12px;
   color: var(--hue-text-2);
+}
+.lc__break {
+  font-size: 11px;
+  color: var(--hue-text-3);
 }
 
 .lc__list {
@@ -219,8 +363,8 @@ onMounted(run)
   cursor: pointer;
   text-align: left;
   transition:
-    background var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
+    background var(--dur-fast, 0.12s) var(--ease, ease),
+    border-color var(--dur-fast, 0.12s) var(--ease, ease);
 }
 .row:hover {
   background: var(--hue-surface-2);
@@ -247,26 +391,34 @@ onMounted(run)
   background: #b08968;
 }
 
-.row__main {
+.row__body {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1px;
+}
+.row__top {
+  display: flex;
   align-items: baseline;
-  gap: 2px 6px;
+  gap: 6px;
+  min-width: 0;
 }
 .row__file {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--hue-text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .row__line {
   font-size: 11px;
   color: var(--hue-accent);
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 .row__target {
-  flex-basis: 100%;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--hue-text-3);
@@ -274,9 +426,20 @@ onMounted(run)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.row__ctx {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--hue-text-3);
+  opacity: 0.72;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-left: 2px solid var(--hue-border-subtle);
+  padding-left: 6px;
+}
 .row__dir {
   flex: 0 0 auto;
-  max-width: 38%;
+  max-width: 36%;
   font-size: 10.5px;
   color: var(--hue-text-3);
   overflow: hidden;

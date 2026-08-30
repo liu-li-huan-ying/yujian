@@ -472,6 +472,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 **版本快照（本地唯一真源，与 `.mdeditor/` 分离）**
 
 * 存储：main 进程在 vault 根建 `.yujian-history/<path-hash>/<ISO8601>.md`（独立于 `.mdeditor/`，建议进 vault `.gitignore`）。`electron/main/snapshots.ts` 提供 `snapshotList` / `snapshotCreate`（写一份，可带备注）/ `snapshotRestore`（**只读返回内容**，不写磁盘）/ `snapshotDelete`。
+* ⚠️ **时区修复（2026-08-30）**：原 `nowIso()` 用 `toISOString()` 取的是 **UTC** 墙钟，而 `isoToDate()` 把该数字当**本地**时间解析，导致东八区用户存的快照被整差 8 小时。已改为取 `Date` 的本地时区 `getFullYear/getMonth/.../getSeconds` 生成文件名，与解析端一致；渲染端 `SnapshotPanel` 时间戳经 `src/utils/time.ts` 的 `formatDateTime`（同样走本机时区），并加「本机时区：{IANA}」tooltip（`Intl.DateTimeFormat().resolvedOptions().timeZone` 自动取电脑时区，无需硬编码东八区）。**注意**：此前（bug 期）已落盘的快照文件名仍是 UTC 数字，读回会偏 8 小时；新快照已正确，旧快照可在 `.yujian-history/` 手动清理。
 * IPC：通道 `snapshot:list` / `snapshot:create` / `snapshot:restore` / `snapshot:delete` 在 `electron/shared/ipc-channels.ts` 集中定义；preload 暴露 `window.api.snapshotList/Create/Restore/Delete`（类型自动派生）。
 * 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**）；玻璃 `SnapshotPanel.vue`（锚定 `.editor` 右上）：备注输入 + 保存、列表（时间 + 备注 + 字数差 `deltaChars`）、选中→`snapshotRestore` 只读返回→`diffLines`（`diff@^7.0.0`）摊平逐行 add/del/ctx 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
 * 行级 diff 库选型修正：原计划写 `jsdiff`，但 `jsdiff@1.1.1` 实为「JSON 对象 diff」库（装配错误）；正确库是 `diff@^7.0.0`（`diffLines`），已在 `package.json` 落地，`jsdiff` 已卸载；无类型的 `diff@7` 在 `src/types/diff.d.ts` 补了环境声明。
@@ -523,14 +524,16 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **扫描（`electron/main/vault.ts` 的 `checkLinks(root)`，新增 IPC `vault:checkLinks` → preload `window.api.checkLinks`）**
 
-* 两遍遍历：第一遍收集全部 Markdown 文档，建立「基名（去扩展名，小写）」与「相对库根路径（去扩展名，小写）」索引；第二遍逐文件逐行抽取链接并解析判定。遍历规则与 `listTree` / `searchVault` 一致（跳过点目录 / node_modules / 同名 `.assets`），不引入任何新依赖。
+* 两遍遍历：第一遍收集全部 Markdown 文档，建立「基名（去扩展名，小写）」与「相对库根路径（去扩展名，小写）」索引；第二遍逐文件逐行抽取链接并解析判定。遍历规则与 `listTree` / `searchVault` 一致（跳过点目录 / node\_modules / 同名 `.assets`），不引入任何新依赖。
 * 识别三类链接：① `[[wikilink]]`（兼容 `[[X|别名]]`、`[[X#标题]]`，按基名或相对路径解析）；② Markdown 链接 `[text](target)`（相对当前文档目录解析后判定目标文件是否存在）；③ 图片 `![alt](target)`（同上检查图片是否存在）。
 * 跳过不计入断链：外部链接（http(s) / mailto / tel / data / ftp、协议相对 `//`、`www.` 域名）、纯锚点（`#标题`）。断链条目上限 2000 提前返回，防大库爆内存。
-* `BrokenLinkReport { scanned, total, items[] }`，`BrokenLinkItem { file, line, raw, target, kind }`；`kind: 'wikilink' | 'mdlink' | 'image'`。
+* `BrokenLinkReport { scanned, total, items[] }`，`BrokenLinkItem { file, line, raw, target, kind, context }`（新增 `context`：断链所在行的原文，便于面板内预览）；`kind: 'wikilink' | 'mdlink' | 'image'`。
 
 **报告面板（`src/components/LinkCheckPanel.vue`，玻璃浮层，入口：标题栏「更多 ⌄ · 链接健康检查」）**
 
-* 挂载即扫描（加载态 → 汇总「扫描 N 篇、发现 M 处」→ 列表）；可「重新扫描」。每行按 kind 三色徽标（Wiki / 链接 / 图片）+ 源文件基名 + 行号 + 目标（等宽），点击经 `App.openPath` 在编辑器中定位该文档；零断链显示「未发现断链 ✓」。
+* 挂载即扫描（加载态带旋转图标 → 汇总「扫描 N 篇、发现 M 处」+ 按类型拆分计数「Wiki a · 链接 b · 图片 c」→ 列表）；可「重新扫描」；`Esc` 关闭。
+* 顶部「全部 / Wiki / 链接 / 图片」类型筛选（带各类型计数，零项禁用）；每行按 kind 三色徽标（Wiki / 链接 / 图片）+ 源文件基名 + 行号 + 目标（等宽）+ **所在行原文预览**（左侧竖线缩进，等宽、截断），hover 标题显示原始链接、所在行与「定位到 N 行」。
+* 点击行 → `App.onOpenBrokenLink(item)`：经 `openPath` 打开文档（已是当前文档则跳过）→ 切源码模式（行级定位只在源码精确）→ `revealLine(line)` 滚动到断链行；与全文搜索结果定位同一套逻辑。零断链显示「未发现断链 ✓」（绿色对勾）。
 
 ### 5.13 写作辅助（2026-08-30，Phase 2 批次三 §3.6）
 
@@ -619,17 +622,17 @@ export interface SessionState {
 
 ## 8. 开发路线图
 
-| 阶段             | 目标                                          | 产出验收标准                                                          |
-| -------------- | ------------------------------------------- | --------------------------------------------------------------- |
-| **0. 地基**      | 脚手架 + 窗口 + IPC 打通                           | `npm run dev` 能弹出一个空白 Electron 窗口                               |
-| **1. 编辑器核心**   | Crepe 接入 + 双模式切换 + 打开/保存 md                 | 能打开一个 md 编辑并保存，Ctrl+/ 切换源码无内容丢失                                 |
-| **2. 笔记库**     | 文件树 + 自动保存 + 崩溃恢复                           | 能打开整个文件夹，断电重启后内容不丢                                              |
-| **3. 写作套件**    | Mermaid + 公式核验 + 表格 + 代码块                   | 一篇含图表的文章能正常编辑渲染                                                 |
-| **4. 图片**      | 粘贴落盘 + 图床配置                                 | 截图粘贴即可插入，图床可配                                                   |
-| **5. 搜索**      | MiniSearch 索引 + 搜索面板                        | 千篇笔记下搜索响应 < 100ms                                               |
-| **6. 导出**      | HTML / PDF / 单 md                           | 导出结果与编辑器内观感一致                                                   |
-| **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                            | 安装包体积优化，可用                                                      |
-| **8. 分发**      | electron-builder 打包                         | 产出 Windows 安装包，可安装运行                                            |
+| 阶段             | 目标                                              | 产出验收标准                                                                               |
+| -------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **0. 地基**      | 脚手架 + 窗口 + IPC 打通                               | `npm run dev` 能弹出一个空白 Electron 窗口                                                    |
+| **1. 编辑器核心**   | Crepe 接入 + 双模式切换 + 打开/保存 md                     | 能打开一个 md 编辑并保存，Ctrl+/ 切换源码无内容丢失                                                      |
+| **2. 笔记库**     | 文件树 + 自动保存 + 崩溃恢复                               | 能打开整个文件夹，断电重启后内容不丢                                                                   |
+| **3. 写作套件**    | Mermaid + 公式核验 + 表格 + 代码块                       | 一篇含图表的文章能正常编辑渲染                                                                      |
+| **4. 图片**      | 粘贴落盘 + 图床配置                                     | 截图粘贴即可插入，图床可配                                                                        |
+| **5. 搜索**      | MiniSearch 索引 + 搜索面板                            | 千篇笔记下搜索响应 < 100ms                                                                    |
+| **6. 导出**      | HTML / PDF / 单 md                               | 导出结果与编辑器内观感一致                                                                        |
+| **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                                | 安装包体积优化，可用                                                                           |
+| **8. 分发**      | electron-builder 打包                             | 产出 Windows 安装包，可安装运行                                                                 |
 | **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+凝神(打字机/禅)模式+导出增强+写作辅助+断链检查 | 🔧 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二已落地（版本快照·写作统计·凝神模式）；批次三待排期（见 `docs/PHASE2-PLAN.md`） |
 
 > 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。

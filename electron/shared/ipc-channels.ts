@@ -306,6 +306,8 @@ export interface BrokenLinkItem {
   target: string
   /** 断链类型：Wiki 链接 / Markdown 链接 / 图片 */
   kind: BrokenLinkKind
+  /** 断链所在行的原文（不含换行，便于在面板内预览「到底是哪一行出了问题」） */
+  context: string
 }
 
 export interface BrokenLinkReport {
