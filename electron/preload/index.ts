@@ -176,14 +176,15 @@ const api = {
   snapshotList: (vaultPath: string, filePath: string): Promise<SnapshotInfo[]> =>
     ipcRenderer.invoke(IPC.SNAPSHOT_LIST, vaultPath, filePath),
 
-  /** 保存一份快照（note 可选）；内容与最新一份相同时自动去重 */
+  /** 保存一份快照（note / tags 可选）；内容哈希相同则自动去重 */
   snapshotCreate: (
     vaultPath: string,
     filePath: string,
     content: string,
-    note?: string
+    note?: string,
+    tags?: string[]
   ): Promise<SnapshotInfo> =>
-    ipcRenderer.invoke(IPC.SNAPSHOT_CREATE, vaultPath, filePath, content, note),
+    ipcRenderer.invoke(IPC.SNAPSHOT_CREATE, vaultPath, filePath, content, note, tags),
 
   /** 读取某快照内容（用于回滚） */
   snapshotRestore: (vaultPath: string, filePath: string, id: string): Promise<string> =>
@@ -191,7 +192,16 @@ const api = {
 
   /** 删除某快照（走系统回收站） */
   snapshotDelete: (vaultPath: string, filePath: string, id: string): Promise<void> =>
-    ipcRenderer.invoke(IPC.SNAPSHOT_DELETE, vaultPath, filePath, id)
+    ipcRenderer.invoke(IPC.SNAPSHOT_DELETE, vaultPath, filePath, id),
+
+  /** 更新某快照的命名标签（git tag 思想）：终稿 / 投稿版 / v1.0 等 */
+  snapshotSetTags: (
+    vaultPath: string,
+    filePath: string,
+    id: string,
+    tags: string[]
+  ): Promise<SnapshotInfo | null> =>
+    ipcRenderer.invoke(IPC.SNAPSHOT_SET_TAGS, vaultPath, filePath, id, tags)
 }
 
 export type ElectronAPI = typeof api

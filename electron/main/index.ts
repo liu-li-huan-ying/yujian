@@ -23,7 +23,7 @@ import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVau
 import { patchSession, readSession } from './session'
 import { saveAsset } from './assets'
 import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
-import { listSnapshots, createSnapshot, restoreSnapshot, deleteSnapshot } from './snapshots'
+import { listSnapshots, createSnapshot, restoreSnapshot, deleteSnapshot, setSnapshotTags } from './snapshots'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -309,6 +309,17 @@ function registerIpc(): void {
     IPC.SNAPSHOT_DELETE,
     async (_event, vaultPath: string, filePath: string, id: string): Promise<void> =>
       deleteSnapshot(vaultPath, filePath, id)
+  )
+
+  ipcMain.handle(
+    IPC.SNAPSHOT_SET_TAGS,
+    async (
+      _event,
+      vaultPath: string,
+      filePath: string,
+      id: string,
+      tags: string[]
+    ): Promise<SnapshotInfo | null> => setSnapshotTags(vaultPath, filePath, id, tags)
   )
 
   // 通用写盘导出：HTML / LaTeX 等文本产物共用，保存对话框类型由 payload.filters 决定。

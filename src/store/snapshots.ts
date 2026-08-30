@@ -31,15 +31,28 @@ export const useSnapshotsStore = defineStore('snapshots', () => {
     }
   }
 
-  /** 保存一份快照（note 可选）；内容与最新一份相同则主进程自动去重 */
+  /** 保存一份快照（note / tags 可选）；内容相同则主进程按哈希去重 */
   async function create(
     vaultPath: string | null,
     filePath: string | null,
     content: string,
-    note?: string
+    note?: string,
+    tags?: string[]
   ): Promise<void> {
     if (!vaultPath || !filePath) return
-    await window.api.snapshotCreate(vaultPath, filePath, content, note)
+    await window.api.snapshotCreate(vaultPath, filePath, content, note, tags)
+    await refresh(vaultPath, filePath)
+  }
+
+  /** 更新某快照的命名标签（git tag 思想） */
+  async function setTags(
+    vaultPath: string | null,
+    filePath: string | null,
+    id: string,
+    tags: string[]
+  ): Promise<void> {
+    if (!vaultPath || !filePath) return
+    await window.api.snapshotSetTags(vaultPath, filePath, id, tags)
     await refresh(vaultPath, filePath)
   }
 
@@ -65,5 +78,5 @@ export const useSnapshotsStore = defineStore('snapshots', () => {
     }
   }
 
-  return { list, loading, selectedId, refresh, create, remove, read }
+  return { list, loading, selectedId, refresh, create, remove, read, setTags }
 })
