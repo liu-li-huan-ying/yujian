@@ -25,7 +25,7 @@
 | 版本快照        | ✅     | 自动（保存+定时）+ 手动；行级 diff 预览 + 命名备注              |
 | 写作统计        | ✅     | 汉字/英文/字符/阅读时长；选中统计；写作目标追踪                    |
 | 打字机 / 禅模式   | ✅     | 融合为「凝神」模式：当前行垂直居中 + 当前块高亮、其余块淡化 + 失焦暂停（零依赖）  |
-| 导出增强：docx   | ✅     | html-to-docx，纯 JS (OOXML)                    |
+| 导出增强：docx   | ✅     | 手写 OOXML + jszip，纯 JS                      |
 | 导出增强：ePub   | ✅     | jszip 手写 OPF (EPUB3)                            |
 | 导出增强：RTF    | ✅     | 手写 RTF 1.9（无依赖）                              |
 | 导出增强：ODT    | ✅     | jszip 手写 ODF 1.2                               |
@@ -89,7 +89,7 @@
 
 > **进度（2026-08-30）**：**导出格式全集已落地（9 种）** —— Markdown / 纯文本 / HTML / PDF / LaTeX / Word(docx) / EPUB / RTF / ODT，全部纯 JS / WASM 实现，**不依赖 pandoc 等外部二进制**。其中 docx / epub / rtf / odt 为二进制格式：在渲染进程序列化为字节，经 IPC 以 base64 传给主进程精确写盘（`ExportPayload.binaryBase64`）。HTML / PDF / LaTeX 增强、导出范围（整篇 / 选中）、图片内联策略、Mermaid 转内嵌 SVG、通用写盘 IPC 均已就绪。
 
-* **docx**：✅ **已实现（2026-08-30）**。`src/export/docx.ts` 用 **`html-to-docx@1.8.0`**（纯 JS，内部 `@oozcitak/dom`，无 fs/path，浏览器可直接打包），取规范化 HTML 的 `<article>` 内层 → Mermaid `<svg>` 经 canvas 光栅化为 PNG → `HTMLToDOCX(cleanHtml, null, { type:'blob', title, font, margins })` → `toUint8Array`（`Buffer` 或 `Blob` 统一转字节）。*已知边界*：LaTeX 公式转 OMML 或静态图、脚注转尾注、代码块转等宽文本尚未做，公式以图片/占位呈现。
+* **docx**：✅ **已实现（2026-08-30，2026-08-30 晚修正）**。初版用 `html-to-docx@1.8.0`，但其在**模块顶层** `import crypto/fs/path/zlib/stream/http/url/https/events/util` 一整条 Node 内置模块，Vite 打包时 externalize 成浏览器空壳，渲染进程启动即崩 → **整窗漆黑、什么都不渲染**（Node 里烟雾测试能过是因为 Node 自带这些模块，浏览器没有）。**已弃用该包**，改用 `jszip` **手写 OOXML**（`src/export/docx.ts`）：手工拼装 `word/document.xml` / `styles.xml`（Normal + Heading1–6 + Quote + Code）/ `numbering.xml`（多级有序·无序列表）/ `_rels` / `[Content_Types].xml` / `docProps`，标题/段落/粗斜体/下划线/链接/有序无序列表（含嵌套）/引用/代码块/表格/图片（PNG 经 canvas 光栅化嵌入）/超链接齐全。取规范化 HTML 的 `<article>` 内层 → Mermaid `<svg>` 光栅化为 PNG → 拼装 DOCX 包。*已知边界*：LaTeX 公式转 OMML 或静态图、脚注转尾注尚未做，公式以图片/占位呈现。
 * **ePub**：✅ **已实现（2026-08-30）**。`src/export/epub.ts` 用 **`jszip@3.10.1`** 手写 EPUB3：`mimetype` 须 STORE 且为首个条目；含 `META-INF/container.xml`、`OEBPS/content.opf`（含 nav properties）、`nav.xhtml`（按标题层级缩进的目录）、`style.css`、`section-001.xhtml`（内联 SVG 保留 Mermaid 图表）、内联图片（`data:` → `OEBPS/images/`）。
 * **RTF**：✅ **已实现（2026-08-30）**。`src/export/rtf.ts` **零依赖**手工生成 RTF 1.9：`\ansicpg936` + `\lang2052` 支持中文；覆盖标题 / 段落 / 粗斜体 / 下划线 / 链接（HYPERLINK field）/ 列表 / 引用 / 代码 / 图片（`\pngblip` 十六进制）/ 表格（降级为制表符分隔）。Mermaid `<svg>` 先光栅化为 PNG 再嵌入。非 ASCII 走 `\u` 带符号 16 位转义（≥ U+8000 的码点转负值、辅助平面拆代理对），保证严格 RTF 解析器可读。
 * **ODT**：✅ **已实现（2026-08-30）**。`src/export/odt.ts` 用 **`jszip@3.10.1`** 手写 OpenDocument 1.2：含 `content.xml` / `styles.xml`（内嵌 `STYLES_XML`，Heading1–6 / Quote / code / bold / italic / underline / mono）/ `meta.xml` / `manifest.xml` / `Pictures/`；标题引用 `Heading1–6` 段落样式，Mermaid `<svg>` 先光栅化为 PNG 嵌入。
@@ -107,7 +107,7 @@
     * **预览 UX 打磨**：确认按钮文案改为「确认并选择位置」并加 hint「确认后将弹出系统对话框，选择保存位置」，明示会弹系统保存框；预览浮层补**空内容兜底态**（「当前内容为空，无可预览内容」），文件名加粗醒目。
 * **图片与图**：✅ **已实现**。图片**内联（base64）vs 相对路径**可选（`src/export/imageInline.ts`，按文档所在目录解析相对路径，经 `file:readBase64` 读取）；**Mermaid 转内嵌 SVG**（`src/export/mermaidSvg.ts`），使 PDF 与离线 HTML 不再依赖 CDN。**PDF 强制内联**——它经隐藏窗口加载 `tmpdir` 下的临时文件，相对路径图片与 CDN 脚本都取不到（这也是此前 PDF 丢图的根因）。
 * **渲染进程 Node 全局 polyfill（2026-08-30 修复）**：`mermaid` 的部分图表模块（swimlanes 等）在浏览器/渲染进程里引用全局 `Buffer`，而本应用 renderer 为 `contextIsolation/sandbox`（无 Node 全局），Vite 不自动 polyfill → 导出含 Mermaid 代码块的文档时抛 `Buffer is not defined`。已在 `src/main.ts` 入口注入纯 JS 的 `buffer` 包（`globalThis.Buffer = Buffer`），确保 mermaid 渲染前全局可用（同时惠及编辑器内 Mermaid 实时预览）。
-* **依赖约束**：二进制格式新增纯 JS 依赖 **`html-to-docx@1.8.0`**（OOXML 生成）+ **`jszip@3.10.1`**（EPUB / ODT 打包），二者均无 node-gyp / fs / path 引用，可在 sandbox 渲染进程直接打包，不触碰「禁编译型依赖」红线；RTF 为零依赖手写。全部格式仍 **不依赖 pandoc 等外部二进制**。
+* **依赖约束**：二进制格式仅新增纯 JS 依赖 **`jszip@3.10.1`**（EPUB / ODT / DOCX 打包），无 node-gyp / fs / path 引用，可在 sandbox 渲染进程直接打包，不触碰「禁编译型依赖」红线；RTF 为零依赖手写。曾经引入的 `html-to-docx` 因其模块顶层 import 一整条 Node 内置模块、在浏览器打包后被 externalize 成空壳并导致渲染进程启动即崩（整窗漆黑），**已移除**。全部格式仍 **不依赖 pandoc 等外部二进制**。
 * **UI**：✅ 导出菜单由 `TitleMenu` 的 `MenuEntry.separatorTitle` 分组为「文本（Markdown / 纯文本）/ 排版·网页（HTML / PDF / LaTeX）/ 办公·电子书（Word / EPUB / RTF / ODT）」三段，下接四个开关（自动目录 / 封面页 / 图片内联 / 仅选中范围）+ 多文件合订入口；合订面板 `CompilePanel.vue` 的格式下拉同步 9 选项；未新增组件。元信息由批次二属性面板的 frontmatter 供给。
 * **IPC 收敛**：`export:html` 升级为通用 `export:file`（content + defaultName + filters），HTML 与 LaTeX 共用一条写盘通道，避免逐格式加通道的冗余；新增 `file:readBase64` 供图片内联。
 

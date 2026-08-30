@@ -32,7 +32,6 @@
     "codemirror": "^6.0.2",
     "diff": "^7.0.0",
     "gray-matter": "^4.0.3",
-    "html-to-docx": "^1.8.0",
     "jszip": "^3.10.1",
     "katex": "^0.18.4",
     "mermaid": "^11.17.2",
