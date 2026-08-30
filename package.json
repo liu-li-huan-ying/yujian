@@ -11,6 +11,7 @@
     "start": "node scripts/dev.mjs preview",
     "build": "electron-vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "verify:md": "node scripts/verify-markdown.mjs",
     "dist": "electron-vite build && electron-builder --win",
     "dist:mac": "electron-vite build && electron-builder --mac",
     "dist:linux": "electron-vite build && electron-builder --linux",

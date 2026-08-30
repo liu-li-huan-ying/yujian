@@ -377,6 +377,28 @@
 }
 /* 菜单项 hover/选中沿用玉质令牌（Crepe 默认用 --crepe-color-*，已重映射） */
 
+/* ── BlockEdit 浮动工具栏图标可见性 ──
+   Crepe 内置的块编辑工具条（B/I/引用/代码/数学等）SVG 图标默认用
+   --crepe-color-on-surface-variant（= --hue-text-3）着色，在玻璃暗底上对比度不足。
+   强制提升至 --hue-text-2，hover 时用强调色高亮。 */
+.milkdown .milkdown-toolbar svg,
+.milkdown .milkdown-toolbar [class*='menu'] svg,
+.milkdown .milkdown-toolbar [class*='item'] svg,
+.milkdown .milkdown-toolbar [class*='button'] svg,
+.milkdown .milkdown-toolbar [class*='icon'] svg {
+  color: var(--hue-text-2);
+  fill: var(--hue-text-2);
+  opacity: 0.9;
+}
+.milkdown .milkdown-toolbar button:hover svg,
+.milkdown .milkdown-toolbar [class*='item']:hover svg,
+.milkdown .milkdown-toolbar [class*='item'][class*='active'] svg,
+.milkdown .milkdown-toolbar [aria-pressed='true'] svg {
+  color: var(--hue-accent);
+  fill: var(--hue-accent);
+  opacity: 1;
+}
+
 /* ── 源码模式：CodeMirror 套用同一套令牌 ───────
    注意：.cm-editor 只限 .source-host 内生效（height:100% + 45vh 底部留白），
    否则会污染所见即所得内代码块的尺寸，导致 1 行代码撑出整屏高度。 */
@@ -590,45 +612,100 @@
    注：旧方案靠 .yj-* 装饰 + 导出后处理，源码里仍留 `~`/`==` 会被 gfm 抢成删除线、
    被序列化转义成 `\~` / `\==`，已废弃。 */
 .milkdown .ProseMirror mark {
-  /* 玉质高亮：用强调色的半透活性底 + 内陷发丝边，融入青瓷/月白配色，不抢眼 */
-  background: var(--hue-active);
+  /* 荧光笔迹：底色自上而下由浅入深，底部再压一道实笔收尾 ——
+     像毛笔蘸色轻扫而过，起笔淡、收笔实，有书写感而非一块死板的色块。
+     颜色取自 --hue-mark（每套皮肤各配一色，见 tokens.css）。 */
   color: inherit;
-  border-radius: var(--radius-sm);
-  padding: 0.08em 0.3em;
-  box-shadow: inset 0 0 0 1px rgba(var(--hue-tint-1), 0.3);
+  padding: 0.1em 0.26em;
+  border-radius: 3px;
+  background-color: rgba(var(--hue-mark), 0.1);
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-mark), 0.05) 0%,
+    rgba(var(--hue-mark), 0.26) 100%
+  );
+  box-shadow: inset 0 -0.09em 0 rgba(var(--hue-mark), 0.5);
+  /* 关键：高亮跨行时「每行片段」都要完整包裹。
+     缺省值 slice 会让换行处的高亮被切断，看着就是「色块和文字分家」。 */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+[data-skin][data-mode='light'] .milkdown .ProseMirror mark {
+  background-color: rgba(var(--hue-mark), 0.15);
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-mark), 0.06) 0%,
+    rgba(var(--hue-mark), 0.24) 100%
+  );
+  box-shadow: inset 0 -0.09em 0 rgba(var(--hue-mark), 0.55);
 }
 .milkdown .ProseMirror sup {
   vertical-align: super;
-  font-size: 0.78em;
+  font-size: 0.75em;
   line-height: 0;
+  /* 上标微调：与正文保持呼吸间距，不拥挤 */
+  margin-left: 1px;
 }
 .milkdown .ProseMirror sub {
   vertical-align: sub;
-  font-size: 0.78em;
+  font-size: 0.75em;
   line-height: 0;
+  /* 下标微调 */
+  margin-left: 1px;
 }
 
 /* ── 内联 HTML / <kbd> 键帽（htmlInline 节点渲染）──
-   玉质键帽：比编辑区略亮的表面 + 发丝边 + 底部加厚一档形成「按下感」，
-   随皮肤与明暗自动着色（亮色用墨调微影，暗色用透光微光）。 */
-.milkdown .ProseMirror .yj-html-inline {
-  display: inline;
-}
+   玉质键帽：透光微凸 + 纤细描边 + 底部投影形成「实体按键」触感。
+   暗色下用青瓷透光（像玉上嵌的半透明键），亮色用羊脂玉微影。
+   设计灵感：macOS 帮助文档键帽 × 玉质美学融合。 */
+.milkdown .ProseMirror .yj-html-inline,
 .milkdown .ProseMirror .yj-html-inline > span {
+  /* 两层包裹都必须保持 inline：容器一旦变成 inline-block，
+     键帽就会脱离文字流被当成独立盒子，出现「色块在左、文字在右」的分离感。 */
   display: inline;
+  white-space: normal;
 }
 .milkdown .ProseMirror kbd {
   font-family: var(--font-mono, monospace);
   font-size: 0.82em;
-  line-height: 1;
-  background: var(--hue-surface);
+  line-height: 1.5;
+  /* 键帽取 --hue-key（皮肤同源色）：像从当前这块玉上雕下来的键，
+     换皮肤时键帽跟着换料，而不是一块永远不变的灰片。 */
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-key), 0.2) 0%,
+    rgba(var(--hue-key), 0.08) 100%
+  );
   color: var(--hue-text-1);
-  border: 1px solid var(--hue-border-subtle);
+  /* 描边下缘更实：模拟按键侧面受光的厚度 */
+  border: 1px solid rgba(var(--hue-key), 0.34);
   border-bottom-width: 2px;
-  border-radius: var(--radius-sm);
-  padding: 0.12em 0.5em;
+  border-bottom-color: rgba(var(--hue-key), 0.48);
+  border-radius: 5px;
+  padding: 0.16em 0.5em;
+  margin: 0 0.05em;
   white-space: nowrap;
-  box-shadow: 0 1px 0 var(--hue-border-subtle);
+  /* 微凸投影：底部阴影模拟按键抬起，顶部一道高光模拟釉面反光 */
+  box-shadow:
+    0 1px 1.5px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  /* 字母间距微松：多字母键名（Ctrl/Cmd/Option）更舒展 */
+  letter-spacing: 0.03em;
+  /* 键名过长换行时，每个片段仍是完整的一枚键帽 */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+[data-skin][data-mode='light'] .milkdown .ProseMirror kbd {
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-key), 0.14) 0%,
+    rgba(var(--hue-key), 0.05) 100%
+  );
+  border-color: rgba(var(--hue-key), 0.42);
+  border-bottom-color: rgba(var(--hue-key), 0.55);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 /* ── 隐藏原生滚动条：交给右侧玉质阅读进度条统一指示，避免双指示破坏美感 ──
