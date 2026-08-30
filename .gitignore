@@ -11,6 +11,10 @@ electron.vite.config.*.mjs
 vite.config.*.mjs
 vite.config.*.js
 .diag/
+.*.tmp
+
+# 文档快照历史（用户数据，不进版本库）
+.yujian-history/
 
 *.log
 npm-debug.log*

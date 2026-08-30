@@ -300,6 +300,8 @@ function switchTo(next: EditorMode): void {
         if (loadStatus.value === 'loading') stopLoading()
         // 渲染恢复后重算大纲高亮
         computeActiveHeading(true)
+        // 面板由隐藏转可见后再补发一次：DOM 可见性切换可能让前一次下发落在不可见树上
+        reapplyFindHighlight()
       })
         // 切回所见即所得后重新下发搜索高亮（setMarkdown 重渲染可能重置插件状态）
         reapplyFindHighlight()
@@ -393,10 +395,14 @@ function milkdownView() {
   return milkdown.value?.getEditorView() ?? null
 }
 
-/** 全文搜索结果点击：跳转到命中行（仅源码模式可精确定位） */
+/**
+ * 搜索结果 / 断链跳转：定位到命中行。
+ * 源码与所见即所得都支持行定位，因此不强制切模式——此前渲染模式直接 return，
+ * 只能靠「先切源码再定位」兜底，导致点搜索结果被迫打断所见即所得写作。
+ */
 function revealLine(line: number): void {
-  if (mode.value !== 'source') return
-  source.value?.revealLine(line)
+  if (mode.value === 'source') source.value?.revealLine(line)
+  else milkdown.value?.revealLine(line)
 }
 
 /**
@@ -410,6 +416,14 @@ let lastFind:
   | { query?: string; opts?: { caseSensitive?: boolean; wholeWord?: boolean }; currentLine?: number }
   | null = null
 
+/** 取源码第 N 行文本（1-based）：渲染态行号被压缩，交给所见即所得端精确判定当前结果行 */
+function currentLineTextOf(line?: number): string | undefined {
+  if (!line || line < 1) return undefined
+  const text = fidelity.currentText.value
+  if (!text) return undefined
+  return text.split('\n')[line - 1]
+}
+
 function setFindHighlight(
   query?: string,
   opts?: { caseSensitive?: boolean; wholeWord?: boolean },
@@ -422,7 +436,8 @@ function setFindHighlight(
       query: query.trim(),
       caseSensitive: opts?.caseSensitive ?? false,
       wholeWord: opts?.wholeWord ?? false,
-      currentLine
+      currentLine,
+      currentLineText: currentLineTextOf(currentLine)
     })
   } else {
     milkdown.value?.setFind(null)

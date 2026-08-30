@@ -469,12 +469,21 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
   * 不传 `file`：对整个 vault 递归，即「全部」范围。
   后端其余逻辑（按行切分命中、替换回写、原子写）两范围完全共用。IPC 通道 `VAULT_SEARCH` / `VAULT_REPLACE` 与 preload 的 `searchVault / replaceInVault` 签名同步透传 `file`。
 * **前端 `Sidebar`**：只保留一个搜索框 + 一个 `SearchResults` 渲染器 + 一个替换面板。`scopeFile()` 在「本文档」范围返回 `props.activePath`、在「全部」返回 `undefined`，作为第 4/5 实参传入 `searchVault / replaceInVault`；命中结果一律**点击跳转**（复用既有 `onOpenResult(path, line)` → `EditorHost.revealLine`），不再有 ‹ › 逐个步进。结果元信息用 `SearchResults` 的 `singleFile` 属性区分：`本文档` 显示「N 处命中」，`全部` 显示「N 处命中 · M 个文件」。
-* **取舍**：放弃了 ‹ › 逐个步进（即用户最初觉得「所见即所得下只是跳转不够直观」那部分体验），换来零代码冗余与两种范围完全一致的交互。命中定位仍可靠（点击命中行即跳到源码模式对应行并精确滚动）。
+* **取舍**：放弃了 ‹ › 逐个步进（即用户最初觉得「所见即所得下只是跳转不够直观」那部分体验），换来零代码冗余与两种范围完全一致的交互。命中定位在**两种编辑模式都可用**（见下方「命中行定位：不再强制切源码」）。
 * **2026-08-30 补回：两端命中常驻高亮（对称体验）**：用户认可源码模式用 CodeMirror `Decoration` 常驻高亮全部命中的体验，故在统一引擎之上补回该视图层高亮；随后因追求两端一致，进一步补回所见即所得 ProseMirror `Decoration` 装饰，使其在两种模式对称高亮。
   * **源码模式**（`src/editor/find-source.ts`）：导出 `sourceFindField`（`StateField` + `setSourceFind` effect），按当前 `query/opts` 全文扫描命中区间打 `.cm-find`、当前结果所在行打 `.cm-find--current`；文档编辑时经 `tr.docChanged` 跟随重算。`SourceEditor` 挂载该字段并暴露 `setFind(query?, opts?, currentLine?)`。
-  * **所见即所得模式**（`src/editor/find-wysiwyg.ts`）：导出 `createFindDecoPlugin`（`$prose(() => ...)` 注册，与凝神插件同机制），按当前 `query/opts` 用 ProseMirror `Decoration.inline` 常驻高亮全部命中、当前结果所在行打 `.pm-find--current`；`currentLine` 经 `doc.textBetween` 统计换行数映射到文档行号；文档编辑 / 切换文档时经 `tr.docChanged` 跟随重算。`MilkdownEditor` 暴露 `setFind(fs | null)`，经 `view.dispatch(tr.setMeta(findKey, fs))` 驱动（meta 事务必触发 `plugin.apply` 重建装饰）。
+  * **所见即所得模式**（`src/editor/find-wysiwyg.ts`）：导出 `createFindDecoPlugin`（`$prose(() => ...)` 注册，与凝神插件同机制），按当前 `query/opts` 用 ProseMirror `Decoration.inline` 常驻高亮全部命中、当前结果所在行打 `.pm-find--current`；`currentLine` 由 `isCurrentHit()` 判定（优先源码行文本匹配、回退行号比较，详见下方「命中行定位」）；文档编辑 / 切换文档时经 `tr.docChanged` 跟随重算。`MilkdownEditor` 暴露 `setFind(fs | null)`，经 `view.dispatch(tr.setMeta(findKey, fs))` 驱动（meta 事务必触发 `plugin.apply` 重建装饰）。
   * **桥接**：`EditorHost.setFindHighlight` 同时转发给 `source.setFind` 与 `milkdown.setFind`（构造 `WysiwygFindState`）。`Sidebar` 经 `find-highlight` 事件在「有查询且已打开文档」时把状态推给编辑器——**两种范围都高亮**（全库范围也会高亮当前打开文档内的全部命中）；无查询 / 无文档时抛 null 清空两端。
   * `editor.css` 恢复 `.cm-find` / `.pm-find` 系列（青瓷半透底 + 实强调色反相的 `--current` 变体）。纯视图装饰，不进文档、对 Markdown 往返保真零影响。
+* **命中行定位：不再强制切源码（2026-08-30 修正）**
+  * **问题**：此前 `App.onOpenResult` / `onOpenBrokenLink` 在跳转前会把 `requestedMode` 强制切到 `'source'`，理由是「渲染模式无法精确定位行」——`EditorHost.revealLine` 里 `if (mode.value !== 'source') return` 直接短路，所见即所得根本没有定位能力。后果：在所见即所得下点搜索结果会**被打断切到源码**，破坏写作沉浸感。
+  * **修正**：所见即所得补齐行定位，`revealLine` 按当前模式分派（源码走 CodeMirror、渲染走 ProseMirror），两处强制切模式的逻辑一并移除。
+  * **关键坑：源码行号 ≠ 渲染行号**。`lineOfPos` 基于 `doc.textBetween(0, pos, '\n', '\n')` 统计换行，而 Markdown 的**空行渲染后不产生节点**、块之间只算一个换行，渲染态行号被「压缩」，与统一搜索返回的源码行号存在系统性偏移（实测：源码第 3 行会落到渲染第 2 个文本块）。
+  * **统一口径**：改用**源码行文本匹配**消除偏差——
+    * `find-wysiwyg.ts` 新增 `stripMd(line)`（去 `#` / `>` / `-` / 强调标记）与 `findPosByText(doc, needle)`（片段逐级缩短做包含匹配，容忍语法差异，找不到返回 `null`）；
+    * `MilkdownEditor.revealLine(line)`：先取源码第 `line` 行文本走 `findPosByText`，匹配不到再回退 `findPosOfLine`（行号反查，保留作兜底），命中后 `setSelection(TextSelection.near(...)).scrollIntoView()` + `view.focus()`；
+    * `WysiwygFindState` 新增 `currentLineText`，`EditorHost.setFindHighlight` 从 `fidelity.currentText` 取该行原文传入；`buildDecos` 判定 `current` 改由 `isCurrentHit()` 优先做**行文本 ↔ 文本块**双向包含匹配，无行文本时才回退行号比较。
+  * **实测**（真实浏览器 + 真实 Crepe，标题/段落/列表/引用混合文档）：源码第 1/3/5/8 行分别正确落到「标题 / 段落 / 列表项 / 引用」块，`current` 强化标记 4/4 命中正确块，超界行号返回 `null` 安全回退；面板 `display:none → 可见` 切换后装饰数不变（4 → 4）。
 
 ### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）
 
@@ -542,7 +551,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 * 挂载即扫描（加载态带旋转图标 → 汇总「扫描 N 篇、发现 M 处」+ 按类型拆分计数「Wiki a · 链接 b · 图片 c」→ 列表）；可「重新扫描」；`Esc` 关闭。
 * 顶部「全部 / Wiki / 链接 / 图片」类型筛选（带各类型计数，零项禁用）；每行按 kind 三色徽标（Wiki / 链接 / 图片）+ 源文件基名 + 行号 + 目标（等宽）+ **所在行原文预览**（左侧竖线缩进，等宽、截断），hover 标题显示原始链接、所在行与「定位到 N 行」。
-* 点击行 → `App.onOpenBrokenLink(item)`：经 `openPath` 打开文档（已是当前文档则跳过）→ 切源码模式（行级定位只在源码精确）→ `revealLine(line)` 滚动到断链行；与全文搜索结果定位同一套逻辑。零断链显示「未发现断链 ✓」（绿色对勾）。
+* 点击行 → `App.onOpenBrokenLink(item)`：经 `openPath` 打开文档（已是当前文档则跳过）→ `revealLine(line)` 按当前模式定位并滚动到断链行（源码与所见即所得都支持，不再强制切源码）；与全文搜索结果定位同一套逻辑。零断链显示「未发现断链 ✓」（绿色对勾）。
 
 ### 5.13 写作辅助（2026-08-30，Phase 2 批次三 §3.6）
 

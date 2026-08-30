@@ -152,11 +152,7 @@ function onDeleted(path: string): void {
 /** 全文搜索结果点击：打开文档并定位到命中行（源码模式可精确定位） */
 async function onOpenResult(payload: { path: string; line: number }): Promise<void> {
   await openPath(payload.path)
-  // 渲染模式无法精确定位行，切换到源码模式以便跳转
-  if (requestedMode.value !== 'source') {
-    requestedMode.value = 'source'
-    await nextTick()
-  }
+  // 两种模式都支持行定位，不再强制切到源码，避免打断所见即所得写作
   host.value?.revealLine(payload.line)
 }
 
@@ -174,11 +170,7 @@ function onFindHighlight(payload: {
 async function onOpenBrokenLink(item: BrokenLinkItem): Promise<void> {
   // 已经是当前文档则跳过「打开」步骤（openPath 对同路径会提前返回，导致后续定位不执行）
   if (item.file !== tabs.activePath) await openPath(item.file)
-  if (requestedMode.value !== 'source') {
-    requestedMode.value = 'source'
-    await nextTick()
-  }
-  // 切到源码后视图重建，多等一拍确保 CodeMirror 实例就绪再定位
+  // 两种模式都支持行定位，不再强制切到源码；等一拍确保新文档载入、视图就绪再定位
   await nextTick()
   host.value?.revealLine(item.line)
 }

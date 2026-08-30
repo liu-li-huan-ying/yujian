@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { languages } from '@codemirror/language-data'
 import { Crepe } from '@milkdown/crepe'
 import { editorViewCtx } from '@milkdown/core'
+import { TextSelection } from '@milkdown/prose/state'
 import type { EditorView } from '@milkdown/prose/view'
 import { $prose, replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
@@ -11,7 +12,14 @@ import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
 import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
-import { createFindDecoPlugin, findKey, setFindState, type WysiwygFindState } from './find-wysiwyg'
+import {
+  createFindDecoPlugin,
+  findKey,
+  findPosByText,
+  findPosOfLine,
+  setFindState,
+  type WysiwygFindState
+} from './find-wysiwyg'
 
 const props = withDefaults(
   defineProps<{
@@ -278,7 +286,33 @@ function setFind(fs: WysiwygFindState | null): void {
   }
 }
 
-defineExpose({ setMarkdown, getMarkdown, getHTML, setReadonly, getEditorView, setFind })
+/**
+ * 定位到指定行（搜索结果 / 断链跳转）：反查行号 → 文档位置，设置光标并滚动到视口。
+ * 与源码模式对称，使所见即所得模式下也能直接跳转，无需被迫切到源码。
+ */
+function revealLine(line: number): void {
+  const view = getEditorView()
+  if (!view) return
+  const doc = view.state.doc
+  // 源码行号与渲染行号口径不同（空行渲染后不产生节点），优先按源码行文本定位，
+  // 匹配不到再回退行号反查，保证跳转落在正确的内容块上。
+  const srcLine = (crepe?.getMarkdown() ?? '').split('\n')[line - 1] ?? ''
+  const raw = findPosByText(doc, srcLine) ?? findPosOfLine(doc, line)
+  if (raw == null) return
+  const pos = Math.max(0, Math.min(raw, doc.content.size))
+  view.dispatch(view.state.tr.setSelection(TextSelection.near(doc.resolve(pos))).scrollIntoView())
+  view.focus()
+}
+
+defineExpose({
+  setMarkdown,
+  getMarkdown,
+  getHTML,
+  setReadonly,
+  getEditorView,
+  setFind,
+  revealLine
+})
 </script>
 
 <template>

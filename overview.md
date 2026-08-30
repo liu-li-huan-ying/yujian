@@ -15,7 +15,7 @@
 
 ## 保留 / 补回的命中高亮（视图层，零冗余）
 - **源码模式** `src/editor/find-source.ts`：`sourceFindField`（`StateField` + `setSourceFind` effect）按统一 `query/opts` 全文扫描命中打 `.cm-find`、当前结果行打 `.cm-find--current`；文档编辑经 `tr.docChanged` 跟随重算。
-- **所见即所得模式** `src/editor/find-wysiwyg.ts`：`createFindDecoPlugin`（`$prose` 注册，与凝神同机制）用 ProseMirror `Decoration.inline` 对称高亮全部命中、当前结果行打 `.pm-find--current`；`currentLine` 经 `doc.textBetween` 统计换行映射到文档行号；文档编辑 / 切换文档经 `tr.docChanged` 跟随重算。`MilkdownEditor` 暴露 `setFind(fs|null)`，经 `view.dispatch(tr.setMeta(findKey, fs))` 驱动。
+- **所见即所得模式** `src/editor/find-wysiwyg.ts`：`createFindDecoPlugin`（`$prose` 注册，与凝神同机制）用 ProseMirror `Decoration.inline` 对称高亮全部命中、当前结果行打 `.pm-find--current`；`currentLine` 经 `isCurrentHit()` 判定（优先源码行文本匹配、回退行号比较，见下节）；文档编辑 / 切换文档经 `tr.docChanged` 跟随重算。`MilkdownEditor` 暴露 `setFind(fs|null)`，经 `view.dispatch(tr.setMeta(findKey, fs))` 驱动。
 - **桥接**：`EditorHost.setFindHighlight` 同时转发两端；`Sidebar` 经 `find-highlight` 事件在「有查询且已打开文档」时推送——**两种范围都高亮**（全库范围也高亮当前打开文档内全部命中），无查询 / 无文档时抛 null 清空两端。
 - `editor.css` 的 `.cm-find` / `.pm-find` 系列样式（青瓷半透底 + 实强调色反相的 `--current` 变体）。
 
@@ -30,8 +30,21 @@
 - 使用指南第 3 节改写为统一检索；README「搜索（双范围）」与「文件内查找 / 替换」两段同步为「共用同一套引擎、仅范围不同」；ARCHITECTURE §5.9 改写为单引擎 file 范围 + 两端高亮。
 
 ## 取舍
-放弃 ‹ › 逐个步进，换来**零代码冗余**与两种范围完全一致的交互；但**保留了两端命中常驻高亮**（用户认可源码模式高亮，并进一步补回所见即所得对称高亮）。高亮完全由统一搜索的 `query/opts` 驱动，与「全部 / 本文档」共用一套逻辑，无独立查找引擎冗余。命中定位仍可靠（点击命中行即跳到源码模式对应行并精确滚动）。
+放弃 ‹ › 逐个步进，换来**零代码冗余**与两种范围完全一致的交互；但**保留了两端命中常驻高亮**（用户认可源码模式高亮，并进一步补回所见即所得对称高亮）。高亮完全由统一搜索的 `query/opts` 驱动，与「全部 / 本文档」共用一套逻辑，无独立查找引擎冗余。命中定位在**两种模式都可用**：所见即所得补齐行定位后，点命中行在当前模式下直接滚动定位，不再强制切到源码（详见下节）。
+
+## 命中行定位：不再强制切源码（2026-08-30）
+
+**问题**：点搜索结果 / 断链时，`App.onOpenResult`、`onOpenBrokenLink` 会把 `requestedMode` 强制切到 `'source'`，理由是「渲染模式无法精确定位行」——`EditorHost.revealLine` 里 `if (mode.value !== 'source') return` 直接短路，所见即所得根本没有定位能力。后果：在所见即所得下点结果会**被打断切到源码**，破坏写作沉浸感。
+
+**修正**：所见即所得补齐行定位，`revealLine` 按当前模式分派（源码 CodeMirror / 渲染 ProseMirror），两处强制切模式的逻辑一并移除。
+
+**关键坑：源码行号 ≠ 渲染行号**。`lineOfPos` 基于 `doc.textBetween(0, pos, '\n', '\n')` 统计换行，而 Markdown 空行**渲染后不产生节点**、块之间只算一个换行，渲染态行号被「压缩」，与统一搜索返回的源码行号存在系统性偏移（实测：源码第 3 行会落到渲染第 2 个文本块）。
+
+**统一口径**：改用源码行文本匹配消除偏差——
+- `find-wysiwyg.ts` 新增 `stripMd(line)` 与 `findPosByText(doc, needle)`（片段逐级缩短匹配，容忍语法差异，找不到返回 `null`）；
+- `MilkdownEditor.revealLine(line)`：先按源码第 `line` 行文本走 `findPosByText`，匹配不到回退 `findPosOfLine`（行号反查留作兜底），命中后 `setSelection(TextSelection.near(...)).scrollIntoView()` + `view.focus()`；
+- `WysiwygFindState` 新增 `currentLineText`，由 `EditorHost.setFindHighlight` 从 `fidelity.currentText` 取该行原文传入，使 `current` 强化标记与源码行号严格对齐。
 
 ## 验证
-- `npm run typecheck` + `npm run build` 预期通过（本任务末执行）。
-- 网络仍不通：完成本地 commit，暂不 push。
+- `npm run typecheck` ✅、`npm run build` ✅；产物含 `findPosByText` / `currentLineText` / `stripMd` / `TextSelection`。
+- 真实浏览器（系统 Edge + puppeteer-core）驱动**真实 Crepe** 实测：初始搜索 / 切源码 / 切回 / 文档变更自愈 / 清空 五个场景装饰数 4·4·4·4·0 全对，CSS 变量解析为 `rgba(95,168,160,0.35)`；源码第 1/3/5/8 行分别落到「标题 / 段落 / 列表项 / 引用」正确块，`current` 标记 4/4 正确；面板 `display:none → 可见` 装饰数 4 → 4 不变。
