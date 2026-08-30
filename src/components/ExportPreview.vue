@@ -84,10 +84,14 @@ onBeforeUnmount(() => {
           sandbox="allow-scripts"
           referrerpolicy="no-referrer"
         />
+        <div v-else class="empty">{{ L.exportPreviewEmpty }}</div>
       </div>
 
       <div class="panel__foot">
-        <span class="panel__name" :title="defaultName">{{ defaultName }}</span>
+        <div class="panel__meta">
+          <span class="panel__name" :title="defaultName">{{ defaultName }}</span>
+          <span class="panel__hint">{{ L.exportPreviewHint }}</span>
+        </div>
         <div class="panel__acts">
           <button class="btn" type="button" @click="emit('cancel')">
             {{ L.exportPreviewCancel }}
@@ -194,16 +198,37 @@ onBeforeUnmount(() => {
   word-break: break-word;
 }
 
+.empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
 .panel__foot {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
 }
-.panel__name {
+.panel__meta {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.panel__name {
   font-size: 11.5px;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel__hint {
+  font-size: 11px;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;

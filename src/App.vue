@@ -20,7 +20,7 @@ import CompilePanel from './components/CompilePanel.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
-import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem } from '../electron/shared/ipc-channels'
+import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
 import { inlineImages } from './export/imageInline'
 import { embedMermaidSvg } from './export/mermaidSvg'
@@ -304,10 +304,14 @@ function onKeydown(e: KeyboardEvent): void {
 const toast = ref<{ msg: string; type: 'ok' | 'err' | 'info' } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-function showToast(msg: string, type: 'ok' | 'err' | 'info' = 'info'): void {
+function showToast(
+  msg: string,
+  type: 'ok' | 'err' | 'info' = 'info',
+  duration = 2600
+): void {
   toast.value = { msg, type }
   if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (toast.value = null), 2600)
+  toastTimer = setTimeout(() => (toast.value = null), duration)
 }
 
 /* ── 图床设置 / 上传 ── */
@@ -683,16 +687,24 @@ async function buildExportContent(
 /** 写盘 / 打印：与构建分离，预览确认后直接复用已构建的内容 */
 async function writeExport(built: BuiltExport): Promise<void> {
   const payload = { content: built.content, defaultName: built.defaultName, filters: built.filters }
-  const res =
-    built.kind === 'pdf'
-      ? await window.api.exportPdf(payload)
-      : await window.api.exportFile(payload)
+  let res: ExportResult
+  try {
+    res =
+      built.kind === 'pdf'
+        ? await window.api.exportPdf(payload)
+        : await window.api.exportFile(payload)
+  } catch (e) {
+    console.error('[export] 写盘 IPC 失败：', e)
+    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
+    return
+  }
   if (res.ok && res.path) {
-    showToast(`${U.toastExportHtmlOk}${res.path}`, 'ok')
+    // 成功：保留路径较长时间，让用户明确看到「导出到了哪里」
+    showToast(`${U.toastExportHtmlOk}${res.path}`, 'ok', 4500)
   } else if (res.canceled) {
     showToast(U.toastExportCanceled, 'info')
   } else {
-    showToast(`${U.toastExportErr}${res.error ?? ''}`, 'err')
+    showToast(`${U.toastExportErr}${res.error ?? ''}`, 'err', 5000)
   }
 }
 
@@ -712,16 +724,23 @@ async function doExport(
   const label = kind === 'html' ? U.exportHtml : kind === 'pdf' ? U.exportPdf : U.exportLatex
   showToast(`${U.toastExporting}${label}…`, 'info')
 
-  const built = await buildExportContent(kind, scope)
-  if (!built) return
+  try {
+    const built = await buildExportContent(kind, scope)
+    if (!built) return // buildExportContent 内部已给出原因提示（无内容 / 无选区等）
 
-  // 开启「导出前预览」：先呈现产物，用户确认后再落盘
-  if (exportPrefs.value.preview) {
-    previewState.value = built
-    showPreview.value = true
-    return
+    // 开启「导出前预览」：先呈现产物，用户确认后再落盘（落盘时会弹出系统保存对话框）
+    if (exportPrefs.value.preview) {
+      previewState.value = built
+      showPreview.value = true
+      toast.value = null // 预览界面已接管，清掉「导出中」提示，避免其悬在浮层之后
+      return
+    }
+    await writeExport(built)
+  } catch (e) {
+    // 任何一步（取正文 / 内联图片 / 渲染图表 / 序列化）抛错都不该静默——明确告诉用户
+    console.error('[export] 生成导出内容失败：', e)
+    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
   }
-  await writeExport(built)
 }
 
 /** 预览面板确认：把已构建的内容落盘 / 打印 */
@@ -730,7 +749,12 @@ async function confirmExport(): Promise<void> {
   showPreview.value = false
   previewState.value = null
   if (!built) return
-  await writeExport(built)
+  try {
+    await writeExport(built)
+  } catch (e) {
+    console.error('[export] 写盘失败：', e)
+    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
+  }
 }
 
 /** 预览面板取消：丢弃已构建内容 */
@@ -768,38 +792,44 @@ async function onCompile(payload: {
     payload.kind === 'html' ? U.exportHtml : payload.kind === 'pdf' ? U.exportPdf : U.exportLatex
   showToast(`${U.toastExporting}${label}…`, 'info')
 
-  let combinedHtml = ''
-  let combinedMd = ''
-  for (const file of payload.files) {
-    const md = await window.api.readFile(file)
-    if (!md.trim()) continue
-    const html = host.value?.markdownToHtml(md) ?? ''
-    // 按该文档所在目录把相对图片内联为 data URL（合订后无法用单一基准）
-    const inlined = await inlineImages(html, file, readAsDataUrl)
-    combinedHtml += payload.newPagePerDoc
-      ? `<section class="yj-compile-page">${inlined}</section>`
-      : inlined
-    combinedMd += `\n\n${md}\n`
-  }
-  if (!combinedHtml && !combinedMd.trim()) {
-    showToast(U.toastNoContent, 'err')
-    return
-  }
+  try {
+    let combinedHtml = ''
+    let combinedMd = ''
+    for (const file of payload.files) {
+      const md = await window.api.readFile(file)
+      if (!md.trim()) continue
+      const html = host.value?.markdownToHtml(md) ?? ''
+      // 按该文档所在目录把相对图片内联为 data URL（合订后无法用单一基准）
+      const inlined = await inlineImages(html, file, readAsDataUrl)
+      combinedHtml += payload.newPagePerDoc
+        ? `<section class="yj-compile-page">${inlined}</section>`
+        : inlined
+      combinedMd += `\n\n${md}\n`
+    }
+    if (!combinedHtml && !combinedMd.trim()) {
+      showToast(U.toastNoContent, 'err')
+      return
+    }
 
-  const built = await buildExportContent(payload.kind, 'all', {
-    title: payload.title,
-    bodyHtml: combinedHtml,
-    markdown: combinedMd,
-    forceInline: true
-  })
-  if (!built) return
+    const built = await buildExportContent(payload.kind, 'all', {
+      title: payload.title,
+      bodyHtml: combinedHtml,
+      markdown: combinedMd,
+      forceInline: true
+    })
+    if (!built) return
 
-  if (payload.preview) {
-    previewState.value = built
-    showPreview.value = true
-    return
+    if (payload.preview) {
+      previewState.value = built
+      showPreview.value = true
+      toast.value = null
+      return
+    }
+    await writeExport(built)
+  } catch (e) {
+    console.error('[export] 合订导出失败：', e)
+    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
   }
-  await writeExport(built)
 }
 
 /* ── 语言切换（key 驱动 Vue 重挂 Crepe）── */

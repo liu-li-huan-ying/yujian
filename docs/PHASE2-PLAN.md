@@ -95,6 +95,10 @@
 * **导出范围**：✅ **整篇 / 当前选中 / 多文件合订均已实现**——选中走 ProseMirror 选区序列化，源码模式取选区 Markdown 再渲染，两种模式产出同构；无选区回退整篇并提示。
   * **多文件合订**（2026-08-30）：`src/components/CompilePanel.vue` 按文件树顺序列出 vault 内全部 `.md`，支持勾选 + 上下移排序 + 合订标题 + 每篇另起页（PDF `break-before:page`）；输出 HTML / PDF / LaTeX 任选。逐文件 `readFile → markdownToHtml（复用 Milkdown parser/schema，不建第二实例）→ inlineImages（按各自文档目录解析相对图片）→ 拼接`，再走与单文档完全相同的 `buildExportContent(override, forceInline)` 管道，`forceInline` 强制内联图片与图表，保证跨目录自包含。
   * **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox)` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘共用同一份已构建内容，不重复渲染。
+  * **导出细节二次打磨（2026-08-30）**：用户实测「开了预览却没看到预览界面、没问导出到哪里、不知是否成功」——根因是导出全链路**无异常兜底**，任一环节抛错即静默 reject。本轮收口：
+    * **源码模式取正文修复（真因）**：`EditorHost.getHTML()` 旧实现先 `setMarkdown` 再读所见即所得 DOM，但源码模式下 WYSIWYG 视图 DOM 滞后/为空 → 返回空串 → `buildExportContent` 因 `!body` 静默返回 null → 不预览、不弹框、不提示，与用户症状完全吻合。改为：**源码模式直接走 `markdownToHtml(fidelity.currentText)` 解析管线**（与合订/选区导出同源），不再依赖滞后视图 DOM。
+    * **全链路异常可见化**：`doExport` / `onCompile` / `confirmExport` / `writeExport` 全部包 try/catch，任何失败 `console.error` 并 `showToast(..., 'err', 5000)` 提示具体错误；写盘成功 toast 时长延至 4500ms 并**显式展示保存路径**，取消 / 失败均回传明确状态。
+    * **预览 UX 打磨**：确认按钮文案改为「确认并选择位置」并加 hint「确认后将弹出系统对话框，选择保存位置」，明示会弹系统保存框；预览浮层补**空内容兜底态**（「当前内容为空，无可预览内容」），文件名加粗醒目。
 * **图片与图**：✅ **已实现**。图片**内联（base64）vs 相对路径**可选（`src/export/imageInline.ts`，按文档所在目录解析相对路径，经 `file:readBase64` 读取）；**Mermaid 转内嵌 SVG**（`src/export/mermaidSvg.ts`），使 PDF 与离线 HTML 不再依赖 CDN。**PDF 强制内联**——它经隐藏窗口加载 `tmpdir` 下的临时文件，相对路径图片与 CDN 脚本都取不到（这也是此前 PDF 丢图的根因）。
 * **依赖约束**：本批次**零新增依赖**目标达成（LaTeX / PDF 增强 / 内联 / Mermaid 均为纯 TS 或复用既有依赖）。docx / ePub 批次再评估体积与 asar 影响。
 * **UI**：✅ 扩展现有 `TitleMenu` 的 MenuEntry（HTML / PDF / LaTeX + 分隔线 + 四个开关：自动目录 / 封面页 / 图片内联 / 仅选中范围），未新增组件；元信息由批次二属性面板的 frontmatter 供给。

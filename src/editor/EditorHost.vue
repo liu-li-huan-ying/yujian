@@ -451,12 +451,13 @@ function reapplyFindHighlight(): void {
 
 /**
  * 取当前文档的渲染 HTML（用于导出）。
- * 源码模式下渲染器 DOM 落后于编辑，先灌入当前源码文本再读，
- * 且不切换可见模式、不触发保存态变化（内容本就等于原文）。
+ * 所见即所得模式直接读渲染视图 DOM；
+ * 源码模式下不依赖可能滞后的 WYSIWYG 视图 DOM，而是用同一套渲染管线
+ * 把当前源码文本转成 HTML（与合订 / 选区导出同源），保证导出始终有内容。
  */
 async function getHTML(): Promise<string> {
   if (mode.value === 'source') {
-    await milkdown.value?.setMarkdown(fidelity.currentText.value)
+    return markdownToHtml(fidelity.currentText.value)
   }
   return (await milkdown.value?.getHTML()) ?? ''
 }

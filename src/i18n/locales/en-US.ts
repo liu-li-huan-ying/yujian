@@ -149,7 +149,9 @@ const enUS = {
     exportMenuCompile: 'Compile…',
     exportPreviewTitle: 'Export preview',
     exportPreviewCancel: 'Cancel',
-    exportPreviewConfirm: 'Export',
+    exportPreviewConfirm: 'Confirm & Choose Location',
+    exportPreviewHint: 'Confirming opens a system dialog to choose where to save',
+    exportPreviewEmpty: 'Nothing to preview — the content is empty',
     /* ── Compile panel ── */
     compileTitle: 'Compile documents',
     compileHint: 'Select notes to compile (in vault order)',

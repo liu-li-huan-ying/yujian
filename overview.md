@@ -75,3 +75,30 @@ typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「�
 
 ## 待办
 docx（`docx` 包）与 ePub（`jszip` 手写 OPF / NCX）。（多文件合订、导出前预览已于 2026-08-30 落地。）
+
+---
+
+# 导出链路细节打磨（2026-08-30，二次打磨）
+
+## 背景
+用户反馈：开启「导出前预览」后导出，**没看到预览界面、没弹出「保存到哪里」的系统对话框、不知道导出是否成功**。要求把这条链路打磨扎实，不再静默失败。
+
+## 根因定位
+- **真因（源码模式取正文）**：`EditorHost.getHTML()` 旧逻辑在源码模式下先 `setMarkdown(fidelity.currentText)` 再读 `view.dom.innerHTML`；但源码模式下所见即所得视图 DOM 滞后/为空 → 读到空串 → `buildExportContent` 因 `!body` 直接返回 `null` → 不预览、不弹窗、不提示。用户正是在**源码模式**下触发的，症状完全吻合。
+- **共因（全链路无兜底）**：`doExport`/`onCompile`/`confirmExport`/`writeExport` 均无 try/catch，任一环节（渲染/读图/内联/Mermaid/写盘）抛错都会静默 reject，用户看不到任何反馈。
+
+## 修复
+- `EditorHost.getHTML()`：源码模式改为直接 `return markdownToHtml(fidelity.currentText)`（复用 Milkdown `parserCtx`/`schemaCtx`/`DOMSerializer`，与合订/选区导出同源），不再依赖滞后视图 DOM；所见即所得模式仍走 `milkdown.getHTML()`。
+- `App.vue` 四处函数包裹 try/catch：失败 `console.error` + `showToast(...,'err',5000)` 显示具体错误；写盘成功 toast 时长延至 4500ms 并显式展示保存路径；主进程 `EXPORT_FILE`/`EXPORT_PDF` 回传 `{ok,path|canceled|error}`，导出结果（成功/取消/失败）均有明确 toast。
+- `ExportPreview.vue` UX：`exportPreviewConfirm` 改为「确认并选择位置」、`exportPreviewHint` 加「确认后将弹出系统对话框，选择保存位置」明示会弹框；补 `exportPreviewEmpty` 空内容兜底态；文件名 `.panel__name` 加粗醒目。i18n zh-CN/en-US 各补 3 键。
+
+## 验证
+- `npm run typecheck` ✅、`npm run build` ✅（16s 左右，`✓ built in 15.43s`）。
+- 无头环境驱动完整 UI 不可靠（开库→开文档→导出需真实交互），故以**静态分析 + 针对性修复**为准；源码模式 `getHTML` 真因建议运行期验收。
+
+## 运行期验收清单（待用户实测）
+1. 开启「导出前预览」后，从**源码模式**与**所见即所得模式**分别导出 HTML / PDF / LaTeX，确认：
+   - 预览浮层出现且渲染真实排版（LaTeX 显示源码）；
+   - 点「确认并选择位置」后弹出系统保存对话框；
+   - 成功后 toast 显示保存路径、失败/取消有明确提示。
+2. 合订面板内勾选「导出前预览」走同一路径验证。
