@@ -208,12 +208,17 @@ export const DEFAULT_SESSION: SessionState = {
 
 /** 渲染进程组装好的完整文档 + 建议文件名 */
 export interface ExportPayload {
-  /** 产物全文：HTML 为完整文档字符串（含 <!DOCTYPE> 与内联样式），LaTeX 为 .tex 全文 */
+  /** 产物全文：HTML 为完整文档字符串（含 <!DOCTYPE> 与内联样式），LaTeX 为 .tex 全文。
+   *  二进制格式（docx/epub/rtf/odt）此处放「预览用」的 HTML 文本，实际字节在 binaryBase64 */
   content: string
   /** 保存对话框的默认文件名（含扩展名） */
   defaultName: string
   /** 保存对话框的文件类型过滤（如 HTML / LaTeX）；不传则由主进程按扩展名兜底 */
   filters?: { name: string; extensions: string[] }[]
+  /** 二进制格式的产物字节（base64）。存在时主进程写字节而非 content 文本 */
+  binaryBase64?: string
+  /** 二进制产物的 MIME（如 application/vnd.openxmlformats-officedocument.wordprocessingml.document） */
+  mime?: string
 }
 
 /** 读取二进制为 data URL 的结果（导出内联图片用） */

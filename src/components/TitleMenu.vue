@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 
 /** 菜单项：与 ContextMenu 的 MenuItem 语义一致，额外支持 icon / hint（右侧键位提示）。
- *  分隔线只需 { separator: true }，其余字段均可省略。 */
+ *  分隔线只需 { separator: true }，分组标题用 { separatorTitle: '文本' }，其余字段均可省略。 */
 export interface MenuEntry {
   action?: string
   label?: string
@@ -13,6 +13,8 @@ export interface MenuEntry {
   danger?: boolean
   disabled?: boolean
   separator?: boolean
+  /** 分组标题（不可点击的灰色小标签，如「文本」「办公 / 电子书」） */
+  separatorTitle?: string
 }
 
 const props = defineProps<{
@@ -74,8 +76,9 @@ defineSlots<{
         :class="`tmenu__list--${align ?? 'right'}`"
         role="menu"
       >
-        <template v-for="(it, i) in items" :key="it.separator ? `sep-${i}` : (it.action ?? i)">
+        <template v-for="(it, i) in items" :key="it.separator ? `sep-${i}` : it.separatorTitle ? `septitle-${i}` : (it.action ?? i)">
           <li v-if="it.separator" class="tmenu__sep" role="separator" />
+          <li v-else-if="it.separatorTitle" class="tmenu__sep-title">{{ it.separatorTitle }}</li>
           <li v-else>
             <button
               class="tmenu__item"
@@ -125,6 +128,14 @@ defineSlots<{
   height: 1px;
   margin: 5px 6px;
   background: var(--hue-border-subtle);
+}
+
+.tmenu__sep-title {
+  padding: 3px 9px 2px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hue-text-3);
 }
 
 .tmenu__item {

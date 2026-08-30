@@ -419,21 +419,26 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ### 5.6 导出
 
-| 格式           | 方案                             | 说明                                    |
-| ------------ | ------------------------------ | ------------------------------------- |
-| **HTML**     | 克隆 ProseMirror DOM + 独立 CSS 模板 | **所见即所得导出**——你在编辑器里看到什么，导出的就是什么       |
-| **PDF**      | `webContents.printToPDF()`     | Electron 原生能力，无需额外依赖；已加自动目录 / A4 分页控制 / 可选封面页 |
-| **LaTeX**    | `src/export/markdownToLatex.ts` | **纯 TS 零依赖**，不引入 pandoc；公式与代码块原样保留      |
-| **Markdown** | 单文件导出                          | 支持"内联图片为 base64"或"附带 .assets 文件夹"两种模式 |
-| **Word**     | `docx` 包（阶段 6，可选）             | ⚠️ 原计划写的 `mammoth` **方向相反**（docx → HTML），生成 docx 应用 `docx` 包 |
+| 格式             | 方案                                       | 说明                                              |
+| -------------- | ---------------------------------------- | ----------------------------------------------- |
+| **Markdown**    | 单文件导出 + `getMarkdown()`                    | 支持「内联图片为 base64」或「附带 .assets 文件夹」两种模式           |
+| **纯文本**        | `htmlToPlainText(article)`                | 规范化 HTML 取 `<article>` 内层剥离标签，块级换段、实体解码          |
+| **HTML**        | 克隆 ProseMirror DOM + 独立 CSS 模板             | **所见即所得导出**——你在编辑器里看到什么，导出的就是什么              |
+| **PDF**         | `webContents.printToPDF()`                | Electron 原生能力，无需额外依赖；已加自动目录 / A4 分页控制 / 可选封面页   |
+| **LaTeX**       | `src/export/markdownToLatex.ts`           | **纯 TS 零依赖**，不引入 pandoc；公式与代码块原样保留             |
+| **Word (docx)** | `html-to-docx@1.8.0`（`src/export/docx.ts`） | 取 `<article>` 内层 → Mermaid `<svg>` 光栅化为 PNG → OOXML 字节 |
+| **EPUB**        | `jszip@3.10.1` 手写 OPF（`src/export/epub.ts`） | EPUB3：`mimetype`(STORE 首条) / content.opf / nav.xhtml / 内联 SVG |
+| **RTF**         | 零依赖手写 RTF 1.9（`src/export/rtf.ts`）        | `\ansicpg936` 中文；标题/列表/引用/代码/图片/链接；`\u` 带符号转义    |
+| **ODT**         | `jszip@3.10.1` 手写 ODF 1.2（`src/export/odt.ts`） | content.xml / styles.xml / manifest.xml / Pictures/   |
 
 **HTML 导出的优雅之处**：WYSIWYG 模式下，ProseMirror 的 DOM 已经是渲染后的结果——Mermaid 已变成 SVG、KaTeX 已变成 MathML、代码块已带高亮 span。直接 `cloneNode(true)` 套上模板 CSS 即可，**不需要再跑一遍 Markdown 渲染管线**，从根源上杜绝"编辑器里好看，导出后变形"的问题。
 
 需额外处理：KaTeX 字体与代码块高亮 CSS 要内联进导出文件，保证单文件离线可用。
 
-**导出增强（2026-08-30，零新增依赖）**
+**导出增强（2026-08-30，格式全集 9 种已落地）**
 
-* **管道收敛**：三种格式共用一条流程——取正文 → 变换 → 落盘。`IPC.EXPORT_HTML` 升级为通用 `export:file`（`content` + `defaultName` + `filters`），HTML 与 LaTeX 共用一条写盘通道，避免逐格式加 IPC 的冗余；PDF 仍走 `export:pdf`（打印管线）。
+* **管道收敛**：九种格式共用一条流程——取正文 → 变换 →（可选预览）→ 落盘。`IPC.EXPORT_FILE` 为通用 `export:file` 通道（`content` + `defaultName` + `filters`），文本类（md / txt / html / latex）与 PDF 直接写盘 / 打印；二进制类（docx / epub / rtf / odt）在**渲染进程**序列化为 `Uint8Array`，经 `ExportPayload.binaryBase64` 以 base64 传给主进程，`writeFile(Buffer.from(b64,'base64'))` 精确写盘，规避 sandbox 下主进程无法访问渲染层 DOM 与文本编码损坏。
+* **二进制序列化分层**：`buildExportContent` 对二进制格式调用 `serializeBinary(kind, canonicalHtml, ctx)`（`src/export/serialize.ts`），按 kind 分派到 `docx.ts` / `epub.ts` / `rtf.ts` / `odt.ts` 四个 builder；Mermaid `<svg>` 统一先经 `rasterizeSvgToImg` 光栅化为 PNG（DOCX/RTF/ODT），EPUB 保留内联 SVG。
 * **LaTeX 转换的关键设计——转义与「公式 / 代码 / 链接」互斥**：先把行内代码、行内公式 `$...$`、显示公式 `$$...$$`、图片、链接、脚注抽成占位符，再对剩余文本做 LaTeX 特殊字符转义（`\ & % $ # _ { } ~ ^`），最后回填。否则链接 URL 里的 `_`、公式里的 `\`、宏名里的 `#` 都会被转义破坏。
 * **PDF 分页**：顶层 `@page { size: A4; margin: 20mm 18mm }`；`@media print` 内 `.yujian-cover, .yujian-toc { break-after: page }`、`.yujian-doc h1 { break-before: page }`、`pre, table, figure, .mermaid, img { break-inside: avoid }`、`h1,h2,h3 { break-after: avoid }`（标题不孤行）。紧跟封面 / 目录的标题用 `.yujian-cover + h1 { break-before: avoid }` 取消分页，避免产生空白页。
 * **图片内联**：`src/export/imageInline.ts` 用 `DOMParser` 解析产物，按**文档所在目录**解析相对路径（玉笺约定：文档同级同名 `.assets`），经 `file:readBase64` 读取后替换 `src`；已是 `data:` / `http(s):` 的跳过。**PDF 强制内联**——它经隐藏窗口加载 `tmpdir` 下的临时 HTML，相对路径图片本就取不到，这是此前 PDF 丢图的根因。
@@ -441,7 +446,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * **渲染任意 Markdown**：`MilkdownEditor.markdownToHtml(md)` 复用 Milkdown 的 `parserCtx` + `schemaCtx` + `DOMSerializer`，**不需要第二个编辑器实例**（不违反单实例红线），是多文件合订与选中范围导出的共同基础。
 * **导出范围**：选中走 `getSelectionHTML()`（ProseMirror 选区 `serializeFragment`），源码模式取选区 Markdown 再渲染，两种模式产出同构；LaTeX 走 `getSelectionMarkdown()`（Milkdown `serializerCtx`，选区结构不合法时 try/catch 兜底）。无选区回退整篇并 toast 提示，不静默降级。
 * **元信息**：`readExportMeta()` 取 `fidelity` 的 Markdown，用 `parseFrontmatter` 读 title / author / date（YAML 的 Date 统一转 `YYYY-MM-DD`），喂给封面页与 LaTeX 的 `\title` / `\author` / `\date`。
-* **UI**：导出菜单扩展 `MenuEntry`（HTML / PDF / LaTeX + 分隔线 + 五个开关：自动目录 / 封面页 / 图片内联 / 仅选中范围 / 导出前预览 + 多文件合订入口）。`MenuEntry` 暂无 checkbox 字段，故用 `☑ / ☐` 符号表达开关态，避免改动 `TitleMenu` 的类型契约。
+* **UI**：导出菜单扩展 `MenuEntry`，用新增的 `separatorTitle` 字段把 9 个格式按「文本 / 排版·网页 / 办公·电子书」分组，下接五个开关（自动目录 / 封面页 / 图片内联 / 仅选中范围 / 导出前预览）+ 多文件合订入口；合订面板 `CompilePanel.vue` 格式下拉同步 9 选项。`MenuEntry` 暂无 checkbox 字段，开关态用 `☑ / ☐` 符号表达，避免改动 `TitleMenu` 的类型契约。
 * **多文件合订**（2026-08-30）：`src/components/CompilePanel.vue` 按文件树顺序列出 vault 内全部 `.md`，支持勾选 + 上下移排序 + 合订标题 + 每篇另起页（`break-before:page`）；输出 HTML / PDF / LaTeX 任选。逐文件 `readFile → markdownToHtml（复用 Milkdown parser/schema，不建第二实例）→ inlineImages（按各自文档目录解析相对图片，因为合订后无法用单一基准路径）→ 拼接`，再走与单文档完全相同的 `buildExportContent(override, forceInline)` 管道；`forceInline` 强制内联图片与 Mermaid 图表，保证跨目录自包含。LaTeX 合订则直接拼接各文件 Markdown 原文。
 * **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox="allow-scripts allow-same-origin")` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘复用同一份已构建内容，不重复渲染。确认按钮明示「确认并选择位置」+ hint「确认后将弹出系统对话框，选择保存位置」，并有空内容兜底态。
   * **预览白屏根因**：预览 `iframe` 用 `blob:` URL，但 CSP `default-src 'self'` 未含 `frame-src blob:`，会直接拦截加载；`sandbox` 缺 `allow-same-origin` 也会阻止 blob 加载 → 一片白。修复：CSP 加 `frame-src 'self' blob:`、`sandbox` 改 `allow-scripts allow-same-origin`。

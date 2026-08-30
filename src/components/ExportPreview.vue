@@ -2,21 +2,23 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
+import { isSource as isSourceKind, type ExportKind } from '../export/types'
 
 const { t } = useI18n()
 const L = t.ui
 
 const props = defineProps<{
-  /** 产物内容：HTML / PDF 为完整 HTML 文档字符串；LaTeX 为 .tex 源码 */
+  /** 产物内容：HTML / PDF / 二进制格式为完整 HTML 文档字符串（预览用）；md/txt/latex 为对应源码 */
   content: string
-  kind: 'html' | 'pdf' | 'latex'
+  kind: ExportKind
   /** 默认文件名（仅展示，实际保存路径由系统对话框决定） */
   defaultName: string
 }>()
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 
 /**
- * HTML / PDF 走 Blob URL 渲染真实排版；LaTeX 是源文件，直接以等宽文本呈现源码。
+ * HTML / PDF / 二进制格式（docx/epub/rtf/odt）走 Blob URL 渲染真实排版；
+ * md/txt/latex 是源文件，直接以等宽文本呈现源码。
  * Blob 相比 srcdoc 没有长度上限顾虑（内联 base64 图片时产物可达数 MB）。
  */
 const blobUrl = ref('')
@@ -32,16 +34,29 @@ watch(
   () => [props.content, props.kind],
   () => {
     release()
-    if (props.kind === 'latex') return
+    if (isSourceKind(props.kind)) return
     const blob = new Blob([props.content], { type: 'text/html;charset=utf-8' })
     blobUrl.value = URL.createObjectURL(blob)
   },
   { immediate: true }
 )
 
-const isSource = computed(() => props.kind === 'latex')
-const kindLabel = computed(() =>
-  props.kind === 'html' ? L.exportHtml : props.kind === 'pdf' ? L.exportPdf : L.exportLatex
+const isSource = computed(() => isSourceKind(props.kind))
+const kindLabel = computed(
+  () =>
+    (
+      {
+        md: L.exportMd,
+        txt: L.exportTxt,
+        html: L.exportHtml,
+        pdf: L.exportPdf,
+        latex: L.exportLatex,
+        docx: L.exportDocx,
+        epub: L.exportEpub,
+        rtf: L.exportRtf,
+        odt: L.exportOdt
+      } as Record<ExportKind, string>
+    )[props.kind]
 )
 
 // Esc 关闭：与既有浮层一致的轻退出

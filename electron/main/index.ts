@@ -303,7 +303,8 @@ function registerIpc(): void {
       deleteSnapshot(vaultPath, filePath, id)
   )
 
-  // 通用写盘导出：HTML / LaTeX 等文本产物共用，保存对话框类型由 payload.filters 决定
+  // 通用写盘导出：HTML / LaTeX 等文本产物共用，保存对话框类型由 payload.filters 决定。
+  // 二进制格式（docx/epub/rtf/odt）经 binaryBase64 传字节，优先按其写盘。
   ipcMain.handle(IPC.EXPORT_FILE, async (_event, payload: ExportPayload): Promise<ExportResult> => {
     const ext = extname(payload.defaultName).replace(/^\./, '') || 'txt'
     const result = await dialog.showSaveDialog({
@@ -312,7 +313,12 @@ function registerIpc(): void {
     })
     if (result.canceled || !result.filePath) return { ok: false, canceled: true }
     try {
-      await writeFile(result.filePath, payload.content, 'utf-8')
+      if (payload.binaryBase64) {
+        // 二进制：base64 解码为 Buffer 写盘（保留二进制精确性，避免文本编码损坏）
+        await writeFile(result.filePath, Buffer.from(payload.binaryBase64, 'base64'))
+      } else {
+        await writeFile(result.filePath, payload.content, 'utf-8')
+      }
       return { ok: true, path: result.filePath }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
