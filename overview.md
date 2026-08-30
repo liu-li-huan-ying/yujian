@@ -102,3 +102,28 @@ docx（`docx` 包）与 ePub（`jszip` 手写 OPF / NCX）。（多文件合订�
    - 点「确认并选择位置」后弹出系统保存对话框；
    - 成功后 toast 显示保存路径、失败/取消有明确提示。
 2. 合订面板内勾选「导出前预览」走同一路径验证。
+
+---
+
+# 导出崩溃修复：渲染进程 Buffer is not defined（2026-08-30）
+
+## 背景
+上一轮把导出全链路加 try/catch 后，导出不再静默失败，但用户实测报「导出失败，buffer is not define」。根因是 mermaid 的若干图表模块（swimlanes 等）在浏览器/渲染进程里引用 Node 全局 `Buffer`，而本应用 renderer 为 `contextIsolation/sandbox`（无 Node 全局），Vite 不会为浏览器自动 polyfill → 含 Mermaid 代码块的文档导出渲染时抛 `Buffer is not defined`。
+
+## 为什么之前没暴露
+源码模式 `getHTML()` 旧实现返回空串会让 `buildExportContent` 提前短路，导出管线根本走不到 mermaid 渲染；修复「源码模式取正文」后管线真正跑起来，才撞上这个依赖级的 `Buffer` 引用。
+
+## 修复
+- 安装纯 JS 的 `buffer` 包（无 node-gyp 编译，符合约束），加入 `dependencies`。
+- `src/main.ts` 入口首行注入并赋值全局：`import { Buffer } from 'buffer'; (globalThis as ...).Buffer = Buffer`。
+  - **不能**放进独立 `polyfills.ts` 模块——rollup 会把它当无副作用模块 tree-shake 掉；入口模块 `main.ts` 的顶层副作用不会被剔除，故放入口。
+  - **不能**放 `index.html` 内联 `<script>`——CSP `default-src 'self'` 禁止内联脚本。
+- 验证：构建产物入口 chunk 含 `globalThis.Buffer = bufferExports.Buffer`，`buffer` 包（`SlowBuffer` 特征串）已打进 bundle。
+- 副作用：同时修了编辑器内 Mermaid 实时预览潜在的同类崩溃。
+
+## 验证
+- `npm run typecheck` ✅；`npm run build` ✅（先 `rm -rf out` 清 EPERM 残留再重建）。
+- 待运行期验收：含 Mermaid（尤其 swimlanes 等进阶图）的文档，开启/关闭「导出前预览」分别导出 HTML/PDF/LaTeX，确认不再报 `Buffer is not defined`。
+
+## 文件
+`src/main.ts`、`package.json`（新增 `buffer` 依赖）、`docs/PHASE2-PLAN.md` §3.4、`docs/ARCHITECTURE.md` §5.6。

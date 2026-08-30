@@ -100,6 +100,7 @@
     * **全链路异常可见化**：`doExport` / `onCompile` / `confirmExport` / `writeExport` 全部包 try/catch，任何失败 `console.error` 并 `showToast(..., 'err', 5000)` 提示具体错误；写盘成功 toast 时长延至 4500ms 并**显式展示保存路径**，取消 / 失败均回传明确状态。
     * **预览 UX 打磨**：确认按钮文案改为「确认并选择位置」并加 hint「确认后将弹出系统对话框，选择保存位置」，明示会弹系统保存框；预览浮层补**空内容兜底态**（「当前内容为空，无可预览内容」），文件名加粗醒目。
 * **图片与图**：✅ **已实现**。图片**内联（base64）vs 相对路径**可选（`src/export/imageInline.ts`，按文档所在目录解析相对路径，经 `file:readBase64` 读取）；**Mermaid 转内嵌 SVG**（`src/export/mermaidSvg.ts`），使 PDF 与离线 HTML 不再依赖 CDN。**PDF 强制内联**——它经隐藏窗口加载 `tmpdir` 下的临时文件，相对路径图片与 CDN 脚本都取不到（这也是此前 PDF 丢图的根因）。
+* **渲染进程 Node 全局 polyfill（2026-08-30 修复）**：`mermaid` 的部分图表模块（swimlanes 等）在浏览器/渲染进程里引用全局 `Buffer`，而本应用 renderer 为 `contextIsolation/sandbox`（无 Node 全局），Vite 不自动 polyfill → 导出含 Mermaid 代码块的文档时抛 `Buffer is not defined`。已在 `src/main.ts` 入口注入纯 JS 的 `buffer` 包（`globalThis.Buffer = Buffer`），确保 mermaid 渲染前全局可用（同时惠及编辑器内 Mermaid 实时预览）。
 * **依赖约束**：本批次**零新增依赖**目标达成（LaTeX / PDF 增强 / 内联 / Mermaid 均为纯 TS 或复用既有依赖）。docx / ePub 批次再评估体积与 asar 影响。
 * **UI**：✅ 扩展现有 `TitleMenu` 的 MenuEntry（HTML / PDF / LaTeX + 分隔线 + 四个开关：自动目录 / 封面页 / 图片内联 / 仅选中范围），未新增组件；元信息由批次二属性面板的 frontmatter 供给。
 * **IPC 收敛**：`export:html` 升级为通用 `export:file`（content + defaultName + filters），HTML 与 LaTeX 共用一条写盘通道，避免逐格式加通道的冗余；新增 `file:readBase64` 供图片内联。
