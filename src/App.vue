@@ -12,6 +12,7 @@ import TabBar from './components/TabBar.vue'
 import FindPanel from './components/FindPanel.vue'
 import SnapshotPanel from './components/SnapshotPanel.vue'
 import LinkCheckPanel from './components/LinkCheckPanel.vue'
+import WritingAidsPanel from './components/WritingAidsPanel.vue'
 import StatsPopover from './components/StatsPopover.vue'
 import ZenRetreatBar from './components/ZenRetreatBar.vue'
 import ZenSettings from './components/ZenSettings.vue'
@@ -403,6 +404,7 @@ const outlineVisible = ref(true)
 const snapshots = useSnapshotsStore()
 const snapshotOpen = ref(false)
 const linkCheckOpen = ref(false)
+const writingAidsOpen = ref(false)
 const statsOpen = ref(false)
 const focusMode = ref(false)
 /** 写作目标字数（会话级持久化；0 = 未设） */
@@ -508,6 +510,17 @@ function onGoalChange(value: number): void {
 watch(filePath, () => {
   if (snapshotOpen.value) void snapshots.refresh(vaultPath.value, filePath.value)
 })
+
+/** 写作辅助·属性面板：应用 frontmatter 改动（正文逐字保留，仅改写顶部 YAML 块） */
+function onApplyFrontmatter(text: string): void {
+  host.value?.loadMarkdownExternal(text)
+  showToast(U.writingAids.toastApplied, 'ok')
+}
+
+/** 写作辅助·片段面板：在光标处插入模板片段 */
+function onInsertSnippet(text: string): void {
+  host.value?.insertText(text)
+}
 
 /** 窄窗软收起：仅影响显示，不改持久偏好，加宽后恢复用户选择 */
 const sidebarShown = computed(() => sidebarVisible.value && windowWidth.value >= 460)
@@ -672,6 +685,7 @@ onBeforeUnmount(() => {
       @preferences="onPreferences"
       @zen-settings="onZenSettings"
       @link-check="linkCheckOpen = true"
+      @writing-aids="writingAidsOpen = true"
       @save="saveFile"
       @save-as="saveFileAs"
       @help="onHelp('shortcuts')"
@@ -760,6 +774,15 @@ onBeforeUnmount(() => {
           :vault-path="vaultPath"
           @close="linkCheckOpen = false"
           @open="openPath"
+        />
+
+        <WritingAidsPanel
+          v-if="writingAidsOpen"
+          :current-text="host?.getMarkdown() ?? ''"
+          :can-edit="!!filePath"
+          @apply="onApplyFrontmatter"
+          @insert="onInsertSnippet"
+          @close="writingAidsOpen = false"
         />
 
         <StatsPopover

@@ -144,6 +144,24 @@ function loadMarkdownExternal(text: string): void {
   scheduleSave()
 }
 
+/**
+ * 在光标处插入文本（写作辅助·片段模板用）。
+ * - 源码模式：直接 dispatch CodeMirror 事务（替换选区）。
+ * - 所见即所得：用 ProseMirror 视图的 insertText（替换选区），触发 markdownUpdated → 自动落盘。
+ * 不切换模式、不影响保真层之外的状态。
+ */
+function insertText(text: string): void {
+  if (mode.value === 'source') {
+    source.value?.insertAtCursor(text)
+    return
+  }
+  const v = milkdownView()
+  if (!v) return
+  const from = v.state.selection.from
+  const to = v.state.selection.to
+  v.dispatch(v.state.tr.insertText(text, from, to))
+}
+
 /* ── 文档大纲 ─────────────────────────────── */
 
 const outline = computed<OutlineItem[]>(() => parseOutline(fidelity.currentText.value))
@@ -597,6 +615,7 @@ defineExpose({
   zenActive,
   getMarkdown,
   loadMarkdownExternal,
+  insertText,
   // ── 文件内查找 / 替换（批次一）──
   find,
   findNext,

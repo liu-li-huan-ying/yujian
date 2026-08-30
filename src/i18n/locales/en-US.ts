@@ -230,7 +230,35 @@ const enUS = {
     zenFullscreenHint: 'Enter fullscreen with focus mode, restore on exit',
     zenRetreatBar: 'Retreat info bar',
     zenRetreatBarHint: 'Press Esc in focus to peek, press again to hide',
-    zenDone: 'Done'
+    zenDone: 'Done',
+    /* ── Writing aids (batch three §3.6) ── */
+    writingAids: {
+      title: 'Writing Aids',
+      tabProps: 'Properties',
+      tabSnippets: 'Snippets',
+      labelTitle: 'Title',
+      labelAuthor: 'Author',
+      labelDesc: 'Description',
+      labelTags: 'Tags',
+      labelDate: 'Date',
+      placeTitle: 'Document title',
+      placeAuthor: 'Author name',
+      placeDesc: 'One-line summary',
+      placeTags: 'tag1, tag2',
+      tagsHint: 'Comma or space separated',
+      apply: 'Apply',
+      close: 'Close',
+      noDoc: 'Open a document first',
+      snipDoc: 'Doc template',
+      snipCode: 'Code block',
+      snipTable: 'Table',
+      snipCallout: 'Callout',
+      snipTask: 'Task list',
+      snipFoot: 'Footnote',
+      snipMermaid: 'Diagram',
+      snipMath: 'Math block',
+      toastApplied: 'Document properties updated'
+    }
   },
 
   /* ── Help panel: shortcuts + guide ── */
