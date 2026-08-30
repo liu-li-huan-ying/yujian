@@ -475,10 +475,26 @@ markdown-editor/
 
 * 数学段（`$$…$$` / `\[…\]` / `\(…\)` / `\begin{数学环境}…\end{数学环境}` / `$…$`）交 MathJax 渲染；
 * 叙述文本段剥离 LaTeX 控制指令（`\section{…}` → 仅留 `…`）后保留可读文字；
-* 报错时只回显 ≤160 字截断源码，不再把整篇文档糊到结果里。
+* 报错时不再回显源码（见下条）。
 
 该方法同时供编辑器预览（`renderMathBlockPreview`）与 HTML 导出（`renderLatexBlocksInExport`，
 见 §5.6）复用 —— 因此导出后的完整 LaTeX 文档同样会被正确分段渲染，而非原样转储源码。
+
+**报错不再回显源码（2026-08-31）**：早期 `errorHtml()` 会把被截断的源码渲染进结果，于是
+`\require{amscd}` / `\documentclass` 等控制指令以红色字面量出现在正文里（用户反馈
+"显示红色的 \require"），还会污染导出。改为只输出错误徽标 `⚠ 公式无法渲染`，
+完整原因放 `title` 悬停可见 —— 读者不需要看源码，作者悬停能查因。
+
+**`\eqref` / `\ref` 交叉引用（2026-08-31）**：MathJax 的标签表挂在共享 `document` 上、
+**跨 `convert()` 保留**，所以 `\eqref` 能否解析取决于「`\label` 是否已经渲染过」。
+而渲染是异步且顺序不定的（行内 nodeView 立即渲染、块级走防抖预览），`\eqref` 经常先于
+`\label` 渲染 → 显示 `???`，且因其结果被缓存而**一直卡在 ???**。
+修复：`renderMathToSvg()` 检测到源码含 `\label{` 时广播 `onLabelsChanged`，
+含 `\eqref` / `\ref` 的行内 nodeView 与块级预览订阅该事件并重渲染（各自带令牌防串台）。
+
+**`$$` 定界符残留（2026-08-31）**：`renderLatexContent()` 增加 `stripMathDelims()`，
+去掉可能残留的 `$$…$$` / `\[…\]` 包裹 —— 带着 `$$` 喂 MathJax 不会报错，但会多渲染两个
+`$$` 字形（实测 SVG 宽度 27.6ex → 32.1ex），看着像公式坏了。
 
 ### 5.3.3 脚注双向跳转（2026-08-30）
 
@@ -518,21 +534,49 @@ MarkText / Typora 风格的内联语法，在所见即所得里以对应样式�
 - `~文本~` → 下标（导出 `<sub>`；**单波浪线**，前后不接 `~` 以免误吞 GFM `~~删除线~~`）
 - `<kbd>Ctrl</kbd>` → 键盘键帽（导出 `<kbd>`）；任意内联 HTML（`<sub>` `<sup>` `<mark>` `<abbr>` …）同理保留
 
-> **上下标语法（易错点）**：下标用**单** `~`（如 `H~2~O`），上标用 `^`（如 `X^2^`）。
-> **双波浪线 `~~` 是 GFM 删除线**，不能用来写下标 —— 例如 `H~~2~~O` 会被渲染成
-> 「删除线样式的 2」，而非下标。此前反馈「上下标未实现」正是因为误用了 `~~`。
+> **上下标语法**：下标用**单** `~`（如 `H~2~O`），上标用 `^`（如 `X^2^`）。
+> **双波浪线 `~~` 是 GFM 删除线**，不能用来写下标 —— `H~~2~~O` 渲染出来是删除线而非下标。
 
-实现分两路，刻意都不引入会威胁「Markdown 往返保真」的 schema：
+**为什么必须做「真节点」而不是装饰（2026-08-31 重构）**：初版沿用 Emoji 那套
+「装饰显示 + 导出后处理」，源码里仍留着 `~` / `==` 字面量，结果**往返保真红线被破坏**：
 
-**A. 装饰 + 导出后处理**（等号高亮 / 上下标）：与 Emoji 同一套模式，源码完全不动。
+1. `remark-gfm` 的 `singleTilde` 默认 `true`，会把单个 `~` 当删除线解析，切回源码时被
+   规范化成 `~~` → 用户把 `~~` 改成 `~`，渲染后又被写回 `~~`，来回拉锯。
+2. 即便关掉 `singleTilde`，`mdast-util-gfm-strikethrough` 仍**静态**注册了
+   `unsafe: [{character:'~', inConstruct:'phrasing'}]`，序列化时 `~` 被转义成 `\~`；
+   同理 `==高亮==` 在行首会被转义成 `\==高亮==`。
 
-1. `inlineMarkupDecorationPlugin`（`src/editor/features/inlineMarkup.ts`）：遍历文本节点，
-   对命中片段用 `Decoration.inline(..., { class })` 包一层样式（`.yj-hl` / `.yj-sup` / `.yj-sub`）。
-2. 跳过 `code_block` / `code_inline` / `math_inline` / `delete`（GFM 删除线），代码、公式与
-   删除线里的字面量不会被误装饰。
-3. **导出** `replaceInlineMarkupInHtml()`（`src/export/domUtils.ts`）：导出副本按内容正则把
-   这些片段落为语义标签（同时跳过 `<code>/<pre>/<svg>/<mark>/<sup>/<sub>/<kbd>` 等，
-   防误处理代码、公式 SVG 与已转换节点）。
+根因是：**只要定界符留在文本里，就必然被 gfm 抢解析或被 safe() 转义**。
+故改为真节点 —— 定界符由节点自己的 to-markdown handler 输出，不经过 `safe()`：
+
+| 输入        | 旧（装饰）       | 新（真节点）  |
+| --------- | ----------- | ------- |
+| `H~2~O`   | `H~~2~~O` ❌  | `H~2~O` ✅ |
+| `X^2^`    | `X^2^` ✅     | `X^2^` ✅  |
+| `==高亮==`  | `\==高亮==` ❌  | `==高亮==` ✅ |
+| `~~删除~~`  | `~~删除~~` ✅   | `~~删除~~` ✅ |
+
+实现分两路：
+
+**A. 内联标记真节点**（等号高亮 / 上下标）：
+
+1. `src/editor/features/inlineMarksSyntax.ts` —— **纯 remark 扩展，不 import 任何 Milkdown 模块**
+   （因而可在 Node 里直接跑往返测试验证，见下）：
+   * micromark 语法扩展：`~` / `^` / `==` 三个行内构造，叶子式分词（内容不跨行、遇到定界符即闭合），
+     `solid` 要求至少一个非空白字符，避免 `~~` / `====` 空标记误命中；
+   * mdast 扩展：`enter` 建节点、`exit` 回填 `value`（注意 `this.exit(token)` **不返回节点**，
+     需在 `this.data` 上用栈传递引用）；
+   * to-markdown handler：经 `data('toMarkdownExtensions')` 自注册 —— 这是 remark 官方扩展通道
+     （remark-gfm 同路），**不依赖任何插件注册时序**。
+2. `src/editor/features/inlineMarks.ts` —— Milkdown `$nodeSchema`（`sub` / `sup` / `highlight`
+   三个行内原子节点，直接渲染 `<sub>` / `<sup>` / `<mark>` 语义标签）+ 输入规则。
+3. **输入规则不可省**：真节点只在「重新解析」时生成，若无 InputRule，用户敲完 `~2~` 当下
+   看不到效果、要切一次模式才变，观感等同于坏掉。节点类型从 `state.schema` 取，
+   不依赖 ctx 时序。
+
+> ⚠️ **序列化 handler 是强制项**：缺失时 remark-stringify 遇到这些节点会直接抛
+> `Cannot handle unknown node 'sub'`（实测），含上下标的文档保存即崩 —— 故 handler
+> 必须由插件自注册，不能依赖外部注入。
 
 **B. 真实内联 HTML 节点**（`<kbd>` 与任意内联 HTML）：
 
@@ -546,9 +590,10 @@ Milkdown 默认没有 HTML 节点，`<kbd>Ctrl</kbd>` 被 micromark 解析成 `h
    （标签不显示、只显示渲染结果），并随皮肤 / 明暗自动着色；
 3. `toMarkdown` 把原始 HTML 原样写回，**保证 Markdown 往返保真**。
 
-> 取舍：A 路装饰层只负责「显示」，语义标签只在导出时落地；B 路则是真实节点，编辑区里
-> `<kbd>` 等即时渲染成键帽。这是为「零 schema 改动 + 往返保真」做的权衡；若日后要可
-> 切换/可编辑的「真 mark」，需改为 `$mark` + 自定义 remark 解析（见 §5.3.2 思路）。
+> 取舍：A / B 两路现在**都是真实节点**，编辑区与导出共用同一套语义标签
+> （`<mark>` / `<sup>` / `<sub>` / `<kbd>`），从根上杜绝「编辑区好看、导出变形」。
+> 代价是这些节点为**原子节点**（内容不可在位编辑，需整块重输），换取的是往返一字不改。
+> 旧的 `replaceInlineMarkupInHtml()` 导出后处理已随之删除（不再是死代码）。
 
 ### 5.4 图片与图床
 

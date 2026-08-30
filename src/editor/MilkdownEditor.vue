@@ -6,15 +6,21 @@ import { editorViewCtx, parserCtx, schemaCtx, serializerCtx } from '@milkdown/co
 import { TextSelection } from '@milkdown/prose/state'
 import { DOMSerializer } from '@milkdown/prose/model'
 import type { EditorView } from '@milkdown/prose/view'
-import { $prose, $inputRule, replaceAll } from '@milkdown/utils'
+import { $prose, $inputRule, $remark, replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 import 'katex/dist/katex.min.css'
 import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
 import { emojiInputRule, emojiDecorationPlugin } from './features/emoji'
-import { inlineMarkupDecorationPlugin } from './features/inlineMarkup'
 import { htmlInlineSchema, remarkHtmlInline } from './features/htmlInline'
+import {
+  highlightSchema,
+  inlineMarkInputRules,
+  subSchema,
+  supSchema
+} from './features/inlineMarks'
+import { remarkInlineMarks } from './features/inlineMarksSyntax'
 import {
   mathInlineNodeViewPlugin,
   renderMathBlockPreview
@@ -275,8 +281,19 @@ async function init(defaultValue?: string): Promise<void> {
   // Emoji 短代码：输入 `:smile:` 自动转 emoji + 已有短代码只读显示为 emoji
   crepe.editor.use($inputRule(() => emojiInputRule))
   crepe.editor.use($prose(() => emojiDecorationPlugin()))
-  // 内联标记装饰：==高亮== / ^上标^ / ~下标~ 在编辑区以对应样式呈现（源码不变）
-  crepe.editor.use($prose(() => inlineMarkupDecorationPlugin()))
+  // 内联标记真节点：==高亮== / ^上标^ / ~下标~
+  // 解析走 micromark 扩展、序列化走自定义 handler 原样输出定界符 —— 这是往返保真的关键：
+  // 旧「装饰 + 导出后处理」方案源码里仍留 `~`/`==`，会被 gfm 抢成删除线 / 被序列化转义成 `\~`、`\==`。
+  crepe.editor.use($remark('remarkInlineMarks', () => remarkInlineMarks))
+  // 每个 $nodeSchema 本身是「插件数组」，需逐个注册（不能直接传数组的数组）
+  crepe.editor.use(subSchema)
+  crepe.editor.use(supSchema)
+  crepe.editor.use(highlightSchema)
+  // 边打字边生效：真节点只在重新解析时生成，输入规则让敲完定界符立刻转成节点。
+  // $inputRule 一次只收一条规则，故逐条注册。
+  for (const rule of inlineMarkInputRules) {
+    crepe.editor.use($inputRule(() => rule))
+  }
   // 内联原始 HTML（<kbd>键</kbd> / <sub> / <sup> / <mark> …）：remark 改写 + 节点渲染，
   // 标签不显示、只显示渲染结果，且 Markdown 往返保真（导出写回原样 HTML）
   crepe.editor.use(remarkHtmlInline)

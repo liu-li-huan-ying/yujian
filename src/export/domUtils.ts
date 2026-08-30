@@ -204,59 +204,10 @@ export function replaceEmojiInHtml(root: ParentNode): void {
 }
 
 /**
- * 导出副本处理：把所见即所得里由装饰呈现的 `==高亮==` / `^上标^` / `~下标~` / `<kbd>键</kbd>`
- * 转换为语义标签 <mark> / <sup> / <sub> / <kbd>。
- *
- * 为什么需要这一步：编辑区只做"装饰显示"，源码里的 `==…==` 等原样保留（保证 Markdown 往返保真），
- * 因此导出的 view DOM 里这些片段仍是字面文本包裹在 .yj-* 装饰 span 中；这里按内容模式匹配并落地为
- * 真正的语义标签。跳过 <code>/<pre>/<svg>/<mark>/<sup>/<sub>/<kbd> 以免误处理代码、公式 SVG 与已转换节点。
+ * 注：`==高亮==` / `^上标^` / `~下标~` 曾在这里做「装饰 → 语义标签」的导出后处理，
+ * 现已废弃删除 —— 它们改由 features/inlineMarks.ts 的**真节点**渲染成 <mark>/<sup>/<sub>，
+ * 导出 DOM 里本来就是语义标签，无需再按文本正则二次转换。
  */
-export function replaceInlineMarkupInHtml(root: ParentNode): void {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      let el = node.parentElement
-      while (el) {
-        const tag = el.tagName
-        if (
-          tag === 'CODE' ||
-          tag === 'PRE' ||
-          tag === 'SVG' ||
-          tag === 'MARK' ||
-          tag === 'SUP' ||
-          tag === 'SUB' ||
-          tag === 'KBD'
-        ) {
-          return NodeFilter.FILTER_REJECT
-        }
-        el = el.parentElement
-      }
-      return NodeFilter.FILTER_ACCEPT
-    }
-  })
-  const targets: Text[] = []
-  let cur: Node | null
-  while ((cur = walker.nextNode())) targets.push(cur as Text)
-
-  const quick =
-    /==[^\n=]+==|\^[^^\n ]+\^|(?<!~)~[^~\n]+~(?!~)|<kbd>[^<]+<\/kbd>/
-  const hl = /==([^\n=]{1,200}?)==/g
-  const sup = /\^([^\^\n ]{1,200}?)\^/g
-  const sub = /(?<!~)~([^~\n]{1,200}?)~(?!~)/g
-  const kbd = /<kbd>([^<]{1,200}?)<\/kbd>/g
-
-  for (const t of targets) {
-    const value = t.nodeValue ?? ''
-    if (!quick.test(value)) continue
-    const html = value
-      .replace(hl, '<mark>$1</mark>')
-      .replace(sup, '<sup>$1</sup>')
-      .replace(sub, '<sub>$1</sub>')
-      .replace(kbd, '<kbd>$1</kbd>')
-    const span = document.createElement('span')
-    span.innerHTML = html
-    t.replaceWith(span)
-  }
-}
 
 /** 把任意「Blob / Buffer / ArrayBuffer / TypedArray」统一成 Uint8Array */
 export async function toUint8Array(res: unknown): Promise<Uint8Array> {

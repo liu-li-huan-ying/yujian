@@ -584,11 +584,12 @@
   height: auto;
 }
 
-/* ── 内联标记装饰：==高亮== / ^上标^ / ~下标~（所见即所得预览样式）──
-   仅编辑区生效；导出 HTML 由 replaceInlineMarkupInHtml 落为 mark/sup/sub 语义标签，
-   其样式在导出模板的 PROSE_CSS 中定义，这里不重复。
-   <kbd> 与任意内联 HTML 由 htmlInline 节点承载（见 features/htmlInline.ts），不在此装饰。 */
-.milkdown .ProseMirror .yj-hl {
+/* ── 内联标记真节点：==高亮==→<mark> / ^上标^→<sup> / ~下标~→<sub> ──
+   由 features/inlineMarks.ts 的 schema 直接渲染成语义标签（不再是装饰），
+   故编辑区与导出共用同一套标签，样式口径一致，不存在"编辑区好看导出变形"。
+   注：旧方案靠 .yj-* 装饰 + 导出后处理，源码里仍留 `~`/`==` 会被 gfm 抢成删除线、
+   被序列化转义成 `\~` / `\==`，已废弃。 */
+.milkdown .ProseMirror mark {
   /* 玉质高亮：用强调色的半透活性底 + 内陷发丝边，融入青瓷/月白配色，不抢眼 */
   background: var(--hue-active);
   color: inherit;
@@ -596,13 +597,15 @@
   padding: 0.08em 0.3em;
   box-shadow: inset 0 0 0 1px rgba(var(--hue-tint-1), 0.3);
 }
-.milkdown .ProseMirror .yj-sup {
+.milkdown .ProseMirror sup {
   vertical-align: super;
   font-size: 0.78em;
+  line-height: 0;
 }
-.milkdown .ProseMirror .yj-sub {
+.milkdown .ProseMirror sub {
   vertical-align: sub;
   font-size: 0.78em;
+  line-height: 0;
 }
 
 /* ── 内联 HTML / <kbd> 键帽（htmlInline 节点渲染）──

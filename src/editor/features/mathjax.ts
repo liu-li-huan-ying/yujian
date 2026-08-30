@@ -62,17 +62,44 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function errorHtml(err: unknown, source: string): string {
+/**
+ * 出错时的降级展示：只给一个错误徽标，完整原因放 title（悬停可见）。
+ *
+ * 为什么不回显源码：早期版本会把被截断的源码直接渲染进结果，于是整篇 LaTeX 的
+ * `\require{amscd}` / `\documentclass` 等控制指令以红色字面量出现在正文里
+ * （用户反馈"显示红色的 \require"）。回显源码对读者毫无价值，还会污染导出，
+ * 故改为只显示徽标 + 悬停看原因。
+ */
+function errorHtml(err: unknown, _source: string): string {
   const message = err instanceof Error ? err.message : String(err)
-  // 出错时只回显被截断的源码片段，避免把整篇 LaTeX 文档（可能含 \require 等）原样糊到结果里
-  const snippet = source.length > 160 ? source.slice(0, 160) + '…' : source
-  return (
-    `<span class="math-error" title="${escapeHtml(message)}">` +
-    `${escapeHtml(snippet)}</span>`
-  )
+  return `<span class="math-error" title="${escapeHtml(message)}">⚠ 公式无法渲染</span>`
 }
 
-/** 渲染 TeX → SVG；失败或语法有误时降级为原始源码（不抛错、不中断编辑） */
+/* ── \label / \eqref 交叉引用 ────────────────────
+   MathJax 的标签表挂在共享 document 上、跨 convert 保留，所以 `\eqref` 能否解析
+   取决于「\label 是否已经渲染过」。而渲染是异步且顺序不定的（行内 nodeView 立即渲染、
+   块级走防抖预览），`\eqref` 经常先于 `\label` 渲染 → 显示 ???。
+   故这里做一处通知：任何含 \label 的公式渲染完成后，触发所有含引用的公式重渲染。 */
+
+const labelListeners = new Set<() => void>()
+
+/** 注册「标签表变化」回调，返回取消函数 */
+export function onLabelsChanged(fn: () => void): () => void {
+  labelListeners.add(fn)
+  return () => {
+    labelListeners.delete(fn)
+  }
+}
+
+/** 源码是否定义标签 / 引用标签 */
+function hasLabel(src: string): boolean {
+  return /\\label\s*\{/.test(src)
+}
+function hasRef(src: string): boolean {
+  return /\\(?:eq)?ref\s*\{/.test(src)
+}
+
+/** 渲染 TeX → SVG；失败或语法有误时降级为错误徽标（不抛错、不中断编辑） */
 export async function renderMathToSvg(
   source: string,
   display: boolean
@@ -80,7 +107,11 @@ export async function renderMathToSvg(
   if (!source.trim()) return ''
   try {
     const mj = await loadMathJax()
-    return mj.convert(source, display)
+    const svg = mj.convert(source, display)
+    if (hasLabel(source)) {
+      for (const fn of labelListeners) fn()
+    }
+    return svg
   } catch (err: unknown) {
     return errorHtml(err, source)
   }
@@ -93,6 +124,8 @@ class MathInlineView {
   private node: PMNode
   /** 自增令牌：只认最后一次请求结果，杜绝慢渲染覆盖新渲染 */
   private token = 0
+  /** 交叉引用的重渲染订阅（仅含 \ref/\eqref 时挂载） */
+  private offLabels: (() => void) | null = null
 
   constructor(node: PMNode) {
     this.node = node
@@ -117,6 +150,22 @@ class MathInlineView {
       if (mine !== this.token) return
       this.dom.innerHTML = svg
     })
+
+    // 交叉引用：\eqref 可能先于 \label 渲染出来（顺序不定），订阅标签表变化后重渲染
+    this.offLabels?.()
+    this.offLabels = null
+    if (hasRef(value)) {
+      this.offLabels = onLabelsChanged(() => {
+        if (this.token !== mine) {
+          this.offLabels?.()
+          this.offLabels = null
+          return
+        }
+        void renderMathToSvg(value, false).then((svg) => {
+          if (mine === this.token) this.dom.innerHTML = svg
+        })
+      })
+    }
   }
 
   update(node: PMNode): boolean {
@@ -137,6 +186,8 @@ class MathInlineView {
   destroy(): void {
     // 让在途渲染失效，避免回调写入已销毁的 DOM
     this.token++
+    this.offLabels?.()
+    this.offLabels = null
   }
 }
 
@@ -247,10 +298,25 @@ async function renderLatexDoc(content: string): Promise<string> {
  * 把一段 latex 代码块内容渲染为 HTML 字符串（SVG 或降级文本）。
  * 供编辑器预览（renderMathBlockPreview）与导出（renderLatexBlocksInExport）共用。
  */
+/**
+ * 去掉可能残留的 `$$…$$` / `\[…\]` 定界符。
+ * remark-math 通常会先剥离，但粘贴等来源不保证；带着 `$$` 喂给 MathJax 不会报错，
+ * 却会多渲染出两个 `$$` 字形（实测 SVG 宽度从 27.6ex 涨到 32.1ex），看着像公式坏了。
+ */
+function stripMathDelims(src: string): string {
+  const s = src.trim()
+  const dollar = /^\$\$([\s\S]*)\$\$$/.exec(s)
+  if (dollar) return dollar[1].trim()
+  const bracket = /^\\\[([\s\S]*)\\\]$/.exec(s)
+  if (bracket) return bracket[1].trim()
+  return src
+}
+
 export async function renderLatexContent(content: string): Promise<string> {
   if (!content.trim()) return ''
   try {
-    return isFullLatexDoc(content) ? await renderLatexDoc(content) : await renderMathToSvg(content, true)
+    if (isFullLatexDoc(content)) return await renderLatexDoc(content)
+    return await renderMathToSvg(stripMathDelims(content), true)
   } catch (err: unknown) {
     return errorHtml(err, content)
   }
@@ -278,8 +344,23 @@ export function renderMathBlockPreview(
   // （即「多个公式块放在一起只有最后一个能渲染」）。
   const mine = (latexBlockToken.get(applyPreview) ?? 0) + 1
   latexBlockToken.set(applyPreview, mine)
-  void renderLatexContent(content).then((html) => {
-    if (latexBlockToken.get(applyPreview) === mine) applyPreview(html)
-  })
+
+  const run = (): void => {
+    void renderLatexContent(content).then((html) => {
+      if (latexBlockToken.get(applyPreview) === mine) applyPreview(html)
+    })
+  }
+  run()
+
+  // 块里的 \eqref 同样可能早于别处的 \label 渲染，订阅后重跑
+  if (hasRef(content)) {
+    const off = onLabelsChanged(() => {
+      if (latexBlockToken.get(applyPreview) !== mine) {
+        off()
+        return
+      }
+      run()
+    })
+  }
   return undefined
 }
