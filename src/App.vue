@@ -15,11 +15,17 @@ import WritingAidsPanel from './components/WritingAidsPanel.vue'
 import StatsPopover from './components/StatsPopover.vue'
 import ZenRetreatBar from './components/ZenRetreatBar.vue'
 import ZenSettings from './components/ZenSettings.vue'
+import ExportPreview from './components/ExportPreview.vue'
+import CompilePanel from './components/CompilePanel.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem } from '../electron/shared/ipc-channels'
 import { buildExportHtml } from './export/docTemplate'
+import { inlineImages } from './export/imageInline'
+import { embedMermaidSvg } from './export/mermaidSvg'
+import { parseFrontmatter } from './editor/frontmatter'
+import { markdownToLatex } from './export/markdownToLatex'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
 import { useTabsStore } from './store/tabs'
@@ -515,30 +521,172 @@ function baseName(path: string): string {
   return (path.split(/[\\/]/).pop() ?? 'document').replace(/\.(md|markdown)$/i, '')
 }
 
-async function doExport(kind: 'html' | 'pdf'): Promise<void> {
-  if (!filePath.value) {
+/**
+ * 导出选项（导出菜单里逐项切换）：
+ * - toc 自动目录（PDF 恒为是——纸质阅读需要导航）
+ * - cover 封面页（标题 / 作者 / 日期，取自 frontmatter）
+ * - inline 图片与图表内联为 data URL（自包含、离线可读；PDF 恒为内联，代价是体积变大）
+ * - selection 仅导出选中内容（无选区时回退整篇）
+ */
+const exportPrefs = ref({
+  toc: false,
+  cover: false,
+  inline: true,
+  selection: false,
+  preview: false
+})
+
+/** 导出菜单切换一个选项 */
+function toggleExportPref(key: 'toc' | 'cover' | 'inline' | 'selection' | 'preview'): void {
+  exportPrefs.value = { ...exportPrefs.value, [key]: !exportPrefs.value[key] }
+}
+
+/**
+ * 取导出元信息：优先用属性面板写入的 frontmatter，回退到文档名。
+ * 日期既可能是字符串也可能是 YAML 解析出的 Date，统一取年月日。
+ */
+function readExportMeta(base: string): { title?: string; author?: string; date?: string } {
+  const md = host.value?.getMarkdown?.() ?? ''
+  const { data } = parseFrontmatter(md)
+  const pick = (...keys: string[]): string | undefined => {
+    for (const k of keys) {
+      const v = data[k]
+      if (typeof v === 'string' && v.trim()) return v.trim()
+      if (v instanceof Date) return v.toISOString().slice(0, 10)
+    }
+    return undefined
+  }
+  return {
+    title: pick('title') ?? base,
+    author: pick('author', 'authors'),
+    date: pick('date', 'updated', 'created')
+  }
+}
+
+/** 读取绝对路径图片为 data URL（导出内联用）；失败返回 null，保留原 src 不破坏文档 */
+async function readAsDataUrl(absPath: string): Promise<string | null> {
+  const res = await window.api.readFileBase64(absPath)
+  return res.ok && res.dataUrl ? res.dataUrl : null
+}
+
+/**
+ * 导出当前文档。三种产物共用一条管道：取正文 → 变换 → 通用写盘 / 打印。
+ * @param kind  html 网页 / pdf 文档 / latex 源文件
+ * @param scope all 整篇 / selection 当前选中（无选区时回退整篇并提示，不静默降级）
+ */
+/** 构建好的导出产物（尚未写盘 / 打印） */
+interface BuiltExport {
+  content: string
+  defaultName: string
+  filters?: { name: string; extensions: string[] }[]
+  kind: 'html' | 'pdf' | 'latex'
+}
+
+/** 导出前预览状态 */
+const showPreview = ref(false)
+const previewState = ref<BuiltExport | null>(null)
+
+/**
+ * 构建导出产物内容（不写盘）。
+ * 与「写盘」拆开，是为了让导出前预览能插在两者之间——预览与落盘共用同一份内容，
+ * 不重复渲染。
+ * @param override 多文件合订时传入：拼接好的正文 HTML / Markdown 原文与合订标题，
+ *                 此时不再走编辑器的「选中 / 整篇」范围逻辑。
+ *                 forceInline 为 true 时（合订）强制内联图片与图表，确保跨目录自包含。
+ */
+async function buildExportContent(
+  kind: 'html' | 'pdf' | 'latex',
+  scope: 'all' | 'selection' = 'all',
+  override?: {
+    title?: string
+    meta?: { title?: string; author?: string; date?: string }
+    bodyHtml?: string
+    markdown?: string
+    forceInline?: boolean
+  }
+): Promise<BuiltExport | null> {
+  const isCompile = !!override
+  if (!isCompile && !filePath.value) {
     showToast(U.toastNoDoc, 'err')
-    return
+    return null
   }
-  showToast(kind === 'html' ? `正在生成 ${U.exportHtml}…` : `正在生成 ${U.exportPdf}…`, 'info')
+  const base = override?.title ?? baseName(filePath.value ?? '')
+  const meta = override?.meta ?? readExportMeta(base)
+  // 范围：优先取调用方指定，其次跟随菜单里的「仅导出选中内容」选项（合订不适用）
+  const useSel = !isCompile && (scope === 'selection' || exportPrefs.value.selection)
 
-  const body = await host.value?.getHTML()
-  if (!body) {
-    showToast(U.toastNoContent, 'err')
-    return
+  let content = ''
+  let defaultName = ''
+  let filters: { name: string; extensions: string[] }[] | undefined
+
+  if (kind === 'latex') {
+    // LaTeX 由 Markdown 原文转换：公式与代码块原样保留，转义不会破坏它们
+    let md = override?.markdown ?? ''
+    if (!isCompile) {
+      md = useSel ? host.value?.getSelectionMarkdown() ?? '' : ''
+      if (useSel && !md.trim()) {
+        showToast(U.toastNoSelection, 'info')
+        md = host.value?.getMarkdown() ?? ''
+      } else if (!useSel) {
+        md = host.value?.getMarkdown() ?? ''
+      }
+    }
+    if (!md.trim()) {
+      showToast(U.toastNoContent, 'err')
+      return null
+    }
+    content = markdownToLatex(md, { meta })
+    defaultName = base + '.tex'
+    filters = [{ name: 'LaTeX 源文件', extensions: ['tex'] }]
+  } else {
+    // 正文：选中范围优先；无选区回退整篇（明确提示，避免用户以为导出失败）
+    let body = override?.bodyHtml ?? ''
+    if (!isCompile) {
+      body = useSel ? host.value?.getSelectionHTML() ?? '' : ''
+      if (useSel && !body) {
+        showToast(U.toastNoSelection, 'info')
+        body = (await host.value?.getHTML()) ?? ''
+      } else if (!useSel) {
+        body = (await host.value?.getHTML()) ?? ''
+      }
+    }
+    if (!body) {
+      showToast(U.toastNoContent, 'err')
+      return null
+    }
+    // PDF 经隐藏窗口加载临时文件，相对路径图片与 CDN 脚本都取不到 → 必须内嵌；
+    // HTML 是否内联由选项决定；合订（forceInline）跨目录引用，必须强制内联保证自包含。
+    // 内嵌图表后不再需要 CDN 的 mermaid 脚本。
+    const embed = kind === 'pdf' || exportPrefs.value.inline || override?.forceInline === true
+    let doc = buildExportHtml(body, base, {
+      math: true,
+      mermaid: !embed,
+      // PDF 恒带自动目录（纸质阅读需要导航），HTML 由选项决定；封面同样由选项控制
+      toc: kind === 'pdf' || exportPrefs.value.toc,
+      cover: exportPrefs.value.cover,
+      meta
+    })
+    if (embed) {
+      // 合订的图片已在拼接前按各自文档目录内联过，此处不二次处理
+      if (!isCompile && filePath.value) {
+        doc = await inlineImages(doc, filePath.value, readAsDataUrl)
+      }
+      doc = await embedMermaidSvg(doc)
+    }
+    content = doc
+    defaultName = base + (kind === 'html' ? '.html' : '.pdf')
+    filters = kind === 'html' ? [{ name: 'HTML 网页', extensions: ['html', 'htm'] }] : undefined
   }
+  return { content, defaultName, filters, kind }
+}
 
-  const base = baseName(filePath.value)
-  const doc = buildExportHtml(body, base, { math: true, mermaid: true })
-  const payload = {
-    html: doc,
-    defaultName: base + (kind === 'html' ? '.html' : '.pdf')
-  }
-
-  const res = kind === 'html'
-    ? await window.api.exportHtml(payload)
-    : await window.api.exportPdf(payload)
-
+/** 写盘 / 打印：与构建分离，预览确认后直接复用已构建的内容 */
+async function writeExport(built: BuiltExport): Promise<void> {
+  const payload = { content: built.content, defaultName: built.defaultName, filters: built.filters }
+  const res =
+    built.kind === 'pdf'
+      ? await window.api.exportPdf(payload)
+      : await window.api.exportFile(payload)
   if (res.ok && res.path) {
     showToast(`${U.toastExportHtmlOk}${res.path}`, 'ok')
   } else if (res.canceled) {
@@ -546,6 +694,112 @@ async function doExport(kind: 'html' | 'pdf'): Promise<void> {
   } else {
     showToast(`${U.toastExportErr}${res.error ?? ''}`, 'err')
   }
+}
+
+/**
+ * 导出当前文档。三种产物共用一条管道：取正文 → 变换 → 预览（可选）→ 通用写盘 / 打印。
+ * @param kind  html 网页 / pdf 文档 / latex 源文件
+ * @param scope all 整篇 / selection 当前选中（无选区时回退整篇）
+ */
+async function doExport(
+  kind: 'html' | 'pdf' | 'latex',
+  scope: 'all' | 'selection' = 'all'
+): Promise<void> {
+  if (!filePath.value) {
+    showToast(U.toastNoDoc, 'err')
+    return
+  }
+  const label = kind === 'html' ? U.exportHtml : kind === 'pdf' ? U.exportPdf : U.exportLatex
+  showToast(`${U.toastExporting}${label}…`, 'info')
+
+  const built = await buildExportContent(kind, scope)
+  if (!built) return
+
+  // 开启「导出前预览」：先呈现产物，用户确认后再落盘
+  if (exportPrefs.value.preview) {
+    previewState.value = built
+    showPreview.value = true
+    return
+  }
+  await writeExport(built)
+}
+
+/** 预览面板确认：把已构建的内容落盘 / 打印 */
+async function confirmExport(): Promise<void> {
+  const built = previewState.value
+  showPreview.value = false
+  previewState.value = null
+  if (!built) return
+  await writeExport(built)
+}
+
+/** 预览面板取消：丢弃已构建内容 */
+function cancelExport(): void {
+  showPreview.value = false
+  previewState.value = null
+}
+
+/* ── 多文件合订（CompilePanel → 共用 buildExportContent override）── */
+
+const showCompile = ref(false)
+
+/**
+ * 多文件合订：逐文件读取 → markdownToHtml 渲染 → 按各自文档目录内联图片 → 拼接，
+ * 再交给与单文档完全相同的导出管道（含预览 / 写盘 / 自包含内联）。
+ * 图片必须在拼接前按文档所在目录分别内联，合订后无法再用单一基准路径解析。
+ */
+async function onCompile(payload: {
+  files: string[]
+  title: string
+  newPagePerDoc: boolean
+  kind: 'html' | 'pdf' | 'latex'
+  preview: boolean
+}): Promise<void> {
+  if (!vaultPath.value) {
+    showToast(U.toastNoDoc, 'err')
+    return
+  }
+  if (!payload.files.length) {
+    showToast(U.compileNoSelection, 'info')
+    return
+  }
+  showCompile.value = false
+  const label =
+    payload.kind === 'html' ? U.exportHtml : payload.kind === 'pdf' ? U.exportPdf : U.exportLatex
+  showToast(`${U.toastExporting}${label}…`, 'info')
+
+  let combinedHtml = ''
+  let combinedMd = ''
+  for (const file of payload.files) {
+    const md = await window.api.readFile(file)
+    if (!md.trim()) continue
+    const html = host.value?.markdownToHtml(md) ?? ''
+    // 按该文档所在目录把相对图片内联为 data URL（合订后无法用单一基准）
+    const inlined = await inlineImages(html, file, readAsDataUrl)
+    combinedHtml += payload.newPagePerDoc
+      ? `<section class="yj-compile-page">${inlined}</section>`
+      : inlined
+    combinedMd += `\n\n${md}\n`
+  }
+  if (!combinedHtml && !combinedMd.trim()) {
+    showToast(U.toastNoContent, 'err')
+    return
+  }
+
+  const built = await buildExportContent(payload.kind, 'all', {
+    title: payload.title,
+    bodyHtml: combinedHtml,
+    markdown: combinedMd,
+    forceInline: true
+  })
+  if (!built) return
+
+  if (payload.preview) {
+    previewState.value = built
+    showPreview.value = true
+    return
+  }
+  await writeExport(built)
 }
 
 /* ── 语言切换（key 驱动 Vue 重挂 Crepe）── */
@@ -630,8 +884,12 @@ onBeforeUnmount(() => {
       @open="openFile"
       @switch-vault="openVault"
       @update:mode="requestedMode = $event"
+      :export-prefs="exportPrefs"
       @export-html="doExport('html')"
       @export-pdf="doExport('pdf')"
+      @export-latex="doExport('latex')"
+      @export-compile="showCompile = true"
+      @export-option="toggleExportPref"
       @appearance="onAppearance"
       @img-host="onImgHost"
       @preferences="onPreferences"
@@ -813,6 +1071,26 @@ onBeforeUnmount(() => {
       v-if="showHelp"
       :initial="helpTab"
       @close="showHelp = false"
+    />
+
+    <!-- 导出前预览（玻璃浮层；HTML/PDF 渲染真实排版，LaTeX 显示源码）-->
+    <ExportPreview
+      v-if="showPreview && previewState"
+      :content="previewState.content"
+      :kind="previewState.kind"
+      :default-name="previewState.defaultName"
+      @confirm="confirmExport"
+      @cancel="cancelExport"
+    />
+
+    <!-- 多文件合订面板 -->
+    <CompilePanel
+      v-if="showCompile"
+      :tree="tree"
+      :vault-path="vaultPath"
+      :preview="exportPrefs.preview"
+      @close="showCompile = false"
+      @compile="onCompile"
     />
 </template>
 

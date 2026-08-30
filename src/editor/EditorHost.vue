@@ -462,6 +462,36 @@ async function getHTML(): Promise<string> {
 }
 
 /**
+ * 把任意 Markdown 渲染成 HTML 片段（多文件合订 / 选中范围导出用）。
+ * 不触碰当前编辑器内容、不改变保存态与滚动位置，因此可安全渲染其它文档。
+ */
+function markdownToHtml(markdown: string): string {
+  return milkdown.value?.markdownToHtml(markdown) ?? ''
+}
+
+/**
+ * 当前选区内容（导出「选中范围」用）：所见即所得直接序列化选区；
+ * 源码模式取选区 Markdown 文本再渲染成 HTML，保证两种模式的产出同构。
+ * 无选区时返回空串，由调用方回退到整篇。
+ */
+function getSelectionHTML(): string {
+  if (mode.value === 'source') {
+    const text = source.value?.getSelectionText() ?? ''
+    return text ? markdownToHtml(text) : ''
+  }
+  return milkdown.value?.getSelectionHTML() ?? ''
+}
+
+/**
+ * 选区的 Markdown 文本（把选中范围导出为 LaTeX 用）；无选区返回空串。
+ * 源码模式直接取选区原文，所见即所得经 serializer 序列化，两种模式口径一致。
+ */
+function getSelectionMarkdown(): string {
+  if (mode.value === 'source') return source.value?.getSelectionText() ?? ''
+  return milkdown.value?.getSelectionMarkdown() ?? ''
+}
+
+/**
  * 上传文档内全部本地图片到图床，并把引用改写为远程 URL。
  * 密钥只在主进程；这里只拿到改写后的 Markdown，应用到保真层后重渲染并保存。
  */
@@ -521,6 +551,9 @@ defineExpose({
   revealLine,
   setFindHighlight,
   getHTML,
+  markdownToHtml,
+  getSelectionHTML,
+  getSelectionMarkdown,
   publishImages,
   gotoOutline,
   outline,

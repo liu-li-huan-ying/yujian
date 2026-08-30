@@ -48,3 +48,30 @@
 ## 验证
 - `npm run typecheck` ✅、`npm run build` ✅；产物含 `findPosByText` / `currentLineText` / `stripMd` / `TextSelection`。
 - 真实浏览器（系统 Edge + puppeteer-core）驱动**真实 Crepe** 实测：初始搜索 / 切源码 / 切回 / 文档变更自愈 / 清空 五个场景装饰数 4·4·4·4·0 全对，CSS 变量解析为 `rgba(95,168,160,0.35)`；源码第 1/3/5/8 行分别落到「标题 / 段落 / 列表项 / 引用」正确块，`current` 标记 4/4 正确；面板 `display:none → 可见` 装饰数 4 → 4 不变。
+
+---
+
+# 导出增强（批次三 · 零依赖批次，2026-08-30）
+
+权威细节见 `docs/PHASE2-PLAN.md` §3.4 与 `docs/ARCHITECTURE.md` §5.6。
+
+## 做了什么
+- **LaTeX 导出**：`src/export/markdownToLatex.ts` 纯 TS 零依赖（不引入 pandoc），覆盖标题 / 列表（含嵌套）/ 表格 / 代码 / 引用 / 图片 / 链接 / 脚注 / 公式，默认 `ctexart` 文档类支持中文。
+- **PDF 增强**：自动目录（取标题层级并补锚点，PDF 恒开）、A4 分页控制（一级标题另起页、代码与表格不跨页断裂、标题不孤行）、可选封面页。
+- **导出范围**：整篇 / 仅选中内容（两端产出同构，无选区回退整篇并提示）；**多文件合订**（2026-08-30）：`CompilePanel.vue` 按文件树顺序列出 vault 内 `.md`，勾选 + 上下移排序 + 合订标题 + 每篇另起页，HTML / PDF / LaTeX 任选，逐文件渲染并按各自目录内联图片后拼接，走同一 `buildExportContent(override, forceInline)` 管道。
+- **图片与图表**：base64 内联策略可选；Mermaid 转内嵌 SVG，PDF 与离线 HTML 不再依赖 CDN；合订强制内联（`forceInline`）保证跨目录自包含。
+- **管道收敛**：`export:html` 升级为通用 `export:file`，HTML 与 LaTeX 共用一条写盘通道；新增 `file:readBase64`。
+- **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关 + 合订面板内勾选；`ExportPreview.vue` 对 HTML/PDF 用 Blob+iframe 渲染真实排版、LaTeX 显示源码，确认后才落盘 / 打印。
+- **菜单**：HTML / PDF / LaTeX + 五个开关（自动目录 / 封面页 / 图片内联 / 仅选中范围 / 导出前预览）+ 多文件合订入口。
+
+## 关键坑
+1. **计划里 mammoth 选型是错的**：mammoth 只能 *docx → HTML*（解析既有 docx），**不能生成 docx**；生成应用 `docx` 包。已在计划文档订正。
+2. **LaTeX 转义与「公式 / 代码 / 链接」互斥**：必须先用占位符抽出这些片段，再对正文转义，否则 URL 的 `_`、公式的 `\`、宏名的 `#` 会被破坏。
+3. **PDF 此前必然丢图**：它经隐藏窗口加载 `tmpdir` 下的临时 HTML，相对路径图片取不到 —— 故 PDF 强制内联 base64。
+4. **构建 EPERM**：`out/` 残留会致 `EPERM: KaTeX_*.woff2`，需沙箱外 `rm -rf out` 后重建。
+
+## 验证
+typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「公式 / 代码 / 链接 URL 不被转义」）。
+
+## 待办
+docx（`docx` 包）与 ePub（`jszip` 手写 OPF / NCX）。（多文件合订、导出前预览已于 2026-08-30 落地。）
