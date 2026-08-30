@@ -54,8 +54,8 @@
 | **P0** | 自动保存与崩溃恢复                    | 编辑器类应用的信任底线  |
 | **P1** | 文件树侧边栏 + 笔记库切换               | <br />       |
 | **P1** | 代码块高亮（多语言）                   | 技术写作刚需       |
-| **P1** | 数学公式（KaTeX）                  | Crepe 内置     |
-| **P1** | Mermaid 流程图                  | 需自研节点，见 §5.3 |
+| **P1** | 数学公式（MathJax）                | Crepe 提供节点，渲染层自研见 §5.3.2 |
+| **P1** | Mermaid 流程图                  | 代码块预览钩子，见 §5.3 |
 | **P1** | 增强表格编辑                       | Crepe 内置     |
 | **P1** | 图片粘贴落盘                       | <br />       |
 | **P1** | 导出 HTML / PDF / 单文件 Markdown | <br />       |
@@ -88,7 +88,7 @@
    这个需求本质上要求"序列化后的 Markdown 与原始 Markdown 高度一致"，正是 Milkdown 的设计目标。
 
 3. **技术写作所需的能力大部分已内置。**
-   Crepe 内置：代码块（CodeMirror 6 驱动，多语言高亮）、LaTeX 公式（KaTeX）、表格（含行列增删与对齐）、图片块（含缩放与图注）、斜杠命令、悬浮工具栏、拖拽排序。
+   Crepe 内置：代码块（CodeMirror 6 驱动，多语言高亮）、LaTeX 公式（提供 `math_inline` / `latex` 代码块节点与 remark-math 解析，**渲染层已自研替换为 MathJax**，见 §5.3.2）、表格（含行列增删与对齐）、图片块（含缩放与图注）、斜杠命令、悬浮工具栏、拖拽排序。
 
 4. **自带 AI 能力接口。**
    Crepe 7.22 内置 `AI` Feature（默认关闭），提供指令面板 + 流式输出 + diff 审阅，可接任意 provider。这给后续加 AI 辅助写作留了低成本入口。
@@ -113,6 +113,10 @@
     // —— 渲染增强 ——
     "mermaid": "^11.17.2",
     "katex": "^0.18.4",                // 显式锁定，与 crepe 内部依赖对齐避免双版本
+                                       // 注：显示层已改用 MathJax，katex 现仅供
+                                       // markdownToHtml（合订导出）的 DOMSerializer 路径使用
+    "mathjax-full": "^3.2.2",          // 数学显示引擎（AllPackages + mhchem，支持 \ce/\require/\eqref）
+    "markdown-it-emoji": "^3.1.0",     // 仅复用其全量 emoji 短代码词典（name → emoji）
 
     // —— 搜索 ——
     "minisearch": "^7.2.0",
@@ -375,13 +379,176 @@ markdown-editor/
 5. 安全：`securityLevel: 'strict'`，预览内容最终由组件内 `sanitizeSvg`（DOMPurify）兜底
 6. 渲染在渲染进程完成，导出 HTML 时 SVG 已在 DOM 中，天然支持离线导出
 
+#### 5.3.1 编辑区默认显示图表（2026-08-30）
+
+默认（`previewOnlyByDefault` 缺省 = 只读态）下代码块是「CodeMirror 编辑器 + 下方预览区」并存，
+图表要往下找才看得到。改为**预览优先**：
+
+* `featureConfigs[Crepe.Feature.CodeMirror].previewOnlyByDefault = true`
+* 该开关是**全局布尔**，不能直接对所有代码块生效（否则普通代码默认变成只读预览）。
+  实际靠 `renderPreview` 的返回值天然分流：
+  * 非 mermaid / 非 latex → 返回 `null` → 预览面板不渲染，`codemirror-host` 也就不加 `hidden`
+    → **普通代码块行为完全不变**（照样是可编辑的高亮代码）
+  * mermaid / latex → 返回 SVG → 预览面板渲染且 `codemirror-host` 加 `hidden`
+    → **默认直接看到图表 / 公式**，点预览区右上角的 Edit 仍可切回编辑源码
+* 结论：用一个全局开关 + 按语言分流的 renderPreview，实现"仅图表类代码块默认预览"，
+  零 schema 改动、零副作用。
+
 **为什么不用自研 NodeView（原方案）**：NodeView 要接管 `code_block` 渲染，
 就必须处理与 Crepe 内置 CodeMirror NodeView 的冲突；一旦动到 schema，
 就会威胁「Markdown 往返保真」这条红线。而 `renderPreview` 契约天然提供了
 同样的产品目标（代码 ⇄ 图表切换由组件自带预览开关提供），对文档零侵入，
 风险低一个数量级。
 
+**多图并存修复（2026-08-30）**：早期实现用模块级共享的 `timer` / `token`，多个 mermaid 图块
+同时存在时，新图的渲染会 `clearTimeout` 掉旧图的定时器、且旧图的结果令牌被判失效被丢弃，
+于是「只有最后渲染的那张图能出来，其余都消失」——即用户反馈的『多个图放在一起渲染能力很弱』。
+改为用 `WeakMap` 以每个代码块的 `applyPreview` 闭包为键，给每个图维护**独立的**防抖定时器与
+结果令牌（`src/editor/features/mermaid.ts`），任意数量的图都能各自独立、正确渲染。
+
 **为什么不用 plugin-diagram**：版本停在 7.7.0，与 kit 7.22.1 混装会触发 Milkdown 的多实例上下文错误。
+
+### 5.3.2 数学渲染：MathJax 替换 KaTeX（2026-08-30）
+
+**背景**：Crepe 的 `Latex` Feature 用 KaTeX 渲染。KaTeX 不认 `\require`、`\ce` 需额外扩展，
+对 `\label` / `\eqref` 交叉引用与整篇 LaTeX 文档级语法支持弱。改用 **MathJax**
+（`mathjax-full` 程序化 API + `AllPackages` + mhchem），原生支持：
+
+| 语法                    | KaTeX     | MathJax（现方案） |
+| --------------------- | --------- | ------------ |
+| `$…$` / `$$…$$`       | ✅         | ✅            |
+| `\label` / `\eqref`   | 有限（需 globalGroup） | ✅            |
+| `\ce{H2O}`（mhchem）    | 需额外扩展     | ✅            |
+| `\require{mhchem}`    | ❌         | ✅            |
+
+**为什么保留 Crepe 的数学节点、只换渲染层**：数学节点的 schema 与 `remark-math`
+解析直接决定「Markdown 往返保真」这条红线。已被验证的部分不动，只接管"显示"，
+风险最低 KaTeX 与 katex.css 因此仍会留在包里（仅供合订导出的 DOMSerializer 路径）。
+
+两条渲染路径：
+
+1. **行内 `$…$`（`math_inline` 原子节点）**
+   Crepe 的渲染写在 schema 的 `toDOM` 里直接调 `katex.render`，但**并没有**给该节点注册
+   nodeView —— 所以补一个 ProseMirror 插件提供 `props.nodeViews.math_inline` 即可接管，
+   无冲突。nodeView 内先以源码占位，MathJax 异步就绪后替换为 SVG；用自增令牌
+   丢弃过期渲染结果，`destroy()` 时让在途回调失效。
+
+2. **块级 `$$…$$`（`language='latex'` 的代码块）**
+   走 `codeBlockConfig.renderPreview`。Crepe 的 Latex Feature 会在 `create()` 期间
+   用 katex 拦截 `latex` 语言并**覆盖**该配置；若用 `editor.config(...)` 在构造期之前覆盖，
+   会被 Latex Feature 的 katex 包装再次盖掉（这就是 `\label`/`\eqref`/`\ce`/`\require`
+   一度以字面量出现的根因）。
+
+   正确做法：用 **`.use()` 特性**（排到内部特性之后）再覆盖一次，让 MathJax 最终胜出：
+
+   ```ts
+   crepe.editor.use((ctx) => () => {
+     ctx.update(codeBlockConfig.key, (prev) => ({
+       ...prev,
+       renderPreview: (language, content, applyPreview) => {
+         if (String(language).toLowerCase() === 'latex')
+           return renderMathBlockPreview(content, applyPreview)  // MathJax
+         return prev.renderPreview(language, content, applyPreview)  // 保住 mermaid 等
+       }
+     }))
+   })
+   ```
+
+   Crepe 构造函数里 `loadFeature` 通过 `editor.use()` 注册内部特性（含 Latex），
+   故本 `.use()` 调用排在它们之后；`create()` 时插件 runner 按注册顺序执行，
+   Latex 的 katex 包装先跑、我们的 MathJax 包装后跑 → **后者为最外层**，`latex` 命中 MathJax。
+   配合 §5.3.1 的预览优先，块级公式在编辑区默认即渲染后的样子。
+
+**沙箱安全性**：用 `liteAdaptor`（MathJax 自带的轻量 DOM 实现）而非浏览器 adaptor。
+实测在**完全没有 document / window 全局**的 Node 环境下即可完成渲染 —— 因此不会
+重蹈 mermaid 缺 `Buffer` 的覆辙（`§6` 的 renderer polyfill 与本模块无关）。
+输出用 SVG 且 `fontCache: 'none'`，每个 SVG 自包含，插入 DOM 与导出都不依赖外部 CSS。
+
+**整篇 LaTeX 文档级围栏修复（2026-08-30）**：用户把含 `\documentclass…\begin{document}` 的
+整篇 LaTeX 文档粘进 `latex` 代码块时，原先被当成**一个巨型数学公式**喂给 MathJax → 渲染出一条
+超宽退化的 SVG（界面上表现为用户所说的「一条加粗实线」）；且一旦报错会回退显示整段源码，于是
+`\require` 等控制指令也以字面量出现在结果里。
+
+修复（`src/editor/features/mathjax.ts`）：`renderLatexContent()` 先判断是否为完整 LaTeX 文档
+（`isFullLatexDoc`，命中 `\begin{document}` 或 `\documentclass`），是则 `renderLatexDoc()`
+抽取 `document` 环境正文，用 `SEG_RE` 切成「数学段 / 文本段」：
+
+* 数学段（`$$…$$` / `\[…\]` / `\(…\)` / `\begin{数学环境}…\end{数学环境}` / `$…$`）交 MathJax 渲染；
+* 叙述文本段剥离 LaTeX 控制指令（`\section{…}` → 仅留 `…`）后保留可读文字；
+* 报错时只回显 ≤160 字截断源码，不再把整篇文档糊到结果里。
+
+该方法同时供编辑器预览（`renderMathBlockPreview`）与 HTML 导出（`renderLatexBlocksInExport`，
+见 §5.6）复用 —— 因此导出后的完整 LaTeX 文档同样会被正确分段渲染，而非原样转储源码。
+
+### 5.3.3 脚注双向跳转（2026-08-30）
+
+Milkdown 的 GFM 脚注渲染为：正文引用 `<sup data-type="footnote_reference" data-label="N">`
+与底部定义 `<dl data-type="footnote_definition" data-label="N"><dt>N</dt><dd>…</dd></dl>`。
+**默认两者都没有锚点**（回跳通常由 rehype 注入，而 Milkdown 用自己的序列化器），
+所以"点脚注跳不到正文"。
+
+* **编辑区**：只加点击委托，**零 DOM 注入** —— 点 `<sup>` 滚到对应 `<dl>`；
+  点定义里的 `<dt>` 滚回正文第一处引用。视觉上用 CSS `::after { content: ' \21A9' }`
+  给出回跳提示。不动 DOM 是为了避免和 ProseMirror 托管 DOM 打架（它会在重渲染时清掉注入）。
+* **导出 HTML**：产物是离屏副本，可安全改写 —— `enhanceFootnotes()` 给引用补
+  `id` 并包一层 `<a href="#fn-N">`，给定义补 `id="fn-N"` 并追加
+  `<a class="footnote-backref" href="#fnref-N-0">↩</a>`。同一脚注多处引用时 id 带序号，
+  回跳指向第一处。
+
+### 5.3.4 Emoji 短代码（2026-08-30）
+
+`:smile:` 这类短代码自动转 emoji，三处协同：
+
+1. **输入规则** `emojiInputRule`（ProseMirror `InputRule`）：敲完 `:name:` 立刻替换成 emoji
+   字符，文档模型里即存 emoji。
+2. **只读装饰** `emojiDecorationPlugin`：对已存在 / 粘贴进来的 `:name:`，用 widget 装饰
+   原位显示 emoji 并把原文本隐藏 —— 不改动源码。经输入规则转换过的字符不再匹配，两者不冲突。
+3. **导出** `replaceEmojiInHtml()`：装饰不进 `innerHTML`，故导出副本需单独把残留的
+   `:name:` 换成 emoji；用 TreeWalker 跳过 `<code>` / `<pre>`，避免破坏代码里的字面量。
+
+词典直接复用 `markdown-it-emoji/lib/data/full.mjs`（全量 GitHub 短代码），
+不自己维护映射表 —— 但只取其数据，不用它的 markdown-it 插件。
+
+### 5.3.5 内联标记：`==高亮==` / `^上标^` / `~下标~` / `<kbd>` 与内联 HTML（2026-08-30）
+
+MarkText / Typora 风格的内联语法，在所见即所得里以对应样式呈现：
+
+- `==文本==` → 高亮（导出 `<mark>`）
+- `^文本^` → 上标（导出 `<sup>`；内部不含 `^` 与空格，避免误吞行首锚点 / 公式）
+- `~文本~` → 下标（导出 `<sub>`；**单波浪线**，前后不接 `~` 以免误吞 GFM `~~删除线~~`）
+- `<kbd>Ctrl</kbd>` → 键盘键帽（导出 `<kbd>`）；任意内联 HTML（`<sub>` `<sup>` `<mark>` `<abbr>` …）同理保留
+
+> **上下标语法（易错点）**：下标用**单** `~`（如 `H~2~O`），上标用 `^`（如 `X^2^`）。
+> **双波浪线 `~~` 是 GFM 删除线**，不能用来写下标 —— 例如 `H~~2~~O` 会被渲染成
+> 「删除线样式的 2」，而非下标。此前反馈「上下标未实现」正是因为误用了 `~~`。
+
+实现分两路，刻意都不引入会威胁「Markdown 往返保真」的 schema：
+
+**A. 装饰 + 导出后处理**（等号高亮 / 上下标）：与 Emoji 同一套模式，源码完全不动。
+
+1. `inlineMarkupDecorationPlugin`（`src/editor/features/inlineMarkup.ts`）：遍历文本节点，
+   对命中片段用 `Decoration.inline(..., { class })` 包一层样式（`.yj-hl` / `.yj-sup` / `.yj-sub`）。
+2. 跳过 `code_block` / `code_inline` / `math_inline` / `delete`（GFM 删除线），代码、公式与
+   删除线里的字面量不会被误装饰。
+3. **导出** `replaceInlineMarkupInHtml()`（`src/export/domUtils.ts`）：导出副本按内容正则把
+   这些片段落为语义标签（同时跳过 `<code>/<pre>/<svg>/<mark>/<sup>/<sub>/<kbd>` 等，
+   防误处理代码、公式 SVG 与已转换节点）。
+
+**B. 真实内联 HTML 节点**（`<kbd>` 与任意内联 HTML）：
+
+Milkdown 默认没有 HTML 节点，`<kbd>Ctrl</kbd>` 被 micromark 解析成 `html` 节点后又因 schema
+无对应节点被**直接丢弃** —— 这正是早期「键盘键适配未实现 / html 还是不支持」的根因。
+改为自研 `$remark` + `$nodeSchema`（`src/editor/features/htmlInline.ts`）：
+
+1. remark 插件把父节点属于行内容器（paragraph / heading / blockquote / listItem /
+   tableCell / emphasis / strong / link / delete）的 `html` 节点改写为自定义 `htmlInline`；
+2. schema 把它映射成行内原子节点，原样保存原始 HTML 字符串，用 `innerHTML` 渲染
+   （标签不显示、只显示渲染结果），并随皮肤 / 明暗自动着色；
+3. `toMarkdown` 把原始 HTML 原样写回，**保证 Markdown 往返保真**。
+
+> 取舍：A 路装饰层只负责「显示」，语义标签只在导出时落地；B 路则是真实节点，编辑区里
+> `<kbd>` 等即时渲染成键帽。这是为「零 schema 改动 + 往返保真」做的权衡；若日后要可
+> 切换/可编辑的「真 mark」，需改为 `$mark` + 自定义 remark 解析（见 §5.3.2 思路）。
 
 ### 5.4 图片与图床
 
@@ -431,7 +598,12 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 | **RTF**         | 零依赖手写 RTF 1.9（`src/export/rtf.ts`）        | `\ansicpg936` 中文；标题/列表/引用/代码/图片/链接；`\u` 带符号转义    |
 | **ODT**         | `jszip@3.10.1` 手写 ODF 1.2（`src/export/odt.ts`） | content.xml / styles.xml / manifest.xml / Pictures/   |
 
-**HTML 导出的优雅之处**：WYSIWYG 模式下，ProseMirror 的 DOM 已经是渲染后的结果——Mermaid 已变成 SVG、KaTeX 已变成 MathML、代码块已带高亮 span。直接 `cloneNode(true)` 套上模板 CSS 即可，**不需要再跑一遍 Markdown 渲染管线**，从根源上杜绝"编辑器里好看，导出后变形"的问题。
+**HTML 导出的优雅之处**：WYSIWYG 模式下，ProseMirror 的 DOM 已经是渲染后的结果——Mermaid 已变成 SVG、数学公式已由 MathJax 变成自包含 SVG、代码块已带高亮 span。直接 `cloneNode(true)` 套上模板 CSS 即可，**不需要再跑一遍 Markdown 渲染管线**，从根源上杜绝"编辑器里好看，导出后变形"的问题。
+
+> **注（2026-08-30）**：WYSIWYG 导出（`getHTML()` 读实时视图 DOM）走 MathJax，产出的是
+> `fontCache:'none'` 的自包含 SVG，**不需要任何外部 CSS / 字体**。
+> 但「多文件合订」走 `markdownToHtml()` → `DOMSerializer` → `math_inline` 的 `toDOM`，
+> 该路径仍是 Crepe 自带的 KaTeX 实现，因此导出模板的 KaTeX CSS CDN 需保留（见下条）。
 
 需额外处理：KaTeX 字体与代码块高亮 CSS 要内联进导出文件，保证单文件离线可用。
 
@@ -602,8 +774,11 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 | 能力          | 实现                                   | 阶段 |
 | ----------- | ------------------------------------ | -- |
 | 代码块多语言高亮    | Crepe 内置 CodeMirror，语言按需引入裁剪体积       | P1 |
-| 数学公式        | Crepe 内置 KaTeX，行内 + 块级               | P1 |
-| Mermaid 流程图 | 代码块 renderPreview 钩子（§5.3）           | P1 |
+| 数学公式        | MathJax（`mathjax-full` + AllPackages + mhchem），行内 nodeView + 块级 renderPreview（§5.3.2）；支持 `\ce` / `\require` / `\label` / `\eqref` | P1 |
+| Mermaid 流程图 | 代码块 renderPreview 钩子（§5.3）；编辑区默认即显示图表（§5.3.1） | P1 |
+| 脚注           | GFM 脚注；编辑区点击双向跳转 + 导出注入回跳锚点（§5.3.3）           | P1 |
+| Emoji 短代码    | `:smile:` 输入自动转换 + 只读装饰显示 + 导出替换（§5.3.4）     | P1 |
+| 内联标记        | `==高亮==` / `^上标^` / `~下标~` 编辑区装饰 + 导出落语义标签；`<kbd>` 与内联 HTML 经 htmlInline 真实节点（§5.3.5） | P1 |
 | 表格增强        | Crepe 内置，行列拖拽 + 对齐设置                 | P1 |
 | 大纲面板        | 从 ProseMirror doc 提取 heading 层级，滚动联动 | P2 |
 | 字数/阅读时间统计   | 状态栏实时显示，中英文分别计数                      | P2 |

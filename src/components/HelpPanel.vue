@@ -10,6 +10,8 @@ const H = t.help
 const props = defineProps<{
   /** 初始标签页：shortcuts（快捷键）| guide（使用指南） */
   initial?: 'shortcuts' | 'guide'
+  /** 应用版本号（来自主进程，动态显示，避免硬编码过时版本） */
+  version?: string
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -112,6 +114,7 @@ const groups = computed(() => [
           <section class="guide__sec">
             <h4 class="guide__h">{{ H.aboutTitle }}</h4>
             <p class="guide__about">{{ H.aboutBody }}</p>
+            <p class="guide__about">{{ H.aboutVersion }} {{ version }}</p>
           </section>
         </div>
       </div>

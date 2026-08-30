@@ -133,6 +133,14 @@ function registerIpc(): void {
     }
   })
 
+  // 渲染层请求用系统默认浏览器打开外部链接（Ctrl/⌘+点击编辑器内链接跳转）。
+  // 仅放行 http(s)，避免 file:// 或 javascript: 等被误打开。
+  ipcMain.handle(IPC.APP_OPEN_EXTERNAL, (_event, url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+      void shell.openExternal(url)
+    }
+  })
+
   /** 图片内联：按扩展名推断 mime（导出内联图片用） */
   const MIME_BY_EXT: Record<string, string> = {
     '.png': 'image/png',

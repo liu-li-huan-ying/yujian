@@ -109,7 +109,7 @@
 }
 
 .milkdown .ProseMirror strong {
-  font-weight: 500;
+  font-weight: 700;
   color: var(--hue-text-1);
 }
 
@@ -510,6 +510,122 @@
   color: var(--hue-text-3);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ── 脚注双向跳转（编辑区）── */
+/* 正文引用：可点击跳到底部定义 */
+.milkdown sup[data-type='footnote_reference'] {
+  cursor: pointer;
+  color: var(--hue-accent);
+}
+.milkdown sup[data-type='footnote_reference']:hover {
+  text-decoration: underline;
+}
+/* 底部定义序号：可点击跳回正文，附 ↩ 提示 */
+.milkdown dl[data-type='footnote_definition'] > dt {
+  cursor: pointer;
+  display: inline-block;
+}
+.milkdown dl[data-type='footnote_definition'] > dt::after {
+  content: ' \21A9';
+  color: var(--hue-text-3);
+  font-size: 0.85em;
+}
+.milkdown dl[data-type='footnote_definition'] > dt:hover::after {
+  color: var(--hue-accent);
+}
+/* 导出 HTML 里的真实回跳锚点 */
+.footnote-backref {
+  margin-left: 0.4em;
+  text-decoration: none;
+  color: var(--yj-accent, #248077);
+}
+
+/* ── MathJax 数学渲染 ── */
+.milkdown .math-inline {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 100%;
+}
+.milkdown .math-inline svg {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+/* 公式语法有误：保留源码并标注，不把原始异常糊用户脸上 */
+.math-error {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--hue-danger);
+  border-bottom: 1px dashed var(--hue-danger);
+  cursor: help;
+}
+
+/* ── 完整 LaTeX 文档预览（latex 代码块，含 \documentclass…\begin{document}）──
+   数学段用 MathJax 渲染、叙述文字剥离指令后保留；整体左对齐、数学居中。 */
+.milkdown .preview .latex-doc {
+  display: block;
+  width: 100%;
+  text-align: left;
+  color: var(--hue-text-1);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.milkdown .preview .latex-text {
+  margin: 0.35em 0;
+}
+.milkdown .preview .latex-math {
+  display: block;
+  margin: 0.3em 0;
+  text-align: center;
+}
+.milkdown .preview .latex-math svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ── 内联标记装饰：==高亮== / ^上标^ / ~下标~（所见即所得预览样式）──
+   仅编辑区生效；导出 HTML 由 replaceInlineMarkupInHtml 落为 mark/sup/sub 语义标签，
+   其样式在导出模板的 PROSE_CSS 中定义，这里不重复。
+   <kbd> 与任意内联 HTML 由 htmlInline 节点承载（见 features/htmlInline.ts），不在此装饰。 */
+.milkdown .ProseMirror .yj-hl {
+  /* 玉质高亮：用强调色的半透活性底 + 内陷发丝边，融入青瓷/月白配色，不抢眼 */
+  background: var(--hue-active);
+  color: inherit;
+  border-radius: var(--radius-sm);
+  padding: 0.08em 0.3em;
+  box-shadow: inset 0 0 0 1px rgba(var(--hue-tint-1), 0.3);
+}
+.milkdown .ProseMirror .yj-sup {
+  vertical-align: super;
+  font-size: 0.78em;
+}
+.milkdown .ProseMirror .yj-sub {
+  vertical-align: sub;
+  font-size: 0.78em;
+}
+
+/* ── 内联 HTML / <kbd> 键帽（htmlInline 节点渲染）──
+   玉质键帽：比编辑区略亮的表面 + 发丝边 + 底部加厚一档形成「按下感」，
+   随皮肤与明暗自动着色（亮色用墨调微影，暗色用透光微光）。 */
+.milkdown .ProseMirror .yj-html-inline {
+  display: inline;
+}
+.milkdown .ProseMirror .yj-html-inline > span {
+  display: inline;
+}
+.milkdown .ProseMirror kbd {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82em;
+  line-height: 1;
+  background: var(--hue-surface);
+  color: var(--hue-text-1);
+  border: 1px solid var(--hue-border-subtle);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  padding: 0.12em 0.5em;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 var(--hue-border-subtle);
 }
 
 /* ── 隐藏原生滚动条：交给右侧玉质阅读进度条统一指示，避免双指示破坏美感 ──

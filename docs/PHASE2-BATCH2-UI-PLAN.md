@@ -12,7 +12,7 @@
 | 能力             | 现状                                                                                   | 本批次如何复用                                                        |
 | -------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
 | 状态管理           | 已装 `pinia@4`，多标签 store 已验证                                                           | 快照列表 store 直接用 Pinia                                           |
-| 玻璃浮层           | `FindPanel` / `TitleMenu` / `ContextMenu` 共用 `.glass` 单一事实来源                         | 快照面板、统计弹层全部套 `.glass`                                          |
+| 玻璃浮层           | `TitleMenu` / `ContextMenu` 共用 `.glass` 单一事实来源（注：原 `FindPanel` 已于 2026-08-30 移除，搜索改走左侧文件树）                         | 快照面板、统计弹层全部套 `.glass`                                          |
 | 右键菜单           | `ContextMenu.vue`（玻璃、`items`、危险项）                                                    | 快照列表项右键「恢复/删除」直接传 items                                        |
 | 图标             | `Icon.vue`（Lucide 线性、`currentColor`）                                                 | `history`(快照) / `moon`(凝神) 走它；需补这两个 PATHS                      |
 | 单实例 EditorHost | 两 pane 常驻、`fidelity` 保真层、`captureScroll/restoreScroll`、`getMarkdown/setMarkdown` 已就绪 | 快照 = 取 `getMarkdown` 存盘；凝神 = 在 EditorHost 内加滚动/装饰，不新建实例（守红线 2） |
@@ -45,7 +45,7 @@
 **关键决策**
 
 * 标题栏「视图/布局」组在 `find` 后追加两个开关：`快照(history)`、`凝神(moon)`。
-* 快照面板 = 玻璃浮层，锚定 `.editor` 容器右侧（同 `FindPanel` 定位语言），不进编辑区 DOM（守纯净红线）。
+* 快照面板 = 玻璃浮层，锚定 `.editor` 容器右侧（`.glass` 浮起层规范，见 `docs/UI-DESIGN.md`），不进编辑区 DOM（守纯净红线）。
 * 统计 = 状态栏常驻紧凑读数 + 点击展开玻璃弹层（详情 + 目标进度环），弹层复用 `.glass`。
 
 ***
@@ -55,7 +55,7 @@
 | 元素         | 材质                              | 理由                               |
 | ---------- | ------------------------------- | -------------------------------- |
 | **标题栏开关**  | `.tbtn`（玉质 hover）               | 与现有视图组按钮同一套语言                    |
-| **快照面板**   | `.glass` 玻璃                     | 浮起层，与 FindPanel / TitleMenu 同源   |
+| **快照面板**   | `.glass` 玻璃                     | 浮起层，与 TitleMenu / ContextMenu 同源   |
 | **统计弹层**   | `.glass` 玻璃                     | 浮起层                              |
 | **进度环**    | 内联 SVG（`--hue-accent` 描边）       | 在玻璃弹层内，矢量、随皮肤变色                  |
 | **状态栏读数**  | `.jade`（已是 footer jade）         | 框架层常驻                            |
@@ -96,7 +96,7 @@
 
 ### 4.2 快照面板 `SnapshotPanel.vue`（玻璃）
 
-* 容器：`.glass`，`position:absolute; top:10px; right:12px; width:420px`（同 FindPanel 定位语言，不进编辑区 DOM）。
+* 容器：`.glass`，`position:absolute; top:10px; right:12px; width:420px`（`.glass` 浮起层规范，见 `docs/UI-DESIGN.md`，不进编辑区 DOM）。
 * 头部：标题 `L.snapshots` + 关闭 ✕ + 「保存快照」按钮（即时留档，弹备注输入，可选填）。
 * 列表项：时间（`YYYY-MM-DD HH:mm`）12.5px `--hue-text-1` + 备注（若有，`--hue-text-3` 斜体）+ 字数差（`+120 / -30`，增色 `--hue-success`、删色 `--hue-danger`）。
 * 选中列表项 → diff 区：`jsdiff` 行级 diff，新增行左边 `--hue-success` 细条 + 淡底，删除行 `--hue-danger` 细条 + 淡底；等宽 12px。
@@ -146,7 +146,7 @@
 
 | # | 决策点     | 采用项                                        |
 | - | ------- | ------------------------------------------ |
-| 1 | 快照面板形态  | 玻璃浮层，锚定编辑区右侧（同 FindPanel 定位语言）             |
+| 1 | 快照面板形态  | 玻璃浮层，锚定编辑区右侧（`.glass` 浮起层规范）             |
 | 2 | 统计入口    | 状态栏常驻紧凑读数 + 点击展开玻璃弹层（含进度环）                 |
 | 3 | 打字机+禅融合 | **融合为「凝神」模式**：当前行居中(偏上 1/3) + 当前块高亮 + 余者淡化 |
 | 4 | 凝神图标/命名 | 图标 `moon`（静夜凝神）；中文「凝神」/ 英文 `Focus`         |
