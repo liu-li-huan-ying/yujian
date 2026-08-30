@@ -2,7 +2,7 @@
 
 > 背景：用户希望把现有的"按文档全量副本"快照，升级成类似 git 的版本管理，或借鉴优秀思路。
 > 本文档先对比成熟方案、列出当前实现的差距，再给出**借鉴而非照搬**的落地方案与分期范围。
-> 状态：设计草案，待确认后实施。
+> 状态：**Phase A 已落地（2026-08-31）**——命名标签、任意两点对比、内容哈希去重、index.json 元数据层、向后兼容迁移均已完成（见 §5）。Phase B / C 仍为规划。
 
 ---
 
@@ -104,11 +104,25 @@ git 分支对写作者太重。更务实的形态：
 
 ## 五、分期实施范围（建议）
 
-### Phase A — 高价值、低风险（建议先做）
-1. **命名标签 tags[]**：快照可打标签、按标签筛选、UI 标记"终稿"等。
-2. **任意两点对比**：`diffLines(快照A, 快照B)`，面板支持选两份对比。
-3. **内容哈希去重**：blob 层去重，index.json 记录元数据 + parent 链。
-4. 数据向后兼容：旧的全量 `.md` 快照在首次读取时迁移进新结构（或保留旧读取路径）。
+### Phase A — 高价值、低风险 ✅ 已落地（2026-08-31）
+1. ✅ **命名标签 tags[]**：快照可打标签（内联 chip 增删，限长 24、最多 8 个、去空去重）、按标签筛选、UI 标记"终稿"等。
+2. ✅ **任意两点对比**：`diffLines(快照A, 快照B)`，面板每行带 A / B 小按钮，选两份即摊平逐行 add/del/ctx 预览；保留旧"选中快照 vs 当前稿"对比。
+3. ✅ **内容哈希去重**：`sha1(content)` 作键，相同正文只存一份 `.md`，多个提交共享（引用计数）；`index.json` 记录元数据 + `parent` 线性血缘链。
+4. ✅ **数据向后兼容**：旧的全量 `.md` 快照在首次读取（`readIndex`）时自动 `migrate` 成 `index.json`（按时间排 `parent` 链），不丢任何历史数据；脏条目（`.md` 已被手动删）自动剔除。
+
+### 当前实现（Phase A 落点）
+
+**存储层**（`electron/main/snapshots.ts`）：
+- 布局 `<vault>/.yujian-history/<pathHash>/`：`index.json`（元数据清单）+ `<ISO>__<note>.md`（正文，向后兼容）。
+- `contentSha1(content)` 去重：`createSnapshot` 命中相同哈希则**仅新增一条 index 记录**指向同一 `.md`，不复制正文；`deleteSnapshot` 用**引用计数**——仅当无任何其它条目引用同一 `.md` 时才走 `shell.trashItem` 回收站物理删除。
+- `tags` 经 `sanitizeTags`（去空/去重/限长24/限8）落库；`setSnapshotTags` 更新后写回 `index.json`。
+- `parent` 链：新快照 `parent` 指向上一份，`migrate` 把旧快照按时间排成线性血缘。
+
+**IPC**：`shared/ipc-channels.ts` 新增 `SNAPSHOT_SET_TAGS`；`preload` 暴露 `snapshotSetTags`；`main/index.ts` 注册 handler；`SnapshotInfo` 接口增补 `tags?` / `contentHash?` / `parent?`。
+
+**前端**：`store/snapshots.ts` 新增 `setTags`（调 IPC 后 `refresh`）；`SnapshotPanel.vue` 重写——标签筛选 chips、A↔B 任意两点对比、标签 chips 内联增删、保留旧选中对比；i18n（zh-CN / en-US）补齐 `snapshotTags` 等双语 key。
+
+**行为红线**：删除仍走系统回收站（绝不 `rm`）；恢复仍只读返回、灌入编辑器标脏、不立即覆盖磁盘原文（守 §5.2 保真红线）。
 
 ### Phase B — 中风险、体验提升
 5. **线性时间轴 / 血缘视图**：基于 parent 链画提交图。
@@ -120,6 +134,9 @@ git 分支对写作者太重。更务实的形态：
 ---
 
 ## 六、开放问题（待你拍板）
-- Phase A 是否现在就做？还是连 Phase B 一起？
-- "命名标签"要不要预设常用词（终稿/投稿版/v1.0）让用户一键选？
-- 草稿分支是否本期就要，还是先只做 A？
+
+> Phase A 已于 2026-08-31 落地，以下遗留项待后续拍板（影响 Phase B / C 范围）。
+
+- **Phase B / C 何时做？** 线性时间轴/血缘视图、轻量草稿分支、段落级 cherry-pick 仍规划中，未排期。
+- **"命名标签"要不要预设常用词**（终稿/投稿版/v1.0）让用户一键选？当前为自由输入，未预设。
+- **草稿分支（Phase B 轻量版）是否本期就要**，还是先只做 A？

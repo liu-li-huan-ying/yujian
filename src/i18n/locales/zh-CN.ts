@@ -221,6 +221,18 @@ const zhCN = {
     snapshotTimezone: '本机时区：{tz}',
     diffAdd: '新增',
     diffDel: '删除',
+    /* ── 版本快照 Phase A：标签 / 任意两点对比 / 筛选 ── */
+    snapshotTags: '标签',
+    snapshotAddTag: '添加标签',
+    snapshotTagPlaceholder: '输入标签名…',
+    snapshotNoTag: '无标签',
+    snapshotSetA: '设为对比A',
+    snapshotSetB: '设为对比B',
+    snapshotCompareAB: 'A↔B 对比',
+    snapshotCompareWithSelected: '与选中对比',
+    snapshotClearCompare: '清除对比',
+    snapshotFilterTag: '按标签筛选',
+    snapshotClearFilter: '清除筛选',
     /* ── 写作统计（批次二）── */
     stats: '统计',
     charCount: '汉字',

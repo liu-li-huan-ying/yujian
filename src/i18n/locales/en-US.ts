@@ -222,6 +222,18 @@ const enUS = {
     snapshotTimezone: 'Local timezone: {tz}',
     diffAdd: 'Added',
     diffDel: 'Removed',
+    /* ── Snapshots Phase A: tags / arbitrary diff / filter ── */
+    snapshotTags: 'Tags',
+    snapshotAddTag: 'Add tag',
+    snapshotTagPlaceholder: 'Tag name…',
+    snapshotNoTag: 'No tags',
+    snapshotSetA: 'Set A',
+    snapshotSetB: 'Set B',
+    snapshotCompareAB: 'A↔B diff',
+    snapshotCompareWithSelected: 'vs Selected',
+    snapshotClearCompare: 'Clear compare',
+    snapshotFilterTag: 'Filter by tag',
+    snapshotClearFilter: 'Clear filter',
     /* ── Writing stats (Batch 2) ── */
     stats: 'Stats',
     charCount: 'Han',

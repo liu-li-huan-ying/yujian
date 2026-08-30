@@ -824,15 +824,22 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ### 5.10 Phase 2 批次二：版本快照 + 写作统计 + 凝神模式（2026-08-29）
 
-**版本快照（本地唯一真源，与 `.mdeditor/` 分离）**
+**版本快照（本地唯一真源，与 `.mdeditor/` 分离；git 化 Phase A 已于 2026-08-31 落地）**
 
-* 存储：main 进程在 vault 根建 `.yujian-history/<path-hash>/<ISO8601>.md`（独立于 `.mdeditor/`，建议进 vault `.gitignore`）。`electron/main/snapshots.ts` 提供 `snapshotList` / `snapshotCreate`（写一份，可带备注）/ `snapshotRestore`（**只读返回内容**，不写磁盘）/ `snapshotDelete`。
+* **存储（git 化 Phase A）**：main 进程在 vault 根建 `.yujian-history/<path-hash>/`：
+  * `<ISO8601>__<note>.md` —— 快照正文（人类可读，**向后兼容旧全量快照**）；
+  * `index.json` —— 元数据清单（git reflog 思想），记录 `tags` / `contentHash` / `parent` / `file` / 字数 / 字节数。
+  * **内容哈希去重**：`createSnapshot` 算 `sha1(content)`，与任一已有快照哈希相同则**不写新 `.md`，仅新增一条 index 记录**指向同一文件（内容寻址去重，多个提交共享一份 blob）；`deleteSnapshot` 用**引用计数**——仅当无任何其它条目引用同一 `.md` 时才走 `shell.trashItem` 回收站物理删除（绝不 `rm`）。
+  * **`parent` 线性血缘链**：新快照 `parent` 指向上一份；旧的全量 `.md` 在首次读取时经 `migrate()` 自动生成 `index.json` 并按时间排成 `parent` 链，**不丢任何历史数据**；脏条目（`.md` 已被手动删）自动剔除。
+  * `electron/main/snapshots.ts` 提供 `listSnapshots` / `createSnapshot`（写一份，可带备注 + 标签）/ `restoreSnapshot`（**只读返回内容**，不写磁盘）/ `deleteSnapshot` / `setSnapshotTags`（更新命名标签）。
 * ⚠️ **时区修复（2026-08-30）**：原 `nowIso()` 用 `toISOString()` 取的是 **UTC** 墙钟，而 `isoToDate()` 把该数字当**本地**时间解析，导致东八区用户存的快照被整差 8 小时。已改为取 `Date` 的本地时区 `getFullYear/getMonth/.../getSeconds` 生成文件名，与解析端一致；渲染端 `SnapshotPanel` 时间戳经 `src/utils/time.ts` 的 `formatDateTime`（同样走本机时区），并加「本机时区：{IANA}」tooltip（`Intl.DateTimeFormat().resolvedOptions().timeZone` 自动取电脑时区，无需硬编码东八区）。**注意**：此前（bug 期）已落盘的快照文件名仍是 UTC 数字，读回会偏 8 小时；新快照已正确，旧快照可在 `.yujian-history/` 手动清理。
-* IPC：通道 `snapshot:list` / `snapshot:create` / `snapshot:restore` / `snapshot:delete` 在 `electron/shared/ipc-channels.ts` 集中定义；preload 暴露 `window.api.snapshotList/Create/Restore/Delete`（类型自动派生）。
-* 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**）；玻璃 `SnapshotPanel.vue`（锚定 `.editor` 右上）：备注输入 + 保存、列表（时间 + 备注 + 字数差 `deltaChars`）、选中→`snapshotRestore` 只读返回→`diffLines`（`diff@^7.0.0`）摊平逐行 add/del/ctx 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
+* **命名标签（git tag 思想，Phase A）**：`tags[]` 经 `sanitizeTags`（去空/去重/限长 24/限最多 8 个）落库；面板每行内联 chip 增删，顶部按全部标签筛选；`SnapshotInfo` 增补 `tags?` / `contentHash?` / `parent?`。
+* **任意两点对比（git diff A B 思想，Phase A）**：`SnapshotPanel.vue` 每行带 A / B 小按钮，选两份即 `diffLines(快照A, 快照B)` 摊平逐行 add/del/ctx 预览；保留旧"选中快照 vs 当前稿"对比（`diffMode` 区分 `'ab'` / `'selected'` / `'none'`）。
+* IPC：通道 `snapshot:list` / `snapshot:create` / `snapshot:restore` / `snapshot:delete` / `snapshot:setTags`（新增）在 `electron/shared/ipc-channels.ts` 集中定义；preload 暴露 `window.api.snapshotList/Create/Restore/Delete/SetTags`（类型自动派生）；`main/index.ts` 注册对应 handler。
+* 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**；新增 `setTags`）；玻璃 `SnapshotPanel.vue`（锚定 `.editor` 右上）：备注输入 + 保存、标签筛选 chips、A↔B 任意两点对比、标签 chips 内联增删、左侧时间 + 备注 + 字数差 `deltaChars`、选中→`snapshotRestore` 只读返回→行级 diff 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
 * 行级 diff 库选型修正：原计划写 `jsdiff`，但 `jsdiff@1.1.1` 实为「JSON 对象 diff」库（装配错误）；正确库是 `diff@^7.0.0`（`diffLines`），已在 `package.json` 落地，`jsdiff` 已卸载；无类型的 `diff@7` 在 `src/types/diff.d.ts` 补了环境声明。
 * 自动快照策略（防抖保存 + 定时）已留接口；批次二先落地「手动留档 + 行级 diff 预览 + 回滚」闭环，自动策略在后续打磨中接入同一 `snapshotCreate`。
-* ✅ **状态：已于 2026-08-30 由用户运行期验证可用**：快照逻辑（主进程 `.yujian-history/` 存储 + `snapshot:*` 通道 + 行级 diff 预览 + 回滚标脏不覆盖磁盘）完整落地，且存 / 看 diff / 恢复 / 删除的实际交互经用户实测正常。原「⚠ 实现但未测试」标注已从 `SnapshotPanel.vue` 代码注释、面板 UI 横幅与本小节移除。
+* ✅ **状态：已于 2026-08-30 由用户运行期验证可用**（基础留档/看 diff/恢复/删除），**git 化 Phase A（标签/任意两点对比/哈希去重/index 元数据/向后兼容迁移）于 2026-08-31 落地**。原「⚠ 实现但未测试」标注已从 `SnapshotPanel.vue` 代码注释、面板 UI 横幅与本小节移除。
 
 **写作统计（纯函数，零依赖）**
 

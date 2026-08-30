@@ -62,10 +62,12 @@ export const IPC = {
   IMGHOST_PUBLISH: 'imghost:publish',
 
   // 版本快照（Phase 2 批次二）：写盘 / 列目录 / 读内容 / 删除（走回收站）
+  // Phase A（git 化）：新增标签读写通道
   SNAPSHOT_LIST: 'snapshot:list',
   SNAPSHOT_CREATE: 'snapshot:create',
   SNAPSHOT_RESTORE: 'snapshot:restore',
-  SNAPSHOT_DELETE: 'snapshot:delete'
+  SNAPSHOT_DELETE: 'snapshot:delete',
+  SNAPSHOT_SET_TAGS: 'snapshot:setTags'
 } as const
 
 export interface WindowState {
@@ -315,6 +317,12 @@ export interface SnapshotInfo {
   createdAt: number
   /** 可选备注（如「发布前」） */
   note?: string
+  /** 命名标签（git tag 思想）：如「终稿」「投稿版」「v1.0」；可多贴 */
+  tags?: string[]
+  /** 内容哈希（sha1），用于内容寻址去重与血缘展示 */
+  contentHash?: string
+  /** 父快照 id（血缘链，线性）：基于其上一份快照；首份为 null */
+  parent?: string | null
   /** 快照字符数（用于与当前文档比较显示字数差） */
   charCount: number
   /** 磁盘字节数 */
