@@ -90,6 +90,25 @@ export function applyAppearance(state: AppearanceState): void {
       })
     }
   }
+
+  // 让 Electron 原生控件（保存框、菜单等）跟随 app 明暗，保持整体色调一致
+  syncNativeTheme(state.mode)
+}
+
+/**
+ * 把 app 选中的明暗模式同步到 Electron 原生主题。
+ * 原生保存框 / 系统菜单由 OS 渲染，若不主动同步，会出现「深色 app 里弹出浅色对话框、
+ * 文件名文字发白看不清」的割裂感。themeSource 接受与 app 一致的 dark/light/system。
+ */
+function syncNativeTheme(mode: ModeKey): void {
+  try {
+    const api = (window as unknown as {
+      api?: { setNativeTheme?: (m: string) => void }
+    }).api
+    api?.setNativeTheme?.(mode)
+  } catch {
+    /* 非 Electron 环境忽略 */
+  }
 }
 
 /** 应用启动早期调用：读持久化值并落到根节点（index.html 已有青瓷+深的默认值兜底） */

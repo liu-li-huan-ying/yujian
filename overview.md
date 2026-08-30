@@ -127,3 +127,26 @@ docx（`docx` 包）与 ePub（`jszip` 手写 OPF / NCX）。（多文件合订�
 
 ## 文件
 `src/main.ts`、`package.json`（新增 `buffer` 依赖）、`docs/PHASE2-PLAN.md` §3.4、`docs/ARCHITECTURE.md` §5.6。
+
+---
+
+# 导出预览打磨（2026-08-30，三次打磨）
+
+## 用户反馈
+导出已能成功，但：① 预览界面**一片白什么也看不见**；② 在**深色模式**下，填写文件名的地方（系统原生保存框）是**偏白背景 + 白字**看不清，且与 app 整体色调不搭。
+
+## 根因
+1. **预览白屏 = CSP 拦截 blob 框架**。预览用 `Blob` + `<iframe :src="blobUrl">` 渲染，`index.html` 的 CSP 是 `default-src 'self'`，**没有 `frame-src blob:`** → 浏览器按 `default-src` 回退判定不允许加载 blob 框架 → iframe 空白（一片白）。叠加 `sandbox="allow-scripts"` 缺 `allow-same-origin`：blob URL 归属父文档源，沙箱无同源则无法加载。
+2. **深色保存框白底白字 = 原生主题未同步**。文件名在 Electron 的**系统原生保存框**里填写，而 app 的深色完全由渲染层 CSS（`data-mode`）驱动；Electron 原生控件明暗由 `nativeTheme.themeSource` 决定，此前从未设置 → 原生框按系统默认（浅色）渲染，与深色 app 割裂。
+
+## 修复
+- **CSP**：`index.html` 追加 `frame-src 'self' blob:`（blob iframe 的**内部**子资源——CDN mermaid/KaTeX——由其自身文档 CSP 决定，blob 文档无 CSP，故不受父 CSP 约束，无需额外放开 script/style）。
+- **`ExportPreview.vue`**：`sandbox` 改 `allow-scripts allow-same-origin`（同源才能加载父文档创建的 blob）；修正误用的未定义令牌 `--text-primary/--text-secondary` → 真实令牌 `--hue-text-1/2`；文件名区改为与主题一致的可读 chip（`background: var(--hue-border-subtle)`）。
+- **原生主题同步**：新增 IPC `app:setNativeTheme`（`electron/shared/ipc-channels.ts` → `preload` 暴露 `setNativeTheme` → `main` 设 `nativeTheme.themeSource = mode`）；`appearance.applyAppearance` 每次切换（含启动 `initAppearance`）都把 `mode`（dark/light/system）同步给主进程，原生保存框/菜单与 app 同明暗。
+
+## 验证
+- `npm run typecheck` ✅；`npm run build` ✅。产物核验：`out/renderer/index.html` 含 `frame-src 'self' blob:`；`ExportPreview` chunk 含 `allow-scripts allow-same-origin`；CSS 含 `hue-text-1/2` 与 `panel__meta` chip。
+- 待运行期验收：深色模式下开启预览导出，确认① 预览渲染真实排版（不再白屏）；② 点「确认并选择位置」弹出的系统保存框为深色、文件名清晰可读、与 app 色调一致。
+
+## 文件
+`src/index.html`、`src/components/ExportPreview.vue`、`src/appearance.ts`、`electron/shared/ipc-channels.ts`、`electron/preload/index.ts`、`electron/main/index.ts`、`docs/PHASE2-PLAN.md` §3.4、`docs/ARCHITECTURE.md` §5.6。

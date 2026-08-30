@@ -30,6 +30,10 @@ const api = {
 
   appVersion: (): Promise<string> => ipcRenderer.invoke(IPC.APP_VERSION),
 
+  /** 外观：把 app 选中的明暗模式同步到 Electron 原生主题（保存框 / 菜单等原生控件） */
+  setNativeTheme: (mode: 'dark' | 'light' | 'system'): Promise<void> =>
+    ipcRenderer.invoke(IPC.APP_SET_NATIVE_THEME, mode),
+
   readFile: (filePath: string): Promise<string> =>
     ipcRenderer.invoke(IPC.FILE_READ, filePath),
 

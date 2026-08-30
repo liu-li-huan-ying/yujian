@@ -1,5 +1,7 @@
 export const IPC = {
   APP_VERSION: 'app:version',
+  /** 外观：渲染层通知主进程同步原生控件（保存框 / 菜单）明暗，使其与 app 主题一致 */
+  APP_SET_NATIVE_THEME: 'app:setNativeTheme',
   FILE_READ: 'file:read',
   FILE_WRITE: 'file:write',
   // 读二进制并按扩展名推断 mime，返回 data URL（导出时内联图片用）
