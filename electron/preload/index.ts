@@ -14,6 +14,7 @@ import {
   type ReplaceResult,
   type SessionState,
   type SnapshotInfo,
+  type BrokenLinkReport,
   type VaultChange,
   type WindowState
 } from '../shared/ipc-channels'
@@ -75,6 +76,10 @@ const api = {
     caseSensitive: boolean
   ): Promise<ReplaceResult> =>
     ipcRenderer.invoke(IPC.VAULT_REPLACE, root, query, replacement, caseSensitive),
+
+  /** 链接健康检查：扫描 vault 内失效的 [[wikilink]] / 相对路径链接 / 图片，返回断链报告 */
+  checkLinks: (root: string): Promise<BrokenLinkReport> =>
+    ipcRenderer.invoke(IPC.VAULT_CHECK_LINKS, root),
 
   watchVault: (root: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_WATCH, root),

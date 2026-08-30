@@ -112,7 +112,7 @@
 
 ### 3.7 链接健康检查
 
-* 扫描 vault 内失效的 `[[wikilinks]]` / 相对路径链接，列出断链报告（玻璃浮层）；纯解析，零依赖。
+* **已实现（2026-08-30）**：主进程 `electron/main/vault.ts` 的 `checkLinks(root)` 两遍遍历（先收集全部 md 建基名 / 相对路径索引，再逐文件逐行抽取 `[[wikilink]]` 与 (md/image) 链接解析判定），新增 IPC `vault:checkLinks` 与 preload `window.api.checkLinks`；渲染侧 `LinkCheckPanel.vue` 玻璃浮层按 Wiki / 链接 / 图片三色分类展示断链（源文件 · 行号 · 目标），点击经 `App.openPath` 定位。外部链接与纯锚点跳过；断链条目上限 2000。
 * 与 Phase 3 双链天然衔接：Phase 2 先埋"解析 + 报告"能力，Phase 3 升级为正向/反向索引与跳转。
 
 ### 3.8 近期打磨（批次二收尾：语言一致性与界面细节）
