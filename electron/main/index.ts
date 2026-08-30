@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
@@ -125,6 +125,13 @@ function registerWindowIpc(win: BrowserWindow): void {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.APP_VERSION, () => app.getVersion())
+
+  // 外观：让原生保存框 / 菜单等随 app 明暗模式切换，避免深色 app 里弹出浅色对话框、文字发白看不清
+  ipcMain.handle(IPC.APP_SET_NATIVE_THEME, (_event, mode: unknown) => {
+    if (mode === 'dark' || mode === 'light' || mode === 'system') {
+      nativeTheme.themeSource = mode
+    }
+  })
 
   /** 图片内联：按扩展名推断 mime（导出内联图片用） */
   const MIME_BY_EXT: Record<string, string> = {

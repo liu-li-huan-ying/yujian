@@ -94,7 +94,10 @@
 * **PDF 增强**：✅ **已实现（2026-08-30）**。在现 `webContents.printToPDF` 之上，`src/export/docTemplate.ts` 增加：`@page` A4 分页、**自动目录**（取正文标题层级并补锚点，PDF 恒开、HTML 可选）、**封面页**（标题 / 作者 / 日期取自 frontmatter，可选）、分页控制（一级标题另起页、代码块 / 表格 / 图表 `break-inside: avoid`、标题不孤行）。
 * **导出范围**：✅ **整篇 / 当前选中 / 多文件合订均已实现**——选中走 ProseMirror 选区序列化，源码模式取选区 Markdown 再渲染，两种模式产出同构；无选区回退整篇并提示。
   * **多文件合订**（2026-08-30）：`src/components/CompilePanel.vue` 按文件树顺序列出 vault 内全部 `.md`，支持勾选 + 上下移排序 + 合订标题 + 每篇另起页（PDF `break-before:page`）；输出 HTML / PDF / LaTeX 任选。逐文件 `readFile → markdownToHtml（复用 Milkdown parser/schema，不建第二实例）→ inlineImages（按各自文档目录解析相对图片）→ 拼接`，再走与单文档完全相同的 `buildExportContent(override, forceInline)` 管道，`forceInline` 强制内联图片与图表，保证跨目录自包含。
-  * **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox)` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘共用同一份已构建内容，不重复渲染。
+  * **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox="allow-scripts allow-same-origin")` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘共用同一份已构建内容，不重复渲染。
+    * **预览白屏修复**：预览 iframe 用 `blob:` URL，但 CSP `default-src 'self'` 未含 `frame-src blob:` 会拦截加载；`sandbox` 缺 `allow-same-origin` 也会阻止 blob 加载 → 一片白。已给 CSP 加 `frame-src 'self' blob:`、iframe 改 `sandbox="allow-scripts allow-same-origin"`，预览恢复正常渲染。
+    * **深色模式原生保存框不同步**：文件名在系统原生保存框里填写，而 app 深色由 CSS 驱动、Electron 原生主题（`nativeTheme.themeSource`）未同步 → 深色 app 弹出浅色对话框、文字发白看不清。新增 IPC `app:setNativeTheme`，`appearance.applyAppearance` 每次切换时把 `nativeTheme.themeSource` 同步为 `mode`，原生对话框与 app 同明暗。
+    * **`ExportPreview.vue` 令牌修正**：原误用未定义的 `--text-primary/--text-secondary`（实际为 `--hue-text-1/2`），已改正确，并把文件名区做成与主题一致的可读 chip。
   * **导出细节二次打磨（2026-08-30）**：用户实测「开了预览却没看到预览界面、没问导出到哪里、不知是否成功」——根因是导出全链路**无异常兜底**，任一环节抛错即静默 reject。本轮收口：
     * **源码模式取正文修复（真因）**：`EditorHost.getHTML()` 旧实现先 `setMarkdown` 再读所见即所得 DOM，但源码模式下 WYSIWYG 视图 DOM 滞后/为空 → 返回空串 → `buildExportContent` 因 `!body` 静默返回 null → 不预览、不弹框、不提示，与用户症状完全吻合。改为：**源码模式直接走 `markdownToHtml(fidelity.currentText)` 解析管线**（与合订/选区导出同源），不再依赖滞后视图 DOM。
     * **全链路异常可见化**：`doExport` / `onCompile` / `confirmExport` / `writeExport` 全部包 try/catch，任何失败 `console.error` 并 `showToast(..., 'err', 5000)` 提示具体错误；写盘成功 toast 时长延至 4500ms 并**显式展示保存路径**，取消 / 失败均回传明确状态。

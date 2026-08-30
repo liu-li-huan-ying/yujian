@@ -81,7 +81,7 @@ onBeforeUnmount(() => {
           v-else-if="blobUrl"
           class="frame"
           :src="blobUrl"
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-same-origin"
           referrerpolicy="no-referrer"
         />
         <div v-else class="empty">{{ L.exportPreviewEmpty }}</div>
@@ -143,7 +143,7 @@ onBeforeUnmount(() => {
 .panel__title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--hue-text-1);
 }
 .panel__tag {
   font-size: 11px;
@@ -161,12 +161,12 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--hue-text-2);
   cursor: pointer;
 }
 .panel__x:hover {
   background: var(--hue-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary);
+  color: var(--hue-text-1);
 }
 
 /* 预览区：纸白底，与导出产物的阅读型配色一致 */
@@ -193,7 +193,7 @@ onBeforeUnmount(() => {
   font-family: var(--font-mono, ui-monospace, 'Sarasa Mono SC', Consolas, monospace);
   font-size: 12.5px;
   line-height: 1.65;
-  color: var(--text-primary);
+  color: var(--hue-text-1);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   font-size: 12.5px;
-  color: var(--text-secondary);
+  color: var(--hue-text-2);
 }
 
 .panel__foot {
@@ -218,10 +218,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--hue-border-subtle, rgba(255, 255, 255, 0.06));
 }
 .panel__name {
   font-size: 11.5px;
-  color: var(--text-primary);
+  color: var(--hue-text-1);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -229,7 +232,7 @@ onBeforeUnmount(() => {
 }
 .panel__hint {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--hue-text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -248,7 +251,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.1));
   background: transparent;
-  color: var(--text-primary);
+  color: var(--hue-text-1);
   cursor: pointer;
 }
 .btn:hover {
