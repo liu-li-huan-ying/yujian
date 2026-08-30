@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   IPC,
@@ -10,6 +10,7 @@ import {
   type ImgHostConfig,
   type ImgHostUploadItem,
   type PublishResult,
+  type ReadBase64Result,
   type SaveAssetPayload,
   type SavedAsset,
   type SessionState,
@@ -125,8 +126,35 @@ function registerWindowIpc(win: BrowserWindow): void {
 function registerIpc(): void {
   ipcMain.handle(IPC.APP_VERSION, () => app.getVersion())
 
+  /** 图片内联：按扩展名推断 mime（导出内联图片用） */
+  const MIME_BY_EXT: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.avif': 'image/avif'
+  }
+
   ipcMain.handle(IPC.FILE_READ, async (_event, filePath: string) =>
     readFile(filePath, 'utf-8')
+  )
+
+  // 读二进制为 data URL（导出内联图片）；未知扩展名兜底为通用二进制类型
+  ipcMain.handle(
+    IPC.FILE_READ_BASE64,
+    async (_event, filePath: string): Promise<ReadBase64Result> => {
+      try {
+        const buf = await readFile(filePath)
+        const mime = MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
+        return { ok: true, dataUrl: `data:${mime};base64,${buf.toString('base64')}` }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
   )
 
   ipcMain.handle(IPC.FILE_WRITE, async (_event, filePath: string, content: string) => {
@@ -268,14 +296,16 @@ function registerIpc(): void {
       deleteSnapshot(vaultPath, filePath, id)
   )
 
-  ipcMain.handle(IPC.EXPORT_HTML, async (_event, payload: ExportPayload): Promise<ExportResult> => {
+  // 通用写盘导出：HTML / LaTeX 等文本产物共用，保存对话框类型由 payload.filters 决定
+  ipcMain.handle(IPC.EXPORT_FILE, async (_event, payload: ExportPayload): Promise<ExportResult> => {
+    const ext = extname(payload.defaultName).replace(/^\./, '') || 'txt'
     const result = await dialog.showSaveDialog({
       defaultPath: payload.defaultName,
-      filters: [{ name: 'HTML 网页', extensions: ['html', 'htm'] }]
+      filters: payload.filters ?? [{ name: '文件', extensions: [ext] }]
     })
     if (result.canceled || !result.filePath) return { ok: false, canceled: true }
     try {
-      await writeFile(result.filePath, payload.html, 'utf-8')
+      await writeFile(result.filePath, payload.content, 'utf-8')
       return { ok: true, path: result.filePath }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
@@ -298,7 +328,7 @@ function registerIpc(): void {
     // 落临时文件再 loadFile：避免超大文档超出 data: URL 长度上限
     const tmp = join(tmpdir(), `.yujian-export-${Date.now()}.html`)
     try {
-      await writeFile(tmp, payload.html, 'utf-8')
+      await writeFile(tmp, payload.content, 'utf-8')
       await win.loadFile(tmp)
       // 等首屏与图表（mermaid）渲染完成再打印
       await new Promise<void>((resolve) => {

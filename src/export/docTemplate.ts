@@ -10,11 +10,23 @@
 export interface ExportOptions {
   /** 引入 KaTeX CSS，让公式排版更精细（默认 true） */
   math?: boolean
-  /** 引入 mermaid，把 ```mermaid 代码块渲染成图（默认 true） */
+  /** 引入 mermaid CDN 把 ```mermaid 代码块渲染成图（默认 true）。
+   *  图表已内嵌为 SVG 时应传 false，避免无谓外链与脚本 */
   mermaid?: boolean
+  /** 生成自动目录：取正文标题层级并给标题加锚点（HTML 可跳转、PDF 带缩进层级，默认 false） */
+  toc?: boolean
+  /** 生成封面页（标题 / 作者 / 日期，默认 false） */
+  cover?: boolean
+  /** 元信息：由属性面板的 frontmatter 供给；缺省时回退到 title 参数 */
+  meta?: { title?: string; author?: string; date?: string }
 }
 
 const PROSE_CSS = `
+/* 打印分页：仅打印 / 导出 PDF 时生效，屏幕渲染无影响 */
+@page { size: A4; margin: 20mm 18mm; }
+/* 多文件合订：每篇另起一页（仅打印 / 导出 PDF 生效，屏幕预览无影响） */
+.yj-compile-page { break-before: page; }
+.yj-compile-page:first-child { break-before: auto; }
 :root {
   --yj-text: #1c1e1f;
   --yj-text-soft: #5b6266;
@@ -116,18 +128,94 @@ thead th { background: var(--yj-quote); font-weight: 600; }
 tbody tr:nth-child(even) { background: #faf9f6; }
 .katex { font-size: 1.05em; }
 .mermaid { margin: 1.2em 0; text-align: center; }
+/* ── 封面页与目录（PDF 分页导出用；HTML 中目录同样可点击跳转）── */
+.yujian-cover {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 80px 24px;
+}
+.cover-title { font-size: 2.4em; margin: 0 0 0.4em; }
+.cover-author, .cover-date { color: var(--yj-text-soft); margin: 0.2em 0; font-size: 1em; }
+.yujian-toc { padding: 8px 0 24px; }
+.toc-title { font-size: 1.5em; margin: 0 0 0.8em; }
+.yujian-toc ul { list-style: none; padding-left: 0; margin: 0; }
+.yujian-toc li { margin: 0.35em 0; }
+.yujian-toc a { border-bottom: none; }
+.toc-lv1 { font-weight: 600; }
+.toc-lv2 { padding-left: 1.2em; }
+.toc-lv3 { padding-left: 2.4em; font-size: 0.95em; }
+.toc-lv4, .toc-lv5, .toc-lv6 { padding-left: 3.4em; font-size: 0.9em; color: var(--yj-text-soft); }
 @media print {
   body { background: #fff; }
   .yujian-doc { padding: 0; max-width: none; }
+  /* 封面与目录各自成页；一级标题另起一页 */
+  .yujian-cover, .yujian-toc { break-after: page; }
+  .yujian-doc h1 { break-before: page; }
+  /* 紧跟封面 / 目录的标题不再另起页，避免产生空白页 */
+  .yujian-cover + h1, .yujian-toc + h1 { break-before: avoid; }
+  /* 标题不孤行；代码块 / 表格 / 图表不跨页断裂 */
+  h1, h2, h3 { break-after: avoid; }
+  pre, table, figure, .mermaid, img { break-inside: avoid; }
 }
 `
 
-function escapeHtml(s: string): string {
+/** HTML 转义（合订面板拼接篇章标题时复用，避免文档名里的特殊字符破坏结构） */
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+interface TocEntry {
+  /** 标题层级 1~6 */
+  level: number
+  text: string
+  id: string
+}
+
+/**
+ * 提取正文标题层级并给每个标题补锚点 id，返回目录项与「加了 id 的正文 HTML」。
+ * 只处理导出产物的副本，绝不触碰编辑器内文档；解析失败时原样返回正文。
+ */
+function buildToc(bodyHtml: string): { html: string; entries: TocEntry[] } {
+  const doc = new DOMParser().parseFromString(
+    `<div id="yujian-root">${bodyHtml}</div>`,
+    'text/html'
+  )
+  const root = doc.getElementById('yujian-root')
+  if (!root) return { html: bodyHtml, entries: [] }
+
+  const entries: TocEntry[] = []
+  Array.from(root.querySelectorAll('h1,h2,h3,h4,h5,h6')).forEach((h, i) => {
+    const level = Number(h.tagName.slice(1)) || 1
+    const id = `yujian-h-${i + 1}`
+    h.setAttribute('id', id)
+    entries.push({ level, text: h.textContent ?? '', id })
+  })
+  return { html: root.innerHTML, entries }
+}
+
+/** 目录 HTML：层级经 toc-lv* 类缩进，锚点可跳转 */
+function tocHtml(entries: TocEntry[]): string {
+  if (!entries.length) return ''
+  const items = entries
+    .map((e) => `<li class="toc-lv${e.level}"><a href="#${e.id}">${escapeHtml(e.text)}</a></li>`)
+    .join('')
+  return `<nav class="yujian-toc"><h1 class="toc-title">目录</h1><ul>${items}</ul></nav>`
+}
+
+/** 封面 HTML：标题 / 作者 / 日期，缺省项不渲染 */
+function coverHtml(meta: { title: string; author?: string; date?: string }): string {
+  const lines = [`<h1 class="cover-title">${escapeHtml(meta.title)}</h1>`]
+  if (meta.author) lines.push(`<p class="cover-author">${escapeHtml(meta.author)}</p>`)
+  if (meta.date) lines.push(`<p class="cover-date">${escapeHtml(meta.date)}</p>`)
+  return `<section class="yujian-cover">${lines.join('')}</section>`
 }
 
 /**
@@ -136,8 +224,23 @@ function escapeHtml(s: string): string {
  * @param title    文档标题（用于 <title> 与默认文件名）
  */
 export function buildExportHtml(bodyHtml: string, title: string, opts: ExportOptions = {}): string {
-  const safeTitle = escapeHtml(title || '未命名文档')
+  const meta = opts.meta ?? {}
+  const docTitle = meta.title || title || '未命名文档'
+  const safeTitle = escapeHtml(docTitle)
   const headExtras: string[] = []
+
+  // 目录：先给正文标题补锚点，再据层级生成（HTML 可跳转、PDF 带缩进）
+  let body = bodyHtml
+  let toc = ''
+  if (opts.toc) {
+    const built = buildToc(body)
+    body = built.html
+    toc = tocHtml(built.entries)
+  }
+  // 封面：标题 / 作者 / 日期，缺省项不渲染
+  const cover = opts.cover
+    ? coverHtml({ title: docTitle, author: meta.author, date: meta.date })
+    : ''
 
   if (opts.math !== false) {
     headExtras.push(
@@ -180,7 +283,7 @@ ${headExtras.join('\n')}
 </head>
 <body>
 <article class="yujian-doc">
-${bodyHtml}
+${cover}${toc}${body}
 </article>
 </body>
 </html>`

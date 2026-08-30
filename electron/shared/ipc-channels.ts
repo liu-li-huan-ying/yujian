@@ -2,6 +2,8 @@ export const IPC = {
   APP_VERSION: 'app:version',
   FILE_READ: 'file:read',
   FILE_WRITE: 'file:write',
+  // 读二进制并按扩展名推断 mime，返回 data URL（导出时内联图片用）
+  FILE_READ_BASE64: 'file:readBase64',
   FILE_LIST_DIR: 'file:listDir',
   FILE_CREATE: 'file:create',
   DIALOG_OPEN_FILE: 'dialog:openFile',
@@ -39,8 +41,9 @@ export const IPC = {
   // 凝神 2.0：进入时自动全屏（开/关）
   WIN_SET_FULLSCREEN: 'win:setFullscreen',
 
-  // 导出（渲染模式所见即所得 → HTML / PDF）
-  EXPORT_HTML: 'export:html',
+  // 导出：EXPORT_FILE 写任意文本产物（HTML / LaTeX 等，filters 决定保存对话框类型），
+  // EXPORT_PDF 走隐藏窗口打印管线。两者共用 ExportPayload，避免逐格式加通道的冗余。
+  EXPORT_FILE: 'export:file',
   EXPORT_PDF: 'export:pdf',
 
   // 图片：粘贴/拖入落盘到文档同级 .assets
@@ -203,10 +206,20 @@ export const DEFAULT_SESSION: SessionState = {
 
 /** 渲染进程组装好的完整文档 + 建议文件名 */
 export interface ExportPayload {
-  /** 完整 HTML 文档字符串（含 <!DOCTYPE> 与内联样式） */
-  html: string
+  /** 产物全文：HTML 为完整文档字符串（含 <!DOCTYPE> 与内联样式），LaTeX 为 .tex 全文 */
+  content: string
   /** 保存对话框的默认文件名（含扩展名） */
   defaultName: string
+  /** 保存对话框的文件类型过滤（如 HTML / LaTeX）；不传则由主进程按扩展名兜底 */
+  filters?: { name: string; extensions: string[] }[]
+}
+
+/** 读取二进制为 data URL 的结果（导出内联图片用） */
+export interface ReadBase64Result {
+  ok: boolean
+  /** 形如 data:image/png;base64,...；失败时为空 */
+  dataUrl?: string
+  error?: string
 }
 
 export interface ExportResult {

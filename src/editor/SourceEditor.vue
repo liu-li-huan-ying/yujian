@@ -236,7 +236,23 @@ function setFind(
   view.dispatch({ effects: setSourceFind.of(st) })
 }
 
-defineExpose({ revealLine, scrollToRatio, getFirstVisibleLine, centerActiveLine, insertAtCursor, setFind })
+/** 当前选区文本（导出「选中范围」用）；无选区返回空串，由调用方回退整篇 */
+function getSelectionText(): string {
+  if (!view) return ''
+  const { from, to } = view.state.selection.main
+  if (from === to) return ''
+  return view.state.sliceDoc(from, to)
+}
+
+defineExpose({
+  revealLine,
+  scrollToRatio,
+  getFirstVisibleLine,
+  centerActiveLine,
+  insertAtCursor,
+  setFind,
+  getSelectionText
+})
 </script>
 
 <template>

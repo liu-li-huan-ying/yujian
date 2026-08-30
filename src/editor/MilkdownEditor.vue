@@ -2,8 +2,9 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { languages } from '@codemirror/language-data'
 import { Crepe } from '@milkdown/crepe'
-import { editorViewCtx } from '@milkdown/core'
+import { editorViewCtx, parserCtx, schemaCtx, serializerCtx } from '@milkdown/core'
 import { TextSelection } from '@milkdown/prose/state'
+import { DOMSerializer } from '@milkdown/prose/model'
 import type { EditorView } from '@milkdown/prose/view'
 import { $prose, replaceAll } from '@milkdown/utils'
 import '@milkdown/crepe/theme/common/style.css'
@@ -247,6 +248,58 @@ function getHTML(): string {
   return view.dom.innerHTML
 }
 
+/**
+ * 把任意 Markdown 渲染成 HTML 片段，**不触碰当前编辑器内容**：
+ * 直接复用 Milkdown 的 parser + schema + DOMSerializer 序列化，不需要第二个编辑器实例，
+ * 因此不违反「单实例」红线。是多文件合订导出与选中范围导出的共同基础。
+ */
+function markdownToHtml(markdown: string): string {
+  if (!crepe || !markdown) return ''
+  return crepe.editor.action((ctx) => {
+    const parser = ctx.get(parserCtx)
+    const schema = ctx.get(schemaCtx)
+    const doc = parser(markdown)
+    if (!doc) return ''
+    const serializer = DOMSerializer.fromSchema(schema)
+    const holder = document.createElement('div')
+    holder.appendChild(serializer.serializeFragment(doc.content))
+    return holder.innerHTML
+  })
+}
+
+/**
+ * 当前选区的 HTML 片段（导出「选中范围」用）；无选区返回空串，由调用方回退整篇。
+ * 序列化走与整篇导出同源的 DOMSerializer，保证两种范围的标签口径一致。
+ */
+function getSelectionHTML(): string {
+  const view = getEditorView()
+  if (!view) return ''
+  const sel = view.state.selection
+  if (sel.empty) return ''
+  const serializer = DOMSerializer.fromSchema(view.state.schema)
+  const holder = document.createElement('div')
+  holder.appendChild(serializer.serializeFragment(sel.content().content))
+  return holder.innerHTML
+}
+
+/**
+ * 选区的 Markdown 文本（把选中范围导出为 LaTeX 时用）；无选区返回空串。
+ * 走 Milkdown 的 serializer，与整篇导出的 Markdown 口径一致。
+ * 选区可能切出不合法的顶层结构（如半个列表），故用 try/catch 兜底，失败由调用方回退整篇。
+ */
+function getSelectionMarkdown(): string {
+  const view = getEditorView()
+  if (!view || !crepe) return ''
+  const sel = view.state.selection
+  if (sel.empty) return ''
+  try {
+    const doc = view.state.schema.topNodeType.create(null, sel.content().content)
+    return crepe.editor.action((ctx) => ctx.get(serializerCtx)(doc))
+  } catch {
+    return ''
+  }
+}
+
 function setReadonly(value: boolean): void {
   crepe?.setReadonly(value)
 }
@@ -339,6 +392,9 @@ defineExpose({
   setMarkdown,
   getMarkdown,
   getHTML,
+  markdownToHtml,
+  getSelectionHTML,
+  getSelectionMarkdown,
   setReadonly,
   getEditorView,
   setFind,

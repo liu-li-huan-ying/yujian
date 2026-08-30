@@ -8,6 +8,7 @@ import {
   type ImgHostUploadItem,
   type ImgHostUploadResult,
   type PublishResult,
+  type ReadBase64Result,
   type SaveAssetPayload,
   type SavedAsset,
   type SearchFileResult,
@@ -31,6 +32,10 @@ const api = {
 
   readFile: (filePath: string): Promise<string> =>
     ipcRenderer.invoke(IPC.FILE_READ, filePath),
+
+  /** 读二进制并按扩展名推断 mime，返回 data URL（导出内联图片用）；失败返回 ok:false */
+  readFileBase64: (filePath: string): Promise<ReadBase64Result> =>
+    ipcRenderer.invoke(IPC.FILE_READ_BASE64, filePath),
 
   writeFile: (filePath: string, content: string): Promise<void> =>
     ipcRenderer.invoke(IPC.FILE_WRITE, filePath, content),
@@ -124,10 +129,11 @@ const api = {
     ipcRenderer.on(IPC.WIN_STATE_CHANGE, (_event, state: WindowState) => callback(state))
   },
 
-  // ── 导出（HTML / PDF）──
+  // ── 导出（HTML / LaTeX 等文本产物 / PDF）──
 
-  exportHtml: (payload: ExportPayload): Promise<ExportResult> =>
-    ipcRenderer.invoke(IPC.EXPORT_HTML, payload),
+  /** 通用写盘导出：content 为产物全文，filters 决定保存对话框的文件类型 */
+  exportFile: (payload: ExportPayload): Promise<ExportResult> =>
+    ipcRenderer.invoke(IPC.EXPORT_FILE, payload),
 
   exportPdf: (payload: ExportPayload): Promise<ExportResult> =>
     ipcRenderer.invoke(IPC.EXPORT_PDF, payload),

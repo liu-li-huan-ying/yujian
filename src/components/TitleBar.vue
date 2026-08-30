@@ -19,6 +19,14 @@ const props = defineProps<{
   snapshotActive: boolean
   /** 凝神模式是否开启（控制开关按钮激活态） */
   focusActive: boolean
+  /** 导出选项当前状态（决定导出菜单里各开关项的勾选态） */
+  exportPrefs?: {
+    toc: boolean
+    cover: boolean
+    inline: boolean
+    selection: boolean
+    preview: boolean
+  }
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +36,9 @@ const emit = defineEmits<{
   (e: 'update:mode', value: EditorMode): void
   (e: 'export-html'): void
   (e: 'export-pdf'): void
+  (e: 'export-latex'): void
+  (e: 'export-compile'): void
+  (e: 'export-option', key: 'toc' | 'cover' | 'inline' | 'selection' | 'preview'): void
   (e: 'appearance'): void
   (e: 'img-host'): void
   (e: 'preferences'): void
@@ -57,14 +68,42 @@ const toggleMaximize = (): void => window.api.toggleMaximize()
 const close = (): void => window.api.close()
 
 /* ── 导出下拉 ── */
-const exportItems = (): MenuEntry[] => [
-  { action: 'export-html', label: L.exportMenuHtml, icon: 'file', disabled: !props.canExport },
-  { action: 'export-pdf', label: L.exportMenuPdf, icon: 'file', disabled: !props.canExport }
-]
+
+/** 开关态符号：MenuEntry 暂无 checkbox 字段，用符号表达勾选，避免改动 TitleMenu 的契约 */
+const mark = (on: boolean | undefined): string => (on ? '☑ ' : '☐ ')
+
+const exportItems = (): MenuEntry[] => {
+  const p = props.exportPrefs
+  return [
+    { action: 'export-html', label: L.exportMenuHtml, icon: 'file', disabled: !props.canExport },
+    { action: 'export-pdf', label: L.exportMenuPdf, icon: 'file', disabled: !props.canExport },
+    {
+      action: 'export-latex',
+      label: L.exportMenuLatex,
+      icon: 'file',
+      disabled: !props.canExport
+    },
+    { separator: true },
+    { action: 'toggle-toc', label: mark(p?.toc) + L.exportOptToc },
+    { action: 'toggle-cover', label: mark(p?.cover) + L.exportOptCover },
+    { action: 'toggle-inline', label: mark(p?.inline) + L.exportOptInline },
+    { action: 'toggle-selection', label: mark(p?.selection) + L.exportMenuSelection },
+    { action: 'toggle-preview', label: mark(p?.preview) + L.exportOptPreview },
+    { separator: true },
+    { action: 'export-compile', label: L.exportMenuCompile, icon: 'layers', disabled: !props.canExport }
+  ]
+}
 
 function onExportSelect(action: string): void {
   if (action === 'export-html') emit('export-html')
   else if (action === 'export-pdf') emit('export-pdf')
+  else if (action === 'export-latex') emit('export-latex')
+  else if (action === 'export-compile') emit('export-compile')
+  else if (action === 'toggle-toc') emit('export-option', 'toc')
+  else if (action === 'toggle-cover') emit('export-option', 'cover')
+  else if (action === 'toggle-inline') emit('export-option', 'inline')
+  else if (action === 'toggle-selection') emit('export-option', 'selection')
+  else if (action === 'toggle-preview') emit('export-option', 'preview')
 }
 
 /* ── 更多下拉（设置 / 文件）── */

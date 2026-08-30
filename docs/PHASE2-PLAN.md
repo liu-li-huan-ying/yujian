@@ -85,14 +85,20 @@
 
 ### 3.4 导出增强（做精）
 
-* **docx**：`mammoth`（纯 JS，md→docx，样式映射保真较好）；**LaTeX 公式**转 OMML 或静态图、**脚注**转尾注、代码块转等宽文本。
-* **ePub**：纯 JS 库（如 `epub-gen`）基于已导出 HTML 打包；支持封面/元信息。
-* **LaTeX**：md→`.tex` 模板生成（轻量模板引擎），公式用 KaTeX 已渲染、表格/代码转 LaTeX 环境；不引入 pandoc 二进制。
-* **PDF 增强**：在现 `webContents.printToPDF` 基础上加自动目录（取大纲）、`@page` 分页控制、可选封面页。
-* **导出范围**：整篇 / 当前选中 / **多文件合订**（一本手册 = 多 md 按大纲顺序合并导出）；导出前可**预览**（尤其 PDF）。
-* **图片与图**：导出时图片**内联（base64）vs 保留相对路径**策略可选；**Mermaid 转静态图**（svg/png）嵌入 PDF/docx/ePub（渲染期截图或转 svg）。
-* **依赖约束**：全部纯 JS / WASM；评估 mammoth 等体积后决定是否进 asar（预计增量小）。
-* **UI**：现有 `TitleMenu` 的 MenuEntry 机制直接扩展导出项，无需新组件；元信息（标题/作者/日期）由批次二属性面板供给。
+> **进度（2026-08-30）**：**零依赖批次已落地** —— LaTeX 导出、PDF 增强（目录 / 分页 / 封面）、导出范围（整篇 / 选中）、图片内联策略、Mermaid 转内嵌 SVG、通用写盘 IPC。
+> **待办**：docx / ePub（需新增纯 JS 依赖，或手写 OOXML/OPF）。多文件合订 + 导出前预览 ✅ 已实现（见下）。
+
+* **docx**：⚠️ **原计划选型有误，已订正**：~~`mammoth`~~ → **`docx` 包**。mammoth 做的是 *docx → HTML*（解析既有 docx 转网页），**方向相反、不能生成 docx**；纯 JS 生成 docx 应用 `docx` 包。*待办*：LaTeX 公式转 OMML 或静态图、脚注转尾注、代码块转等宽文本。
+* **ePub**：*待办*。纯 JS 方案为 `jszip` 手写 OPF / NCX（ePub 本质是 zip + 固定 XML 结构），或 `epub-gen`。
+* **LaTeX**：✅ **已实现（2026-08-30）**。`src/export/markdownToLatex.ts` 纯 TS 零依赖，不引入 pandoc。关键设计：**转义与「公式 / 代码 / 链接」互斥**——先把这些片段抽成占位符，对剩余文本做 LaTeX 特殊字符转义，最后回填；否则 URL 里的 `_`、公式里的 `\` 会被破坏。覆盖标题 / 列表（含嵌套）/ 表格 / 代码 / 引用 / 图片 / 链接 / 脚注 / 公式，默认 `ctexart` 文档类支持中文（需 XeLaTeX）。Node 单测 19 项断言全通过。
+* **PDF 增强**：✅ **已实现（2026-08-30）**。在现 `webContents.printToPDF` 之上，`src/export/docTemplate.ts` 增加：`@page` A4 分页、**自动目录**（取正文标题层级并补锚点，PDF 恒开、HTML 可选）、**封面页**（标题 / 作者 / 日期取自 frontmatter，可选）、分页控制（一级标题另起页、代码块 / 表格 / 图表 `break-inside: avoid`、标题不孤行）。
+* **导出范围**：✅ **整篇 / 当前选中 / 多文件合订均已实现**——选中走 ProseMirror 选区序列化，源码模式取选区 Markdown 再渲染，两种模式产出同构；无选区回退整篇并提示。
+  * **多文件合订**（2026-08-30）：`src/components/CompilePanel.vue` 按文件树顺序列出 vault 内全部 `.md`，支持勾选 + 上下移排序 + 合订标题 + 每篇另起页（PDF `break-before:page`）；输出 HTML / PDF / LaTeX 任选。逐文件 `readFile → markdownToHtml（复用 Milkdown parser/schema，不建第二实例）→ inlineImages（按各自文档目录解析相对图片）→ 拼接`，再走与单文档完全相同的 `buildExportContent(override, forceInline)` 管道，`forceInline` 强制内联图片与图表，保证跨目录自包含。
+  * **导出前预览**（2026-08-30）：`exportPrefs.preview` 开关（导出菜单可切换），或在合订面板内勾选。预览浮层 `src/components/ExportPreview.vue` 对 HTML/PDF 用 Blob + `iframe(sandbox)` 渲染真实排版、LaTeX 显示源码，确认后才写盘 / 打印；预览与落盘共用同一份已构建内容，不重复渲染。
+* **图片与图**：✅ **已实现**。图片**内联（base64）vs 相对路径**可选（`src/export/imageInline.ts`，按文档所在目录解析相对路径，经 `file:readBase64` 读取）；**Mermaid 转内嵌 SVG**（`src/export/mermaidSvg.ts`），使 PDF 与离线 HTML 不再依赖 CDN。**PDF 强制内联**——它经隐藏窗口加载 `tmpdir` 下的临时文件，相对路径图片与 CDN 脚本都取不到（这也是此前 PDF 丢图的根因）。
+* **依赖约束**：本批次**零新增依赖**目标达成（LaTeX / PDF 增强 / 内联 / Mermaid 均为纯 TS 或复用既有依赖）。docx / ePub 批次再评估体积与 asar 影响。
+* **UI**：✅ 扩展现有 `TitleMenu` 的 MenuEntry（HTML / PDF / LaTeX + 分隔线 + 四个开关：自动目录 / 封面页 / 图片内联 / 仅选中范围），未新增组件；元信息由批次二属性面板的 frontmatter 供给。
+* **IPC 收敛**：`export:html` 升级为通用 `export:file`（content + defaultName + filters），HTML 与 LaTeX 共用一条写盘通道，避免逐格式加通道的冗余；新增 `file:readBase64` 供图片内联。
 
 ### 3.5 凝神模式 = 打字机 + 专注/禅 融合
 
