@@ -23,6 +23,12 @@ export interface WysiwygFindState {
   caseSensitive: boolean
   wholeWord: boolean
   currentLine?: number
+  /**
+   * 当前结果行的源码文本。源码行号与渲染行号口径不同（Markdown 空行渲染后不产生节点，
+   * 块间只算一个换行，渲染态行号被「压缩」），仅靠 currentLine 比较会标错命中。
+   * 用行文本匹配命中所在文本块，可让 current 标记与源码行号严格一致。
+   */
+  currentLineText?: string
 }
 
 interface FindPluginValue {
@@ -63,6 +69,87 @@ function lineOfPos(doc: PMNode, pos: number): number {
   return n
 }
 
+/** 去掉常见 Markdown 行标记，便于源码行文本与渲染文本互相匹配 */
+export function stripMd(line: string): string {
+  return line
+    .replace(/^\s*#{1,6}\s+/, '')
+    .replace(/^\s*>\s?/, '')
+    .replace(/^\s*(?:[-*+]|\d+\.)\s+/, '')
+    .replace(/[*_`~]/g, '')
+    .trim()
+}
+
+/**
+ * 判断命中是否属于「当前结果行」：优先用源码行文本匹配命中所在的文本块
+ * （渲染态行号被压缩，直接比行号会偏），没有行文本时回退到行号比较。
+ */
+function isCurrentHit(doc: PMNode, pos: number, fs: WysiwygFindState): boolean {
+  if (fs.currentLine === undefined) return false
+  const needle = fs.currentLineText ? stripMd(fs.currentLineText) : ''
+  if (!needle) return lineOfPos(doc, pos) === fs.currentLine
+  const blockText = doc.resolve(pos).parent?.textContent ?? ''
+  // 双向包含：源码行可能残留标记，或块文本仅为行文本的一部分
+  return blockText.includes(needle) || needle.includes(blockText)
+}
+
+/**
+ * 按源码行文本在渲染文档中定位：片段逐级缩短做包含匹配，容忍语法差异造成的局部不匹配。
+ * 找不到返回 null，由调用方回退到行号反查。
+ */
+export function findPosByText(doc: PMNode, needle: string): number | null {
+  const n = stripMd(needle)
+  if (!n) return null
+  for (let len = n.length; len >= 4; len = Math.floor(len * 0.7)) {
+    const frag = n.slice(0, len)
+    let hit: number | null = null
+    doc.descendants((node, pos) => {
+      if (hit !== null) return false
+      if (node.isTextblock) {
+        const i = node.textContent.indexOf(frag)
+        if (i >= 0) {
+          hit = pos + 1 + i
+          return false
+        }
+      }
+      return true
+    })
+    if (hit !== null) return hit
+  }
+  return null
+}
+
+/**
+ * 反查「行号 → 文档位置」：与 lineOfPos 完全同一口径（均基于 textBetween 的换行统计），
+ * 使所见即所得模式的定位与命中高亮的 currentLine 判定结果一致。
+ * 先按文本节点顺序找到目标行所在的节点（行号单调递增），再在节点内推进若干换行取精确偏移。
+ * 供搜索结果 / 断链跳转使用，避免「渲染模式无法定位行 → 被迫切源码」的体验割裂。
+ */
+export function findPosOfLine(doc: PMNode, target: number): number | null {
+  const spans: { pos: number; text: string }[] = []
+  doc.descendants((node, pos) => {
+    if (node.isText && node.text) spans.push({ pos, text: node.text })
+  })
+  if (!spans.length) return null
+
+  let best = spans[0]
+  let bestLine = 1
+  for (const s of spans) {
+    const l = lineOfPos(doc, s.pos)
+    if (l <= target) {
+      best = s
+      bestLine = l
+    } else break
+  }
+
+  let need = target - bestLine
+  let i = 0
+  while (need > 0 && i < best.text.length) {
+    if (best.text[i] === '\n') need--
+    i++
+  }
+  return best.pos + i
+}
+
 /** 扫描整个文档文本节点，给每个命中区间打上 .pm-find；当前结果行的命中额外加 .pm-find--current */
 function buildDecos(doc: PMNode, fs: WysiwygFindState): DecorationSet {
   if (!fs.query) return DecorationSet.empty
@@ -83,7 +170,7 @@ function buildDecos(doc: PMNode, fs: WysiwygFindState): DecorationSet {
           re.lastIndex++
           continue
         }
-        const isCurrent = fs.currentLine !== undefined && fs.currentLine === lineOfPos(doc, from)
+        const isCurrent = isCurrentHit(doc, from, fs)
         decos.push(
           Decoration.inline(from, to, {
             class: isCurrent ? 'pm-find pm-find--current' : 'pm-find'
