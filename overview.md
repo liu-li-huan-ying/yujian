@@ -96,7 +96,7 @@ typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「�
 - `npm run typecheck` ✅、`npm run build` ✅（16s 左右，`✓ built in 15.43s`）。
 - 无头环境驱动完整 UI 不可靠（开库→开文档→导出需真实交互），故以**静态分析 + 针对性修复**为准；源码模式 `getHTML` 真因建议运行期验收。
 
-## 运行期验收清单（待用户实测）
+## 运行期验收清单（本机未验证）
 1. 开启「导出前预览」后，从**源码模式**与**所见即所得模式**分别导出 HTML / PDF / LaTeX，确认：
    - 预览浮层出现且渲染真实排版（LaTeX 显示源码）；
    - 点「确认并选择位置」后弹出系统保存对话框；
@@ -146,7 +146,7 @@ typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「�
 
 ## 验证
 - `npm run typecheck` ✅；`npm run build` ✅。产物核验：`out/renderer/index.html` 含 `frame-src 'self' blob:`；`ExportPreview` chunk 含 `allow-scripts allow-same-origin`；CSS 含 `hue-text-1/2` 与 `panel__meta` chip。
-- 待运行期验收：深色模式下开启预览导出，确认① 预览渲染真实排版（不再白屏）；② 点「确认并选择位置」弹出的系统保存框为深色、文件名清晰可读、与 app 色调一致。
+- 本机未验证（用户缺验证软件，暂不验证）：深色模式下开启预览导出，确认① 预览渲染真实排版（不再白屏）；② 点「确认并选择位置」弹出的系统保存框为深色、文件名清晰可读、与 app 色调一致。
 
 ## 文件
 `src/index.html`、`src/components/ExportPreview.vue`、`src/appearance.ts`、`electron/shared/ipc-channels.ts`、`electron/preload/index.ts`、`electron/main/index.ts`、`docs/PHASE2-PLAN.md` §3.4、`docs/ARCHITECTURE.md` §5.6。
@@ -213,7 +213,7 @@ typecheck ✅；LaTeX 转换器 Node 单测 **19 项断言全通过**（含「�
 - `npm run typecheck` ✅；`npm run build` ✅（`✓ built in 18.94s`）。
 - 构建警告确认清除：原先 `crypto/fs/path/xmlbuilder2/@oozcitak/url/htmlparser2` 的 `externalized for browser compatibility` 警告、**整条 html-to-docx 依赖树**、以及 `mermaid dynamic/static import` 警告均消失。
 - 依赖：仅新增 `jszip@3.10.1`（EPUB / ODT / DOCX 打包），纯 JS、无 node-gyp/fs/path 引用，可在 sandbox 渲染进程直接打包；**已移除 `html-to-docx`**。
-- **待运行期验收**：深色模式下分别导出 9 种格式（尤其含 Mermaid 图表的文档导 docx/epub/rtf/odt），确认预览浮层、系统保存框、产物可正常打开（Word/EPUB 阅读器/LibreOffice）。
+- **本机未验证（用户缺验证软件，暂不验证）**：深色模式下分别导出 9 种格式（尤其含 Mermaid 图表的文档导 docx/epub/rtf/odt），确认预览浮层、系统保存框、产物可正常打开（Word/EPUB 阅读器/LibreOffice）。待用户本机具备对应软件后逐项验收。
 
 ## 文件
 - 新增：`src/export/types.ts`、`src/export/domUtils.ts`、`src/export/docx.ts`、`src/export/epub.ts`、`src/export/rtf.ts`、`src/export/odt.ts`、`src/export/serialize.ts`。
