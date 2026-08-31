@@ -245,6 +245,9 @@ const zhCN = {
     snapshotAdoptTip: '把这份草稿内容载入编辑器，成为正文',
     snapshotBranchEmpty: '该分支暂无快照',
     snapshotMilestone: '里程碑',
+    snapshotCurrentWorkspace: '当前工作区',
+    snapshotCharDelta: '相对当前文档字数',
+    snapshotNoDiff: '与对比对象一致',
     /* ── 写作统计（批次二）── */
     stats: '统计',
     charCount: '汉字',
