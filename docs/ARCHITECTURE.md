@@ -868,7 +868,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **进退场（`src/styles/zen.css`，App 根节点 `.shell[data-zen]` 驱动，JS 只挂/摘属性）**
 
-* 四幕进场 ~360ms：① 侧栏/大纲宽→0+淡出（0–100ms，复用 `is-collapsed`，App 传 `visible && !focusMode`）② 标题栏 `.bar`/标签条 `.tabbar`/状态栏 `.statusbar` 高→0（80–200ms）③ 正文列 `--w-column` 720→640（180–300ms，`@property` 注册长度变量使全部块联动、一次样式重算）④ `.editor::before/::after` 上下 48px 羽化遮罩 + 装饰淡入（280ms 起）。
+* 四幕进场 ~360ms：① 侧栏/大纲宽→0+淡出（0–100ms，复用 `is-collapsed`，App 传 `visible && !focusMode`）② 标题栏 `.bar`/标签条 `.tabbar`/状态栏 `.statusbar` 高→0（80–200ms）③ 正文列变宽（`--w-column → --w-column-zen`，随窗口等比例更宽，180–300ms，`@property` 注册长度变量使全部块联动、一次样式重算）④ `.editor::before/::after` 上下 48px 羽化遮罩 + 装饰淡入（280ms 起）。常态列 `clamp(700px,56vw,920px)`、凝神列 `clamp(760px,62vw,1000px)`（`src/styles/tokens.css`）。
 * 退场 240ms 三幕反向（`:not([data-zen])` 基态规则承载退场时序——transition 取目标态规则，进退场各自独立时序）。`prefers-reduced-motion` 全部降为 0ms 直接切换。
 
 **雾化五档（`src/editor/zen.ts` + `editor.css`）**
@@ -883,7 +883,8 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 * `ZenRetreatBar.vue`：32px 玻璃胶囊（`position:fixed` 不占布局），文件名 · 字数 · 相对保存时间（30s 自刷新）｜⚙ 设置 / 切换文档（复用标签激活）/ 退出凝神。Esc 状态机在 `App.onKeydown`（设置面板优先、轻退栏可关）。
 * `ZenSettings.vue`：玻璃模态，锚点（1/3·黄金分割·正中）/ 雾化（快中慢）/ 滚动（跟手·平滑·极平滑）/ 自动全屏 / 轻退栏，改即生效并 `patchSession({ zenPrefs })`。`SessionState.zenPrefs` 经 `session.ts sanitizeZenPrefs` 逐字段校验。设置入口：轻退栏 ⚙ + 标题栏「更多」菜单（`zen-settings`）。
-* 凝神下源码模式居中列：`.shell[data-zen] .source-host .cm-scroller` 对称内边距 `max(0, 50% − var(--w-column-zen)/2)`，行号 + 代码整体收进 640px 居中列（行号随列移动），修复 CodeMirror 宽窗整屏贴左。
+* 凝神下源码模式居中列：`.shell[data-zen] .source-host .cm-scroller` 对称内边距 `max(0, 50% − var(--w-column-zen)/2)`，行号 + 代码整体收进居中列（列宽 = `--w-column-zen`，随窗口等比例更宽；行号随列移动），修复 CodeMirror 宽窗整屏贴左。常态源码模式也走居中列（`max(24px, 50% − var(--w-column)/2)`，见 `editor.css`）。
+* 凝神当前块视觉焦点：`.zen-active` 在开启「放大当前段落」开关时字号 `1.07em` + `scale(1.01)`（青瓷微光底衬保留），离开时由 `.zen-dim-*` 过渡平滑回弹；开关经 `ZenPrefs.blockZoom` 持久化、`App` 根节点 `data-zen-block-zoom` 属性门控。
 * 自动全屏走新 IPC `win:setFullscreen`（preload `window.api.setFullscreen`）；只还原自己转的全屏（`zenAutoFullscreen` 标记），不碰用户手动 F11。
 
 ### 5.12 链接健康检查（2026-08-30，Phase 2 批次三 §3.7）

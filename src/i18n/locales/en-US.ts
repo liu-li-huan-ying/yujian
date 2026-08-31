@@ -327,6 +327,8 @@ const enUS = {
     zenFullscreenHint: 'Enter fullscreen with focus mode, restore on exit',
     zenRetreatBar: 'Retreat info bar',
     zenRetreatBarHint: 'Press Esc in focus to peek, press again to hide',
+    zenBlockZoom: 'Enlarge active paragraph',
+    zenBlockZoomHint: 'Slightly enlarge the paragraph you are writing for focus',
     zenDone: 'Done',
     /* ── Writing aids (batch three §3.6) ── */
     writingAids: {

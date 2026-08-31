@@ -413,7 +413,12 @@
 
 .source-host > .cm-editor .cm-scroller {
   font-family: var(--font-mono);
-  padding: 20px 24px 45vh;
+  /* 源码模式也走居中列：左右对称内边距把「行号 gutter + 代码」收进 --w-column 宽的
+     居中列（与所见即所得同根列宽，随窗口等比例变宽）；max() 保证窄窗不出现负内边距。 */
+  padding-top: 20px;
+  padding-bottom: 45vh;
+  padding-left: max(24px, calc(50% - var(--w-column) / 2));
+  padding-right: max(24px, calc(50% - var(--w-column) / 2));
 }
 
 .cm-editor .cm-content {
@@ -754,16 +759,32 @@
 .milkdown .ProseMirror .zen-dim-3,
 .milkdown .ProseMirror .zen-dim-4,
 .milkdown .ProseMirror .zen-dim-5 {
-  transition: opacity var(--dur-fast) var(--ease);
+  transition:
+    opacity var(--dur-fast) var(--ease),
+    font-size var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 .milkdown .ProseMirror .zen-active {
   opacity: 1;
   /* 当前块青瓷微光底衬：+2% 提亮的呼吸感强调（替代「光标闪烁频率」——原生 caret 不可定制） */
   background: linear-gradient(90deg, rgba(var(--hue-tint-1), 0.1), transparent 72%);
   border-radius: 8px;
+  /* 轻微抬升：缩放时压在相邻块之上，避免亚像素重叠被裁切 */
+  position: relative;
+  z-index: 1;
   transition:
     opacity var(--dur-fast) var(--ease),
-    background var(--dur-fast) var(--ease);
+    background var(--dur-fast) var(--ease),
+    font-size var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+/* 当前块放大（凝神设置「放大当前段落」可关）：字号微放大 + 轻微缩放，
+   营造视觉焦点与冲击力，让眼睛更轻松地落在正在写的那一段。
+   仅当 .zen-active 存在时生效（该装饰只在凝神态注入），且仅在开启开关时。 */
+.shell[data-zen-block-zoom='on'] .milkdown .ProseMirror .zen-active {
+  font-size: 1.07em;
+  transform: scale(1.01);
+  transform-origin: left center;
 }
 
 /* ── 数学公式（KaTeX）：随玉质主题着色，块级公式不溢出 720 列 ──

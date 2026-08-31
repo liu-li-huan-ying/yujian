@@ -412,7 +412,8 @@ const zenPrefs = ref<ZenPrefs>({
   fog: 'mid',
   scroll: 0.16,
   fullscreen: false,
-  retreatBar: true
+  retreatBar: true,
+  blockZoom: true
 })
 /** 本次凝神是否因偏好自动全屏（退出时只还原自己转的全屏，不碰用户手动 F11） */
 let zenAutoFullscreen = false
@@ -1047,7 +1048,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="shell" :data-zen="focusMode ? 'on' : null">
+  <div class="shell" :data-zen="focusMode ? 'on' : null" :data-zen-block-zoom="zenPrefs.blockZoom ? 'on' : 'off'">
     <TitleBar
       :file-name="fileName"
       :mode="requestedMode"

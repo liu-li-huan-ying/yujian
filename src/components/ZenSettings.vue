@@ -120,7 +120,7 @@ function near(a: number, b: number): boolean {
         />
       </div>
 
-      <div class="row row--last">
+      <div class="row">
         <div class="row__txt">
           <span class="row__label">{{ L.zenRetreatBar }}</span>
           <span class="row__hint">{{ L.zenRetreatBarHint }}</span>
@@ -130,6 +130,19 @@ function near(a: number, b: number): boolean {
           type="button"
           :class="{ 'switch--on': props.prefs.retreatBar }"
           @click="emit('change', { retreatBar: !props.prefs.retreatBar })"
+        />
+      </div>
+
+      <div class="row row--last">
+        <div class="row__txt">
+          <span class="row__label">{{ L.zenBlockZoom }}</span>
+          <span class="row__hint">{{ L.zenBlockZoomHint }}</span>
+        </div>
+        <button
+          class="switch"
+          type="button"
+          :class="{ 'switch--on': props.prefs.blockZoom }"
+          @click="emit('change', { blockZoom: !props.prefs.blockZoom })"
         />
       </div>
 

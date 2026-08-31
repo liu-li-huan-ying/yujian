@@ -326,6 +326,8 @@ const zhCN = {
     zenFullscreenHint: '进入凝神时窗口转全屏，退出时还原',
     zenRetreatBar: '轻退信息栏',
     zenRetreatBarHint: '凝神中按 Esc 掀帘看一眼，再按收起',
+    zenBlockZoom: '放大当前段落',
+    zenBlockZoomHint: '正在写的那一段字号微放大，形成视觉焦点',
     zenDone: '完成',
     /* ── 写作辅助包（批次三 §3.6）── */
     writingAids: {
