@@ -249,6 +249,13 @@ const enUS = {
     snapshotCurrentWorkspace: 'Current workspace',
     snapshotCharDelta: 'Chars vs current doc',
     snapshotNoDiff: 'Identical to comparison',
+    /* ── Snapshots Phase C: paragraph-level cherry-pick ── */
+    snapshotPick: 'Pick',
+    snapshotPickTip: 'Insert at the cursor in the current document',
+    snapshotPicked: 'Paragraph inserted at cursor',
+    snapshotHunkAdd: 'Added',
+    snapshotHunkDel: 'Removed',
+    snapshotHunkMod: 'Modified',
     /* ── Writing stats (Batch 2) ── */
     stats: 'Stats',
     charCount: 'Han',

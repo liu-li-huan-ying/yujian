@@ -248,6 +248,13 @@ const zhCN = {
     snapshotCurrentWorkspace: '当前工作区',
     snapshotCharDelta: '相对当前文档字数',
     snapshotNoDiff: '与对比对象一致',
+    /* ── 版本快照 Phase C：段落级 cherry-pick ── */
+    snapshotPick: '摘取',
+    snapshotPickTip: '摘取到当前文档光标处',
+    snapshotPicked: '已摘取此段到光标处',
+    snapshotHunkAdd: '新增',
+    snapshotHunkDel: '删除',
+    snapshotHunkMod: '修改',
     /* ── 写作统计（批次二）── */
     stats: '统计',
     charCount: '汉字',

@@ -130,9 +130,10 @@ function loadMarkdownExternal(text: string): void {
 }
 
 /**
- * 在光标处插入文本（写作辅助·片段模板用）。
+ * 在光标处插入文本（写作辅助·片段模板 / 快照 cherry-pick 用）。
  * - 源码模式：直接 dispatch CodeMirror 事务（替换选区）。
- * - 所见即所得：用 ProseMirror 视图的 insertText（替换选区），触发 markdownUpdated → 自动落盘。
+ * - 所见即所得：优先把文本当作 Markdown 解析成节点再插入（标题/列表/代码块等语法正确渲染）；
+ *   仅当解析失败才退回纯文本 insertText。触发 markdownUpdated → 自动落盘。
  * 不切换模式、不影响保真层之外的状态。
  */
 function insertText(text: string): void {
@@ -140,6 +141,8 @@ function insertText(text: string): void {
     source.value?.insertAtCursor(text)
     return
   }
+  // 所见即所得：Markdown 感知插入（cherry-pick / 片段模板都能正确渲染）
+  if (milkdown.value?.insertMarkdownAtCursor(text)) return
   const v = milkdownView()
   if (!v) return
   const from = v.state.selection.from
