@@ -117,10 +117,17 @@
   color: var(--hue-accent);
   text-decoration: none;
   border-bottom: 1px solid rgba(var(--hue-tint-2), 0.4);
-  transition: border-color var(--dur-fast) var(--ease);
+  border-radius: 2px;
+  padding: 0 1px;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .milkdown .ProseMirror a:hover {
   border-bottom-color: var(--hue-accent);
+  /* 极轻底衬，hover 时浮现一道「药丸」高光（参考 Bear / Notion） */
+  background: rgba(var(--hue-tint-1), 0.12);
 }
 
 .milkdown .ProseMirror blockquote {
@@ -409,6 +416,14 @@
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* 源码模式选区：与全局强调色同源（默认 CM 选区偏灰，与玉质主题不搭）。
+   highlightSelection 开启时 CM 默认样式权重高，需用 !important 覆盖。 */
+.source-host .cm-editor .cm-selectionBackground,
+.source-host .cm-editor.cm-focused .cm-selectionBackground,
+.source-host .cm-editor .cm-content ::selection {
+  background: var(--hue-active) !important;
 }
 
 .source-host > .cm-editor .cm-scroller {
@@ -785,6 +800,20 @@
   font-size: 1.07em;
   transform: scale(1.01);
   transform-origin: left center;
+}
+
+/* 常态轻聚焦：光标所在段落一道极轻底衬（参考 Typora / Bear），帮助眼睛在长文档里
+   快速锚定「我在哪」；不雾化、不缩放，保持常态写作的信息完整与克制。
+   凝神态由 .zen-active 接管，此处不叠加（插件在 zen 激活时返回空装饰）。 */
+.milkdown .ProseMirror .focus-block {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--hue-tint-1), 0.07),
+    rgba(var(--hue-tint-1), 0.025) 72%,
+    transparent
+  );
+  border-radius: 8px;
+  transition: background var(--dur-base) var(--ease);
 }
 
 /* ── 数学公式（KaTeX）：随玉质主题着色，块级公式不溢出 720 列 ──

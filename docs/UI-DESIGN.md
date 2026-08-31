@@ -387,6 +387,14 @@
 
 ***
 
+### 5.12 常态轻聚焦与链接微交互
+
+* **常态轻聚焦（参考 Typora / Bear）**：非凝神所见即所得下，光标所在段落获得一道极轻底衬（`linear-gradient` 自左 7% → 右透明，`border-radius:8px`），帮助眼睛在长文档里快速锚定「我在哪」；不雾化、不缩放，保持常态写作信息完整。
+  * 与凝神分工：zen 激活时该插件返回空装饰、由 `.zen-active` 接管，二者不叠加；zen 结束那一帧强制重建一次，焦点块立刻回归。
+  * 实现：新增 `src/editor/focusBlock.ts`（`createFocusBlockPlugin()`，沿用本仓库 Decoration 插件惯例，仅在选区 / 文档变化时重建）+ `src/styles/editor.css` 的 `.focus-block`。
+* **链接悬停微交互（参考 Bear / Notion）**：`a` 默认保留 1px 半透下划线；悬停时浮现一道「药丸」高光（`background: rgba(--hue-tint-1,.12)`）+ 下划线转 accent 色，三者 `var(--dur-fast)` 过渡，比单纯变色更有「可点」的反馈。
+* **源码模式选区同色**：`.cm-selectionBackground` / `.cm-content ::selection` 改为 `--hue-active`（与全局 `::selection` 同源），修正 CodeMirror 默认灰选色与玉质主题不搭。
+
 ## 6. 图片资源方案（UI 落地）
 
 存储策略详见 §7。UI 上需要三处配合：

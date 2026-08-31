@@ -29,6 +29,7 @@ import {
 import { codeBlockConfig } from '@milkdown/kit/component/code-block'
 import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
+import { createFocusBlockPlugin } from './focusBlock'
 import {
   createFindDecoPlugin,
   findKey,
@@ -279,6 +280,8 @@ async function init(defaultValue?: string): Promise<void> {
 
   // 凝神模式装饰插件：开关由 EditorHost 经模块级状态控制，空事务触发重算，零侵入。
   crepe.editor.use($prose(() => createZenPlugin()))
+  // 常态轻聚焦：光标所在段落极轻底衬（Typora / Bear 风），凝神时让位给 .zen-active。
+  crepe.editor.use($prose(() => createFocusBlockPlugin()))
   // 所见即所得搜索命中高亮插件：与源码模式对称，由统一搜索 query/选项驱动。
   crepe.editor.use($prose(() => createFindDecoPlugin()))
   // Emoji 短代码：输入 `:smile:` 自动转 emoji + 已有短代码只读显示为 emoji
