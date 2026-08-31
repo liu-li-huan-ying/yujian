@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>玉笺 · 微交互预览（常态轻聚焦 + 链接悬停）</title>
+<style>
+  :root{
+    /* 墨玉暗色皮肤令牌（与 tokens.css 一致） */
+    --hue-editor:#1c1e1f;
+    --hue-text-1:#e8e9e7;
+    --hue-accent:#5fa8a0;
+    --hue-tint-1:126,196,182;
+    --hue-tint-2:95,168,160;
+    --hue-active:rgba(95,168,160,.16);
+    --radius-md:6px;
+    --dur-fast:120ms;
+    --ease:cubic-bezier(.2,0,.2,1);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--hue-editor);
+    color:var(--hue-text-1);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    font-size:16px;line-height:1.75;
+    display:flex;justify-content:center;
+    padding:48px 24px 96px;
+  }
+  .stage{width:min(720px,100%);}
+  .stage h1{font-size:1.7rem;margin:0 0 6px;}
+  .stage .sub{opacity:.6;font-size:13px;margin:0 0 28px;}
+  .doc{outline:none;}
+  .doc p,.doc h2,.doc li{margin:0 0 14px;padding:2px 8px;border-radius:8px;transition:background var(--dur-fast) var(--ease);}
+  /* 常态轻聚焦：光标所在段落极轻底衬（Typora / Bear 风） */
+  .focus-block{
+    background:linear-gradient(90deg,
+      rgba(var(--hue-tint-1),.07),
+      rgba(var(--hue-tint-1),.025) 72%,
+      transparent);
+  }
+  /* 链接：默认半透下划线；悬停浮现「药丸」高光（Bear / Notion 风） */
+  .doc a{
+    color:var(--hue-accent);text-decoration:none;
+    border-bottom:1px solid rgba(var(--hue-tint-2),.4);
+    border-radius:2px;padding:0 1px;
+    transition:border-color var(--dur-fast) var(--ease),
+               background var(--dur-fast) var(--ease),
+               color var(--dur-fast) var(--ease);
+  }
+  .doc a:hover{
+    border-bottom-color:var(--hue-accent);
+    background:rgba(var(--hue-tint-1),.12);
+  }
+  .hint{
+    margin-top:28px;padding:12px 14px;border-radius:var(--radius-md);
+    background:rgba(var(--hue-tint-1),.06);
+    border:1px solid rgba(var(--hue-tint-2),.18);
+    font-size:13px;line-height:1.6;opacity:.85;
+  }
+  .hint b{color:var(--hue-accent);}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <h1>微交互预览</h1>
+    <p class="sub">常态轻聚焦（Typora / Bear 风） · 链接悬停微交互（Bear / Notion 风）</p>
+
+    <div class="doc" contenteditable="true" spellcheck="false">
+      <h2>把光标放到任意段落里</h2>
+      <p>这是一段普通的正文。当你把光标移到这一段时，它会被一道极轻的底衬温柔地托起——只此一段，不雾化、不缩放，其余文字保持原样。</p>
+      <p>这种「轻聚焦」借鉴了 Typora 与 Bear 的做法：长文档写作时，眼睛总能一眼锚定「我现在在哪」，又不会被强烈的视觉变化打断心流。</p>
+      <p>它不是凝神模式的替代品。凝神里你会得到雾化衰减与当前块放大；而常态下，只需要这一点点提示就够了。</p>
+      <p>文内还可以放一个<a href="#" onclick="return false">可点击的链接</a>，把鼠标悬上去，看它如何浮现一道「药丸」高光——比单纯变色更有「可点」的反馈。</p>
+      <p>把光标移到这里，对比上一段的底衬是否随你移动。若觉得太弱或太强，都能在源码里一行调。</p>
+    </div>
+
+    <div class="hint">
+      <b>怎么看：</b>点击上方任意段落开始输入或移动光标，<b>当前段</b>会出现极轻底衬（颜色随光标移动）；把鼠标移到<b>链接</b>上可见悬停高光。
+      纯前端模拟，真实 App 里由 <code>createFocusBlockPlugin</code> 在 ProseMirror 装饰层实现，行为一致。
+    </div>
+  </div>
+
+<script>
+  const doc = document.querySelector('.doc');
+  const BLOCK = 'P,H1,H2,H3,H4,H5,H6,LI,BLOCKQUOTE';
+  function update(){
+    const sel = window.getSelection();
+    if(!sel || !sel.anchorNode) return;
+    let node = sel.anchorNode;
+    if(node.nodeType === 3) node = node.parentElement;
+    const block = node.closest && node.closest(BLOCK);
+    doc.querySelectorAll('.focus-block').forEach(el=>el.classList.remove('focus-block'));
+    if(block && doc.contains(block)) block.classList.add('focus-block');
+  }
+  ['keyup','click','focus','input','selectionchange'].forEach(ev=>
+    document.addEventListener(ev, ()=>requestAnimationFrame(update)));
+  // 初始高亮第一段
+  const first = doc.querySelector(BLOCK);
+  if(first) first.classList.add('focus-block');
+</script>
+</body>
+</html>
