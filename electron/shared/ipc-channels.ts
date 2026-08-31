@@ -157,6 +157,8 @@ export interface ZenPrefs {
   fullscreen: boolean
   /** 轻退信息栏（Esc 掀帘看一眼）开关（默认开） */
   retreatBar: boolean
+  /** 凝神中放大当前段落（字号微放大 + 轻微缩放），营造视觉焦点（默认开） */
+  blockZoom?: boolean
 }
 
 /** 凝神偏好默认值：与渲染侧 src/editor/zen.ts 的 DEFAULT_PREFS 保持一致 */

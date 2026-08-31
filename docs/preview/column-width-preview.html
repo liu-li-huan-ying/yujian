@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-skin="jade" data-mode="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>列宽响应式 / 凝神放大当前段落 · 预览</title>
+<style>
+  :root{
+    --hue-editor:#1C1E1F; --hue-surface:#23292B; --hue-text-1:#E8ECEA; --hue-text-2:#A7B0AD;
+    --hue-text-3:#6E7674; --hue-accent:#5FA8A0; --hue-tint-1:95,168,160; --hue-border-subtle:rgba(255,255,255,.08);
+    --hue-active:rgba(95,168,160,.16); --radius-lg:8px; --dur-fast:120ms;
+    /* 与 app 同步：随窗口等比例变宽 */
+    --w-column: clamp(700px, 56vw, 920px);
+    --w-column-zen: clamp(760px, 62vw, 1000px);
+    --font-ui:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  }
+  html[data-mode="light"]{
+    --hue-editor:#FCFCFB; --hue-surface:#EFF2F0; --hue-text-1:#1F2426; --hue-text-2:#4A5350;
+    --hue-text-3:#8A938F; --hue-accent:#248077; --hue-tint-1:36,128,119; --hue-border-subtle:rgba(20,30,28,.1);
+    --hue-active:rgba(36,128,119,.12);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font-ui);background:#0E1011;color:var(--hue-text-2);padding:22px}
+  html[data-mode="light"] body{background:#E4E8E6}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:15px;color:var(--hue-text-1);font-weight:600;margin:0 0 4px}
+  .sub{font-size:12px;color:var(--hue-text-3);margin-bottom:16px}
+  .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:center;padding:14px 16px;
+    background:var(--hue-surface);border:1px solid var(--hue-border-subtle);border-radius:var(--radius-lg);margin-bottom:16px}
+  .controls label{font-size:12px;color:var(--hue-text-2);display:flex;flex-direction:column;gap:6px}
+  .controls .row{display:flex;align-items:center;gap:10px}
+  input[type=range]{width:240px;accent-color:var(--hue-accent)}
+  .seg{display:flex;gap:2px;padding:2px;border-radius:8px;background:rgba(127,127,127,.12);border:1px solid var(--hue-border-subtle)}
+  .seg button{border:none;background:transparent;color:var(--hue-text-2);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer}
+  .seg button.on{background:rgba(var(--hue-tint-1),.2);color:var(--hue-accent)}
+  .switch{width:38px;height:21px;border:none;border-radius:11px;background:var(--hue-border-subtle);position:relative;cursor:pointer;transition:background var(--dur-fast)}
+  .switch.on{background:var(--hue-accent)}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:left var(--dur-fast)}
+  .switch.on::after{left:19px}
+  .stat{font-size:12px;color:var(--hue-text-3);font-variant-numeric:tabular-nums}
+  .stat b{color:var(--hue-accent);font-weight:600}
+
+  /* 模拟「窗口」外框 */
+  .stage{position:relative;width:100%;margin:0 auto;background:var(--hue-editor);border:1px solid var(--hue-border-subtle);
+    border-radius:12px;overflow:hidden;transition:width 120ms ease}
+  .stage::before,.stage::after{content:"";position:absolute;left:0;right:0;height:38px;z-index:5;pointer-events:none;opacity:0;transition:opacity 120ms}
+  .stage::before{top:0;background:linear-gradient(180deg,var(--hue-editor),transparent)}
+  .stage::after{bottom:0;background:linear-gradient(0deg,var(--hue-editor),transparent)}
+  .stage.zen::before,.stage.zen::after{opacity:1}
+  .bar{height:30px;background:var(--hue-surface);border-bottom:1px solid var(--hue-border-subtle);display:flex;align-items:center;padding:0 12px;gap:8px;font-size:11px;color:var(--hue-text-3);transition:height 120ms,opacity 120ms}
+  .stage.zen .bar{height:0;opacity:0;overflow:hidden;border:none}
+  .dotc{width:8px;height:8px;border-radius:50%;background:var(--hue-text-3);opacity:.5}
+
+  /* 编辑区（模拟 .milkdown .ProseMirror） */
+  .editor{height:440px;overflow-y:auto;scrollbar-width:none;background:var(--hue-editor);padding:10px 0 40vh}
+  .editor::-webkit-scrollbar{width:0}
+  .col{max-width:var(--w-column);margin:0 auto;font-size:16px;line-height:1.75;color:var(--hue-text-1);
+    padding:24px 30px 45vh;padding-left:96px;transition:max-width 120ms ease}
+  .stage.zen .col{max-width:var(--w-column-zen)}
+  .col h1{font-size:26px;font-weight:500;margin:26px 0 10px}
+  .col p{margin:0 0 14px}
+  .col blockquote{margin:16px 0;padding:8px 0 8px 14px;border-left:3px solid var(--hue-accent);
+    background:linear-gradient(90deg,var(--hue-active),transparent 70%);color:var(--hue-text-2)}
+  /* 雾化（非当前段） */
+  .col .dim{opacity:.4;transition:opacity var(--dur-fast)}
+  /* 当前段：青瓷微光 + 放大 */
+  .col .active{opacity:1;border-radius:8px;position:relative;z-index:1;
+    background:linear-gradient(90deg,rgba(var(--hue-tint-1),.1),transparent 72%);
+    transition:opacity var(--dur-fast),font-size var(--dur-fast),transform var(--dur-fast)}
+  .stage.zen .col .active.zoom{font-size:1.07em;transform:scale(1.01);transform-origin:left center}
+  .hint{margin-top:12px;font-size:11.5px;color:var(--hue-text-3);line-height:1.6}
+  .hint b{color:var(--hue-text-2);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>列宽响应式 · 凝神放大当前段落</h1>
+  <div class="sub">拖动「模拟窗口宽度」看正文列随窗口等比例变宽（每行多显示字，字号不变）；开启「凝神」看列更宽且当前段落微放大。</div>
+
+  <div class="controls">
+    <label>模拟窗口宽度：<span class="stat" id="winLabel">1280px</span>
+      <input id="win" type="range" min="780" max="2560" value="1280" step="20" />
+    </label>
+    <div class="row">
+      <span class="stat">模式</span>
+      <div class="seg" id="modeSeg">
+        <button data-mode="normal" class="on">常态</button>
+        <button data-mode="zen">凝神</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="stat">放大当前段落</span>
+      <button id="zoom" class="switch on"></button>
+    </div>
+    <div class="row" style="margin-left:auto">
+      <span class="stat">列宽 <b id="colW">—</b> · 约 <b id="colC">—</b> 字/行</span>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="bar"><span class="dotc"></span> 玉笺 · 笔记.md · 已保存</div>
+    <div class="editor">
+      <div class="col" id="col">
+        <h1>玉笺写作：让视野随窗口呼吸</h1>
+        <p class="dim">窗口变宽时，正文列也跟着等比例变宽——不是把字放大，而是每行能多容纳几个字，阅读节奏更顺。在默认尺寸下保持约 720px 的舒适阅读宽度，全屏时自然铺开到上限。</p>
+        <p class="active zoom">这一段是当前正在编辑的段落。在凝神模式下，它会字号微放大并轻微抬起，配合青瓷微光底衬，成为视觉焦点，让眼睛更轻松地落在正在写的地方——这是参考 iA Writer 焦点放大与 Typora 淡出思路融合后的处理。</p>
+        <p class="dim">其余段落按雾化距离逐档淡出，结构保留、文字退后，营造出「雾里看字、眼前清晰」的沉浸感。列宽上限守住 CJK 阅读舒适区（约 60 字/行），不会因超宽屏而变得难以回行。</p>
+        <blockquote class="dim">「优秀的写作工具，应该让格式消失，只留下你和文字。」—— 列宽是这件小事里最容易被人忽略、却最影响长期舒适度的细节。</blockquote>
+        <p class="dim">拖动上方滑块即可实时观察：从窄窗到 2560px 全屏，正文列如何从约 700px 平滑增长到约 920（常态）/ 1000（凝神）px，而字号始终不变。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">
+    <b>设计取舍：</b>列宽用 <code>clamp(700px, 56vw, 920px)</code>（凝神 <code>clamp(760px, 62vw, 1000px)</code>）绑定视口宽度——
+    下限守住窄窗不挤压、上限守住超宽屏不过宽；字号恒定 16px，变的是「每行字数」而非「字的大小」。
+    凝神当前段 <code>font-size:1.07em + scale(1.01)</code> 提供视觉冲击，离开时平滑回弹（可关）。
+  </div>
+</div>
+
+<script>
+  const win=document.getElementById('win'), stage=document.getElementById('stage'),
+        col=document.getElementById('col'), colW=document.getElementById('colW'),
+        colC=document.getElementById('colC'), winLabel=document.getElementById('winLabel'),
+        zoom=document.getElementById('zoom'), modeSeg=document.getElementById('modeSeg');
+  let zen=false, zoomOn=true;
+
+  function apply(){
+    const w=+win.value;
+    winLabel.textContent=w+'px';
+    stage.style.width=Math.min(w, document.querySelector('.wrap').clientWidth)+'px';
+    // 用与 app 相同的 clamp 公式，按「模拟视口」计算列宽
+    const normal=clamp(700, w*0.56, 920);
+    const zenW=clamp(760, w*0.62, 1000);
+    const cw=zen?zenW:normal;
+    colW.textContent=Math.round(cw)+'px';
+    colC.textContent=Math.round(cw/16); // 16px ≈ 1 中文字
+    stage.classList.toggle('zen', zen);
+    col.querySelector('.active').classList.toggle('zoom', zen && zoomOn);
+  }
+  function clamp(min,v,max){return Math.max(min,Math.min(max,v));}
+
+  win.addEventListener('input',apply);
+  zoom.addEventListener('click',()=>{zoomOn=!zoomOn;zoom.classList.toggle('on',zoomOn);apply();});
+  modeSeg.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    zen=b.dataset.mode==='zen';
+    [...modeSeg.children].forEach(x=>x.classList.toggle('on',x===b));
+    apply();
+  });
+  window.addEventListener('resize',apply);
+  apply();
+</script>
+</body>
+</html>

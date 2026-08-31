@@ -4,7 +4,7 @@
    四幕进场（~360ms，幕间重叠）：
      一 · 退入雾中    0–100ms   侧栏左退 / 大纲右退（宽→0 + 淡出）
      二 · 框架收幕   80–200ms   标题栏 / 标签条 / 状态栏高→0 + 淡出
-     三 · 纸卷微收  180–300ms   正文列 720→640（--w-column 注册过渡）
+     三 · 视野铺展  180–300ms   正文列变宽（--w-column 注册过渡，随窗口等比例伸缩）
      四 · 雾起锚定  280–400ms   上下 48px 羽化遮罩淡入；装饰淡入由
                                 editor.css 的 --dur-fast 过渡承担
    退场（240ms，三幕，反向更快——「回来干活不需要仪式感」）。
@@ -69,7 +69,7 @@
     opacity 100ms var(--ease-zen) 0s;
 }
 
-/* 幕三 · 纸卷微收（180ms 起） */
+/* 幕三 · 视野铺展（180ms 起）：凝神列宽（--w-column-zen，随窗口等比例更宽） */
 .shell[data-zen] {
   --w-column: var(--w-column-zen);
   transition: --w-column 120ms var(--ease-zen) 180ms;
@@ -105,7 +105,7 @@
 /* ── 凝神：源码模式也走居中列 ────────────────────────
    CodeMirror 默认整屏贴左，宽窗下右半边全空 → 视觉「非常偏左」。
    对称内边距把「行号 gutter + 代码」整体收进 --w-column-zen 宽的居中列
-   （行号随代码一起移动，与所见即所得同根列宽 640px）；
+   （行号随代码一起移动，与所见即所得同根列宽，且随窗口等比例变宽）；
    max() 保证窄窗（< 列宽）不产生负内边距，退回贴边布局。 */
 .shell[data-zen] .source-host > .cm-editor .cm-scroller {
   padding-left: max(0px, calc(50% - var(--w-column-zen) / 2));
