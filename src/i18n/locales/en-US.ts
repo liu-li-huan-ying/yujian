@@ -246,6 +246,9 @@ const enUS = {
     snapshotAdoptTip: 'Load this draft into the editor as your main text',
     snapshotBranchEmpty: 'No snapshots on this branch',
     snapshotMilestone: 'Milestone',
+    snapshotCurrentWorkspace: 'Current workspace',
+    snapshotCharDelta: 'Chars vs current doc',
+    snapshotNoDiff: 'Identical to comparison',
     /* ── Writing stats (Batch 2) ── */
     stats: 'Stats',
     charCount: 'Han',

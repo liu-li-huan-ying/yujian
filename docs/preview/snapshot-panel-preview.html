@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-skin="celadon" data-mode="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>玉笺 · 快照面板视觉预览（打磨版）</title>
+<style>
+  /* ============ 玉质 / 玻璃 令牌（青瓷 celadon，深 / 浅）============ */
+  :root {
+    --font-ui: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Cascadia Code", Menlo, Consolas, monospace;
+    --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px;
+    --ease: cubic-bezier(0.2, 0, 0.2, 1);
+    --dur-fast: 120ms; --dur-base: 180ms; --dur-slow: 280ms;
+    --material-highlight-top: rgba(255,255,255,.055);
+    --material-noise-opacity: .045;
+    --noise-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    --border-subtle: rgba(255,255,255,.06);
+  }
+  /* 深（墨玉） */
+  [data-skin='celadon'][data-mode='dark'] {
+    --hue-base:#23292b; --hue-bar:#1f2527;
+    --hue-tint-1:126,196,182; --hue-tint-2:95,168,160;
+    --hue-accent:#5fa8a0; --hue-editor:#1c1e1f; --hue-code:rgba(255,255,255,.035);
+    --hue-text-1:#e8e9e7; --hue-text-2:#a3a7a5; --hue-text-3:#8b908e;
+    --hue-success:#4ec9a0; --hue-danger:#f2685f;
+    --hue-active:rgba(95,168,160,.16); --hue-highlight:rgba(255,255,255,.055);
+    --hue-border-subtle:rgba(255,255,255,.055);
+    --hue-surface:#262c2e; --hue-surface-2:#2c3336;
+    --hue-on-accent:#14201e;
+    --hue-shadow-1:0 6px 20px rgba(0,0,0,.42);
+  }
+  /* 浅（羊脂玉） */
+  [data-skin='celadon'][data-mode='light'] {
+    --hue-base:#eff2f0; --hue-bar:#f3f5f3;
+    --hue-tint-1:184,214,206; --hue-tint-2:196,222,216;
+    --hue-accent:#248077; --hue-editor:#fcfcfb; --hue-code:#f3f5f3;
+    --hue-text-1:#1b1d1c; --hue-text-2:#575b5a; --hue-text-3:#6e7372;
+    --hue-success:#2e8b6b; --hue-danger:#c93f36;
+    --hue-active:rgba(36,128,119,.11); --hue-highlight:rgba(255,255,255,.85);
+    --hue-border-subtle:rgba(0,0,0,.065);
+    --hue-surface:#ffffff; --hue-surface-2:#f6f8f7;
+    --hue-on-accent:#ffffff;
+    --hue-shadow-1:0 8px 24px rgba(20,30,28,.14);
+  }
+
+  /* ============ 玻璃材质（浮层统一配方）============ */
+  .glass {
+    background: rgba(32,37,38,.66);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid rgba(255,255,255,.09);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 18px 48px rgba(0,0,0,.38);
+  }
+  [data-skin][data-mode='light'] .glass {
+    background: rgba(245,248,246,.78);
+    border: 1px solid rgba(20,30,28,.1);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 18px 48px rgba(20,30,28,.18);
+  }
+
+  /* ============ 背景仿真编辑区（让玻璃模糊可见）============ */
+  body { margin:0; font-family:var(--font-ui); }
+  .stage {
+    position: relative; min-height: 100vh; overflow:hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.04), transparent 22%),
+      radial-gradient(120% 62% at 12% 0%, rgba(126,196,182,.12), transparent 62%),
+      radial-gradient(95% 55% at 85% 105%, rgba(95,168,160,.09), transparent 58%),
+      var(--hue-editor);
+  }
+  .stage::after {
+    content:''; position:absolute; inset:0;
+    background-image: var(--noise-texture); opacity:var(--material-noise-opacity);
+    mix-blend-mode:overlay; pointer-events:none;
+  }
+  .doc {
+    max-width: 720px; margin: 0 auto; padding: 64px 32px; color: var(--hue-text-1);
+    line-height: 1.75; font-size: 16px;
+  }
+  .doc h1 { font-size: 28px; font-weight: 500; margin: 0 0 24px; }
+  .doc p { color: var(--hue-text-2); margin: 0 0 18px; opacity:.9; }
+  .doc .code { font-family: var(--font-mono); font-size: 14px; background: var(--hue-code);
+    padding: 12px 14px; border-radius: var(--radius-md); color: var(--hue-text-1); }
+
+  /* 预览控制条 */
+  .controls {
+    position: fixed; left: 16px; top: 16px; z-index: 100;
+    display:flex; gap:8px; align-items:center;
+    padding:8px 10px; border-radius: var(--radius-md);
+    background: var(--hue-surface); border:1px solid var(--hue-border-subtle);
+    font-size:12px; color: var(--hue-text-2);
+  }
+  .controls button {
+    font: inherit; font-size:12px; padding:4px 10px; cursor:pointer;
+    border:1px solid var(--hue-border-subtle); border-radius:999px;
+    background:transparent; color:var(--hue-text-2);
+  }
+  .controls button.on { background:var(--hue-active); border-color:var(--hue-accent); color:var(--hue-accent); }
+
+  /* ============ 快照面板（与组件同款样式）============ */
+  .snap {
+    position: absolute; top: 10px; right: 16px; z-index: 30;
+    width: 340px; max-width: calc(100% - 32px); max-height: calc(100% - 20px);
+    padding: 14px; border-radius: var(--radius-lg);
+    display: flex; flex-direction: column; gap: 12px;
+    transition: width var(--dur-fast) var(--ease);
+  }
+  .snap--tl { width: 460px; }
+
+  .snap__head { display:flex; align-items:center; gap:8px; }
+  .snap__title { font-size:13px; font-weight:600; letter-spacing:.01em; color:var(--hue-text-1); }
+  .snap__count { font-size:11px; color:var(--hue-text-3); font-variant-numeric:tabular-nums; }
+  .snap__views { margin-left:auto; display:inline-flex; padding:2px; gap:2px; background:var(--hue-highlight); border:1px solid var(--hue-border-subtle); border-radius:999px; }
+  .vbtn { padding:3px 10px; font-size:11px; border:0; background:transparent; color:var(--hue-text-3); border-radius:999px; cursor:pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+  .vbtn:hover { color:var(--hue-text-1); }
+  .vbtn.on { background:var(--hue-accent); color:var(--hue-on-accent); }
+  .snap__x { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border:0; border-radius:var(--radius-sm); background:transparent; color:var(--hue-text-3); cursor:pointer; }
+  .snap__x:hover { background:var(--hue-surface-2); color:var(--hue-text-1); }
+
+  .snap__branches { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  .bchip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; font-size:11px; border:1px solid var(--hue-border-subtle); border-radius:999px; background:transparent; color:var(--hue-text-2); cursor:pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+  .bchip__dot { width:6px; height:6px; border-radius:50%; background:var(--hue-text-3); flex:0 0 auto; }
+  .bchip__name { font-weight:500; }
+  .bchip__n { font-size:10px; color:var(--hue-text-3); font-variant-numeric:tabular-nums; }
+  .bchip:hover { border-color:var(--hue-accent); color:var(--hue-text-1); }
+  .bchip.on { background:var(--hue-active); border-color:var(--hue-accent); color:var(--hue-accent); }
+  .bchip.on .bchip__dot { background:var(--hue-accent); }
+  .bchip.on .bchip__n { color:inherit; opacity:.7; }
+  .bchip--add { border-style:dashed; color:var(--hue-text-3); }
+  .bchip--add:hover { border-color:var(--hue-accent); color:var(--hue-accent); }
+  .draftinput { width:160px; height:24px; font-size:11px; padding:0 10px; border:1px solid var(--hue-accent); border-radius:999px; background:var(--hue-surface); color:var(--hue-text-1); outline:none; font-family:inherit; }
+
+  .snap__save { display:flex; gap:6px; }
+  .snap__note { flex:1; min-width:0; height:32px; padding:0 10px; border:1px solid var(--hue-border-subtle); border-radius:var(--radius-md); background:var(--hue-surface); color:var(--hue-text-1); font:inherit; font-size:12.5px; outline:none; transition:border-color var(--dur-fast) var(--ease); }
+  .snap__note::placeholder { color:var(--hue-text-3); }
+  .snap__note:focus { border-color:var(--hue-accent); }
+  .snap__savebtn { display:inline-flex; align-items:center; gap:5px; height:32px; padding:0 12px; border:0; border-radius:var(--radius-md); background:var(--hue-accent); color:var(--hue-on-accent); font-size:12px; font-weight:500; cursor:pointer; white-space:nowrap; }
+  .snap__savebtn:hover { filter:brightness(1.06); }
+
+  .snap__filters { display:flex; flex-wrap:wrap; gap:6px; }
+  .ftag { padding:3px 10px; font-size:11px; border:1px solid var(--hue-border-subtle); border-radius:999px; background:transparent; color:var(--hue-text-2); cursor:pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+  .ftag:hover { border-color:var(--hue-accent); color:var(--hue-text-1); }
+  .ftag.on { background:var(--hue-active); border-color:var(--hue-accent); color:var(--hue-accent); }
+  .ftag--clear { color:var(--hue-text-3); border-style:dashed; }
+
+  .snap__list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+  .snap__empty { font-size:12px; color:var(--hue-text-3); text-align:center; padding:20px 8px; line-height:1.6; }
+
+  .row { display:flex; align-items:stretch; gap:10px; padding:9px 11px; border:1px solid var(--hue-border-subtle); border-radius:var(--radius-md); background:var(--hue-surface); cursor:pointer; text-align:left; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+  .row:hover { background:var(--hue-surface-2); border-color:var(--hue-border-default, var(--hue-border-subtle)); box-shadow:var(--hue-shadow-1); }
+  .row.on { border-color:var(--hue-accent); background:var(--hue-active); }
+  .row.a { box-shadow: inset 3px 0 0 var(--hue-accent); }
+  .row.b { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--hue-accent) 50%, var(--hue-text-3)); }
+  .row__body { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
+  .row__main { display:flex; align-items:center; gap:8px; min-width:0; }
+  .row__time { font-size:12px; color:var(--hue-text-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .row__time--now { color:var(--hue-accent); font-weight:600; }
+  .row__note { flex:1; min-width:0; font-size:12px; color:var(--hue-text-1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row__note--muted { color:var(--hue-text-3); font-weight:400; }
+  .row__spacer { flex:1; }
+  .row__delta { font-size:11px; color:var(--hue-text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .row__cmp { display:inline-flex; gap:3px; opacity:.5; transition:opacity var(--dur-fast) var(--ease); }
+  .row:hover .row__cmp, .row.on .row__cmp, .row.a .row__cmp, .row.b .row__cmp { opacity:1; }
+  .cmpbtn { width:20px; height:20px; font-size:10px; line-height:1; font-weight:600; border:1px solid var(--hue-border-subtle); border-radius:4px; background:transparent; color:var(--hue-text-3); cursor:pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+  .cmpbtn:hover { border-color:var(--hue-accent); color:var(--hue-text-1); }
+  .cmpbtn.on { background:var(--hue-accent); border-color:var(--hue-accent); color:var(--hue-on-accent); }
+
+  .row__tags { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+  .chip { display:inline-flex; align-items:center; gap:3px; padding:1px 9px; font-size:11px; border-radius:999px; background:color-mix(in srgb, var(--hue-accent) 16%, transparent); color:var(--hue-text-1); cursor:pointer; transition:background var(--dur-fast) var(--ease); }
+  .chip:hover { background:color-mix(in srgb, var(--hue-accent) 28%, transparent); }
+  .chip__x { font-style:normal; opacity:.5; font-size:12px; line-height:1; }
+  .chip--add { padding:1px 10px; background:transparent; border:1px dashed var(--hue-border-subtle); color:var(--hue-text-3); }
+  .chip--add:hover { border-color:var(--hue-accent); color:var(--hue-accent); background:transparent; }
+  .taginput { width:96px; height:22px; font-size:11px; padding:0 9px; border:1px solid var(--hue-accent); border-radius:999px; background:var(--hue-surface); color:var(--hue-text-1); outline:none; font-family:inherit; }
+
+  .snap__list--tl { gap:0; padding:2px 0; }
+  .snap__list--tl .row { background:transparent; border-color:transparent; padding:10px 4px 10px 0; border-radius:0; }
+  .snap__list--tl .row:hover { background:color-mix(in srgb, var(--hue-surface-2) 55%, transparent); }
+  .snap__list--tl .row.on { background:var(--hue-active); border-color:transparent; border-radius:var(--radius-md); }
+  .row__rail { position:relative; flex:0 0 16px; align-self:stretch; }
+  .row__rail::before { content:''; position:absolute; left:7px; top:0; bottom:0; width:1.5px; background:var(--hue-border-subtle); }
+  .snap__list--tl .tl-now .row__rail::before { top:18px; }
+  .snap__list--tl .row:last-child .row__rail::before { bottom:auto; height:18px; }
+  .row__dot { position:absolute; left:3.5px; top:16px; width:9px; height:9px; transform:translateY(-50%); border-radius:50%; background:var(--hue-surface-2); border:1.5px solid var(--hue-border-default, var(--hue-border-subtle)); z-index:1; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+  .row__dot--tag { background:var(--hue-accent); border-color:var(--hue-accent); }
+  .row__dot--on { box-shadow:0 0 0 3px color-mix(in srgb, var(--hue-accent) 24%, transparent); }
+  .row__dot--now { background:var(--hue-accent); border-color:var(--hue-accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--hue-accent) 26%, transparent); }
+  .tl-now { display:flex; align-items:stretch; gap:10px; padding:6px 4px 12px 0; }
+  .tl-now .row__time--now { font-size:12px; }
+
+  .snap__diff { max-height:36%; overflow:auto; border-top:1px solid var(--hue-border-subtle); border-bottom:1px solid var(--hue-border-subtle); padding:8px 0; }
+  .diff__head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; padding:0 2px; }
+  .diff__mode { font-size:11px; font-weight:500; color:var(--hue-text-2); }
+  .diff__stat { display:inline-flex; gap:8px; font-size:11px; font-variant-numeric:tabular-nums; }
+  .stat--add { color:var(--hue-success); font-weight:600; }
+  .stat--del { color:var(--hue-danger); font-weight:600; }
+  .diff__clear { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border:0; border-radius:var(--radius-sm); background:transparent; color:var(--hue-text-3); cursor:pointer; }
+  .diff__none { font-size:11.5px; color:var(--hue-text-3); text-align:center; padding:8px; }
+  .diff { margin:0; font-family:var(--font-mono); font-size:11px; line-height:1.6; white-space:pre; color:var(--hue-text-2); }
+  .diff > span { display:block; padding:0 8px; }
+  .diff__add { color:var(--hue-success); background:color-mix(in srgb, var(--hue-success) 13%, transparent); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-success) 60%, transparent); }
+  .diff__del { color:var(--hue-danger); background:color-mix(in srgb, var(--hue-danger) 13%, transparent); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-danger) 60%, transparent); }
+  .diff__ctx { color:var(--hue-text-3); }
+
+  .snap__acts { display:flex; gap:8px; }
+  .act { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:5px; height:34px; border:1px solid var(--hue-border-subtle); border-radius:var(--radius-md); background:transparent; color:var(--hue-text-1); font-size:12.5px; cursor:pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+  .act--restore:hover { background:var(--hue-active); border-color:var(--hue-accent); color:var(--hue-accent); }
+  .act--del:hover { background:color-mix(in srgb, var(--hue-danger) 12%, transparent); border-color:var(--hue-danger); color:var(--hue-danger); }
+
+  .snap button:focus-visible { outline:2px solid var(--hue-accent); outline-offset:2px; }
+</style>
+</head>
+<body>
+  <div class="controls">
+    <span>视图</span>
+    <button id="btnList" class="on" onclick="setView('list')">列表</button>
+    <button id="btnTl" onclick="setView('timeline')">时间轴</button>
+    <span style="opacity:.4">·</span>
+    <span>皮肤</span>
+    <button id="btnDark" class="on" onclick="setMode('dark')">墨玉</button>
+    <button id="btnLight" onclick="setMode('light')">羊脂玉</button>
+  </div>
+
+  <div class="stage">
+    <article class="doc">
+      <h1>玉笺 Markdown 编辑器</h1>
+      <p>这是一页仿真的编辑区背景，用来检验快照面板的玻璃材质是否通透、内容层是否「退后」。面板浮在右上角，像 Apple 的浮起层那样悬浮于内容之上。</p>
+      <p>把快照面板想像成写作者的「时间隧道入口」：列表模式是干净的卡片流，时间轴模式则把每次留档串成一条向纵深延伸的线索。</p>
+      <div class="code">const editor = new MilkdownCrepe({ theme: 'classic' })</div>
+      <p>本预览仅用于视觉打磨评审，所有数据均为示例，不读写任何磁盘文件。</p>
+    </article>
+
+    <!-- ===== 快照面板（示例数据） ===== -->
+    <div class="snap glass" id="panel">
+      <header class="snap__head">
+        <span class="snap__title">快照</span>
+        <span class="snap__count">3 份</span>
+        <span class="snap__views">
+          <button class="vbtn on" id="vList" onclick="setView('list')">列表</button>
+          <button class="vbtn" id="vTl" onclick="setView('timeline')">时间轴</button>
+        </span>
+        <button class="snap__x" title="关闭">✕</button>
+      </header>
+
+      <div class="snap__branches">
+        <button class="bchip on"><i class="bchip__dot"></i><span class="bchip__name">主线</span><span class="bchip__n">3</span></button>
+        <button class="bchip"><i class="bchip__dot"></i><span class="bchip__name">换个结尾</span><span class="bchip__n">1</span></button>
+        <button class="bchip bchip--add">+ 另起草稿</button>
+      </div>
+
+      <div class="snap__save">
+        <input class="snap__note" placeholder="备注（可选，如「发布前」）" />
+        <button class="snap__savebtn">＋ 保存快照</button>
+      </div>
+
+      <div class="snap__filters">
+        <button class="ftag on">发布前</button>
+        <button class="ftag">v1</button>
+        <button class="ftag ftag--clear">清除筛选</button>
+      </div>
+
+      <div class="snap__list" id="list">
+        <!-- 列表模式示例 -->
+        <div class="row on">
+          <div class="row__body">
+            <div class="row__main">
+              <span class="row__time">08-31 14:02</span>
+              <span class="row__note">发布前定稿</span>
+              <span class="row__spacer"></span>
+              <span class="row__delta">±0</span>
+              <span class="row__cmp"><button class="cmpbtn on">A</button><button class="cmpbtn">B</button></span>
+            </div>
+            <div class="row__tags">
+              <span class="chip">发布前<i class="chip__x">×</i></span>
+              <span class="chip">v1<i class="chip__x">×</i></span>
+              <button class="chip chip--add">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row b">
+          <div class="row__body">
+            <div class="row__main">
+              <span class="row__time">08-31 11:20</span>
+              <span class="row__note">补充第三章</span>
+              <span class="row__spacer"></span>
+              <span class="row__delta">−140</span>
+              <span class="row__cmp"><button class="cmpbtn">A</button><button class="cmpbtn on">B</button></span>
+            </div>
+            <div class="row__tags"><button class="chip chip--add">+</button></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row__body">
+            <div class="row__main">
+              <span class="row__time">08-30 22:10</span>
+              <span class="row__note"></span>
+              <span class="row__spacer"></span>
+              <span class="row__delta">−820</span>
+              <span class="row__cmp"><button class="cmpbtn">A</button><button class="cmpbtn">B</button></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="snap__diff">
+        <div class="diff__head">
+          <span class="diff__mode">A↔B 对比</span>
+          <span class="diff__stat"><b class="stat--add">+4</b><b class="stat--del">−2</b></span>
+          <button class="diff__clear" title="清除对比">✕</button>
+        </div>
+        <pre class="diff"><span class="diff__ctx"> 第三章围绕「克制」展开。</span><span class="diff__del"> 旧版罗列了七种装饰手法。</span><span class="diff__add"> 新版只保留三种，并给出取舍理由。</span><span class="diff__ctx"> 读者可在五分钟内建立判断框架。</span><span class="diff__add"> 新增「当不确定时，先删」的原则。</span></pre>
+      </div>
+
+      <div class="snap__acts">
+        <button class="act act--restore">↺ 恢复</button>
+        <button class="act act--del">🗑 删除</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  function setView(v) {
+    var panel = document.getElementById('panel');
+    var isTl = v === 'timeline';
+    panel.classList.toggle('snap--tl', isTl);
+    document.getElementById('btnList').classList.toggle('on', !isTl);
+    document.getElementById('btnTl').classList.toggle('on', isTl);
+    document.getElementById('vList').classList.toggle('on', !isTl);
+    document.getElementById('vTl').classList.toggle('on', isTl);
+    renderList(isTl);
+  }
+  function setMode(m) {
+    document.documentElement.setAttribute('data-mode', m);
+    document.getElementById('btnDark').classList.toggle('on', m === 'dark');
+    document.getElementById('btnLight').classList.toggle('on', m === 'light');
+  }
+  // 切换时间轴时，把首行替换为「当前工作区」锚点示例
+  function renderList(isTl) {
+    var list = document.getElementById('list');
+    if (isTl) {
+      list.classList.add('snap__list--tl');
+      list.innerHTML = `
+        <div class="tl-now">
+          <span class="row__rail"><i class="row__dot row__dot--now" title="当前工作区"></i></span>
+          <div class="row__body"><div class="row__main">
+            <span class="row__time row__time--now">当前工作区</span>
+            <span class="row__note row__note--muted">快照</span>
+          </div></div>
+        </div>
+        <div class="row on">
+          <span class="row__rail"><i class="row__dot row__dot--tag row__dot--on" title="里程碑"></i></span>
+          <div class="row__body"><div class="row__main">
+            <span class="row__time">08-31 14:02</span><span class="row__note">发布前定稿</span>
+            <span class="row__spacer"></span><span class="row__delta">±0</span>
+            <span class="row__cmp"><button class="cmpbtn on">A</button><button class="cmpbtn">B</button></span>
+          </div><div class="row__tags"><span class="chip">发布前<i class="chip__x">×</i></span><span class="chip">v1<i class="chip__x">×</i></span><button class="chip chip--add">+</button></div></div>
+        </div>
+        <div class="row b">
+          <span class="row__rail"><i class="row__dot"></i></span>
+          <div class="row__body"><div class="row__main">
+            <span class="row__time">08-31 11:20</span><span class="row__note">补充第三章</span>
+            <span class="row__spacer"></span><span class="row__delta">−140</span>
+            <span class="row__cmp"><button class="cmpbtn">A</button><button class="cmpbtn on">B</button></span>
+          </div><div class="row__tags"><button class="chip chip--add">+</button></div></div>
+        </div>
+        <div class="row">
+          <span class="row__rail"><i class="row__dot"></i></span>
+          <div class="row__body"><div class="row__main">
+            <span class="row__time">08-30 22:10</span><span class="row__note"></span>
+            <span class="row__spacer"></span><span class="row__delta">−820</span>
+            <span class="row__cmp"><button class="cmpbtn">A</button><button class="cmpbtn">B</button></span>
+          </div></div>
+        </div>`;
+    } else {
+      list.classList.remove('snap__list--tl');
+      list.innerHTML = `
+        <div class="row on">
+          <div class="row__body"><div class="row__main">
+            <span class="row__time">08-31 14:02</span><span class="row__note">发布前定稿</span>
+            <span class="row__spacer"></span><span class="row__delta">±0</span>
+            <span class="row__cmp"><button class="cmpbtn on">A</button><button class="cmpbtn">B</button></span>
+          </div><div class="row__tags"><span class="chip">发布前<i class="chip__x">×</i></span><span class="chip">v1<i class="chip__x">×</i></span><button class="chip chip--add">+</button></div></div>
+        </div>
+        <div class="row b">
+          <div class="row__body"><div class="row__main">
+            <span class="row__time">08-31 11:20</span><span class="row__note">补充第三章</span>
+            <span class="row__spacer"></span><span class="row__delta">−140</span>
+            <span class="row__cmp"><button class="cmpbtn">A</button><button class="cmpbtn on">B</button></span>
+          </div><div class="row__tags"><button class="chip chip--add">+</button></div></div>
+        </div>
+        <div class="row">
+          <div class="row__body"><div class="row__main">
+            <span class="row__time">08-30 22:10</span><span class="row__note"></span>
+            <span class="row__spacer"></span><span class="row__delta">−820</span>
+            <span class="row__cmp"><button class="cmpbtn">A</button><button class="cmpbtn">B</button></span>
+          </div></div>
+        </div>`;
+    }
+  }
+</script>
+</body>
+</html>

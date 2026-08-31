@@ -164,6 +164,15 @@ const diffRows = computed<{ type: 'add' | 'del' | 'ctx'; prefix: string; text: s
   return out
 })
 const hasDiff = computed(() => diffRows.value.some((r) => r.type !== 'ctx'))
+const diffStats = computed(() => {
+  let add = 0
+  let del = 0
+  for (const r of diffRows.value) {
+    if (r.type === 'add') add++
+    else if (r.type === 'del') del++
+  }
+  return { add, del }
+})
 
 /* ── 字数差（快照相对当前文档）── */
 function deltaChars(charCount: number): string {
@@ -231,7 +240,7 @@ function fmtTime(ts: number): string {
 
 <template>
   <div class="snap glass" :class="{ 'snap--tl': view === 'timeline' }" role="dialog" aria-label="版本快照">
-    <div class="snap__head">
+    <header class="snap__head">
       <span class="snap__title">{{ L.snapshots }}</span>
       <span class="snap__count">{{ L.snapshotCount.replace('{n}', String(snapshots.branchList.length)) }}</span>
       <span class="snap__views">
@@ -245,7 +254,7 @@ function fmtTime(ts: number): string {
       <button class="snap__x" type="button" :title="L.close" @click="emit('close')">
         <Icon name="x" :size="14" />
       </button>
-    </div>
+    </header>
 
     <!-- 分支：主线 + 草稿分支；「另起草稿」基于当前正文 Fork 一条独立时间轴 -->
     <div v-if="filePath" class="snap__branches">
@@ -254,10 +263,13 @@ function fmtTime(ts: number): string {
         :key="b.name"
         type="button"
         class="bchip"
-        :class="{ 'bchip--on': snapshots.activeBranch === b.name }"
+        :class="{ on: snapshots.activeBranch === b.name }"
+        :title="b.name === MAIN_BRANCH ? L.snapshotMainBranch : b.name"
         @click="snapshots.activeBranch = b.name"
       >
-        {{ branchLabel(b.name) }}<span class="bchip__n">{{ b.count }}</span>
+        <i class="bchip__dot" />
+        <span class="bchip__name">{{ branchLabel(b.name) }}</span>
+        <span class="bchip__n">{{ b.count }}</span>
       </button>
       <button
         v-if="!drafting"
@@ -298,7 +310,7 @@ function fmtTime(ts: number): string {
         :key="tg"
         type="button"
         class="ftag"
-        :class="{ 'ftag--on': filterTag === tg }"
+        :class="{ on: filterTag === tg }"
         @click="filterTag = filterTag === tg ? '' : tg"
       >{{ tg }}</button>
       <button v-if="filterTag" type="button" class="ftag ftag--clear" @click="filterTag = ''">{{ L.snapshotClearFilter }}</button>
@@ -312,11 +324,22 @@ function fmtTime(ts: number): string {
       </p>
 
       <template v-else>
+        <!-- 时间轴：当前工作区锚点，向纵深收束到各快照 -->
+        <div v-if="view === 'timeline'" class="tl-now">
+          <span class="row__rail"><i class="row__dot row__dot--now" :title="L.snapshotCurrentWorkspace" /></span>
+          <div class="row__body">
+            <div class="row__main">
+              <span class="row__time row__time--now">{{ L.snapshotCurrentWorkspace }}</span>
+              <span class="row__note row__note--muted">{{ isDraft ? L.snapshotAdopt : L.snapshots }}</span>
+            </div>
+          </div>
+        </div>
+
         <div
           v-for="item in filteredList"
           :key="item.id"
           class="row"
-          :class="{ 'row--on': snapshots.selectedId === item.id, 'row--a': compareA === item.id, 'row--b': compareB === item.id }"
+          :class="{ on: snapshots.selectedId === item.id, a: compareA === item.id, b: compareB === item.id }"
           @click="snapshots.selectedId = item.id"
           @contextmenu="onContext($event, item.id)"
         >
@@ -329,30 +352,34 @@ function fmtTime(ts: number): string {
             />
           </span>
 
-          <span class="row__time" :title="tz ? L.snapshotTimezone.replace('{tz}', tz) : ''">{{ fmtTime(item.createdAt) }}</span>
-          <span v-if="item.note" class="row__note">{{ item.note }}</span>
-          <span class="row__delta">{{ deltaChars(item.charCount) }}</span>
+          <div class="row__body">
+            <div class="row__main">
+              <span class="row__time" :title="tz ? L.snapshotTimezone.replace('{tz}', tz) : ''">{{ fmtTime(item.createdAt) }}</span>
+              <span v-if="item.note" class="row__note">{{ item.note }}</span>
+              <span class="row__spacer" />
+              <span class="row__delta" :title="L.snapshotCharDelta">{{ deltaChars(item.charCount) }}</span>
+              <span class="row__cmp">
+                <button type="button" class="cmpbtn" :class="{ on: compareA === item.id }" :title="L.snapshotSetA" @click.stop="toggleA(item.id)">A</button>
+                <button type="button" class="cmpbtn" :class="{ on: compareB === item.id }" :title="L.snapshotSetB" @click.stop="toggleB(item.id)">B</button>
+              </span>
+            </div>
 
-          <span class="row__cmp">
-            <button type="button" class="cmpbtn" :class="{ on: compareA === item.id }" :title="L.snapshotSetA" @click.stop="toggleA(item.id)">A</button>
-            <button type="button" class="cmpbtn" :class="{ on: compareB === item.id }" :title="L.snapshotSetB" @click.stop="toggleB(item.id)">B</button>
-          </span>
-
-          <span class="row__tags">
-            <template v-if="item.tags && item.tags.length">
-              <span v-for="tg in item.tags" :key="tg" class="chip" @click.stop="removeTag(item, tg)">{{ tg }}<i class="chip__x">×</i></span>
-            </template>
-            <button v-if="editingTagsId !== item.id" type="button" class="chip chip--add" :title="L.snapshotAddTag" @click.stop="startEditTags(item)">+</button>
-            <input
-              v-else
-              v-model="tagDraft"
-              class="taginput"
-              :placeholder="L.snapshotTagPlaceholder"
-              @click.stop
-              @keydown.enter.prevent="commitTag(item)"
-              @keydown.esc="editingTagsId = null"
-            />
-          </span>
+            <div v-if="(item.tags && item.tags.length) || editingTagsId === item.id" class="row__tags">
+              <template v-if="item.tags && item.tags.length">
+                <span v-for="tg in item.tags" :key="tg" class="chip" @click.stop="removeTag(item, tg)">{{ tg }}<i class="chip__x">×</i></span>
+              </template>
+              <button v-if="editingTagsId !== item.id" type="button" class="chip chip--add" :title="L.snapshotAddTag" @click.stop="startEditTags(item)">+</button>
+              <input
+                v-else
+                v-model="tagDraft"
+                class="taginput"
+                :placeholder="L.snapshotTagPlaceholder"
+                @click.stop
+                @keydown.enter.prevent="commitTag(item)"
+                @keydown.esc="editingTagsId = null"
+              />
+            </div>
+          </div>
         </div>
       </template>
     </div>
@@ -361,11 +388,15 @@ function fmtTime(ts: number): string {
     <div v-if="diffMode !== 'none'" class="snap__diff">
       <div class="diff__head">
         <span class="diff__mode">{{ diffLabel }}</span>
+        <span v-if="hasDiff" class="diff__stat">
+          <b class="stat--add">+{{ diffStats.add }}</b>
+          <b class="stat--del">−{{ diffStats.del }}</b>
+        </span>
         <button v-if="diffMode === 'ab'" type="button" class="diff__clear" :title="L.snapshotClearCompare" @click="compareA = null; compareB = null">
           <Icon name="x" :size="12" />
         </button>
       </div>
-      <div v-if="!hasDiff" class="diff__none">— 与对比对象一致 —</div>
+      <div v-if="!hasDiff" class="diff__none">— {{ L.snapshotNoDiff }} —</div>
       <pre v-else class="diff"><span
           v-for="(row, i) in diffRows"
           :key="i"
@@ -408,21 +439,22 @@ function fmtTime(ts: number): string {
   top: 10px;
   right: 16px;
   z-index: 30;
-  width: 320px;
+  width: 340px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
-  padding: 12px;
+  padding: 14px;
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   transition: width var(--dur-fast) var(--ease);
 }
 /* 时间轴视图需要横向空间放血缘导轨与更长的备注，面板相应加宽 */
 .snap--tl {
-  width: 440px;
+  width: 460px;
 }
 
+/* ── 头部 ── */
 .snap__head {
   display: flex;
   align-items: center;
@@ -431,27 +463,32 @@ function fmtTime(ts: number): string {
 .snap__title {
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--hue-text-1);
 }
 .snap__count {
   font-size: 11px;
   color: var(--hue-text-3);
+  font-variant-numeric: tabular-nums;
 }
 
-/* 视图切换：列表 / 时间轴 */
+/* 视图切换：列表 / 时间轴（分段控件，与标题栏同语言） */
 .snap__views {
   margin-left: auto;
   display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--hue-highlight);
   border: 1px solid var(--hue-border-subtle);
   border-radius: 999px;
-  overflow: hidden;
 }
 .vbtn {
-  padding: 2px 9px;
+  padding: 3px 10px;
   font-size: 11px;
   border: 0;
   background: transparent;
   color: var(--hue-text-3);
+  border-radius: 999px;
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease),
@@ -461,39 +498,42 @@ function fmtTime(ts: number): string {
   color: var(--hue-text-1);
 }
 .vbtn.on {
-  background: var(--hue-active);
-  color: var(--hue-accent);
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
 }
 
 .snap__x {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--hue-text-3);
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .snap__x:hover {
-  background: var(--bg-hover);
+  background: var(--hue-surface-2);
   color: var(--hue-text-1);
 }
 
-/* 分支 chips */
+/* ── 分支 chips ── */
 .snap__branches {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 .bchip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 9px;
+  gap: 6px;
+  padding: 3px 10px;
   font-size: 11px;
   border: 1px solid var(--hue-border-subtle);
   border-radius: 999px;
@@ -505,21 +545,34 @@ function fmtTime(ts: number): string {
     border-color var(--dur-fast) var(--ease),
     color var(--dur-fast) var(--ease);
 }
-.bchip:hover {
-  border-color: var(--hue-accent);
-  color: var(--hue-text-1);
+.bchip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hue-text-3);
+  flex: 0 0 auto;
 }
-.bchip--on {
-  background: var(--hue-active);
-  border-color: var(--hue-accent);
-  color: var(--hue-accent);
+.bchip__name {
+  font-weight: 500;
 }
 .bchip__n {
   font-size: 10px;
   color: var(--hue-text-3);
   font-variant-numeric: tabular-nums;
 }
-.bchip--on .bchip__n {
+.bchip:hover {
+  border-color: var(--hue-accent);
+  color: var(--hue-text-1);
+}
+.bchip.on {
+  background: var(--hue-active);
+  border-color: var(--hue-accent);
+  color: var(--hue-accent);
+}
+.bchip.on .bchip__dot {
+  background: var(--hue-accent);
+}
+.bchip.on .bchip__n {
   color: inherit;
   opacity: 0.7;
 }
@@ -532,18 +585,19 @@ function fmtTime(ts: number): string {
   color: var(--hue-accent);
 }
 .draftinput {
-  width: 150px;
-  height: 22px;
+  width: 160px;
+  height: 24px;
   font-size: 11px;
-  padding: 0 9px;
+  padding: 0 10px;
   border: 1px solid var(--hue-accent);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--hue-surface);
   color: var(--hue-text-1);
   outline: none;
   font-family: inherit;
 }
 
+/* ── 保存条 ── */
 .snap__save {
   display: flex;
   gap: 6px;
@@ -551,15 +605,19 @@ function fmtTime(ts: number): string {
 .snap__note {
   flex: 1;
   min-width: 0;
-  height: 30px;
-  padding: 0 8px;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+  background: var(--hue-surface);
   color: var(--hue-text-1);
   font: inherit;
   font-size: 12.5px;
   outline: none;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.snap__note::placeholder {
+  color: var(--hue-text-3);
 }
 .snap__note:focus {
   border-color: var(--hue-accent);
@@ -567,17 +625,20 @@ function fmtTime(ts: number): string {
 .snap__savebtn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 10px;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--hue-accent);
   color: var(--hue-on-accent);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    filter var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 .snap__savebtn:disabled {
   opacity: 0.5;
@@ -587,14 +648,14 @@ function fmtTime(ts: number): string {
   filter: brightness(1.06);
 }
 
-/* 标签筛选 */
+/* ── 标签筛选 ── */
 .snap__filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
 }
 .ftag {
-  padding: 2px 9px;
+  padding: 3px 10px;
   font-size: 11px;
   border: 1px solid var(--hue-border-subtle);
   border-radius: 999px;
@@ -610,7 +671,7 @@ function fmtTime(ts: number): string {
   border-color: var(--hue-accent);
   color: var(--hue-text-1);
 }
-.ftag--on {
+.ftag.on {
   background: var(--hue-active);
   border-color: var(--hue-accent);
   color: var(--hue-accent);
@@ -620,105 +681,76 @@ function fmtTime(ts: number): string {
   border-style: dashed;
 }
 
+/* ── 列表 ── */
 .snap__list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .snap__empty {
   font-size: 12px;
   color: var(--hue-text-3);
   text-align: center;
-  padding: 18px 8px;
+  padding: 20px 8px;
   line-height: 1.6;
 }
 
+/* 每条快照 = 卡片（列表模式） */
 .row {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid transparent;
+  align-items: stretch;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--hue-border-subtle);
   border-radius: var(--radius-md);
   background: var(--hue-surface);
   cursor: pointer;
   text-align: left;
   transition:
     background var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
-}
-.row:hover {
-  background: var(--hue-surface-2);
-}
-.row--on {
-  border-color: var(--hue-accent);
-  background: var(--hue-active);
-}
-.row--a {
-  box-shadow: inset 3px 0 0 var(--hue-accent);
-}
-.row--b {
-  box-shadow: inset 3px 0 0 #d99a4e;
-}
-
-/* ── 时间轴：血缘导轨（竖线 + 节点圆点）── */
-.row__rail {
-  position: relative;
-  flex: 0 0 14px;
-  align-self: stretch;
-}
-.row__rail::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--hue-border-subtle);
-}
-/* 首行（最新）竖线从节点开始向下，末行（最旧）到节点为止 —— 时间轴两端不冒头 */
-.snap__list--tl .row:first-child .row__rail::before {
-  top: 16px;
-}
-.snap__list--tl .row:last-child .row__rail::before {
-  bottom: auto;
-  height: 16px;
-}
-.row__dot {
-  position: absolute;
-  left: 3px;
-  top: 16px;
-  width: 8px;
-  height: 8px;
-  transform: translateY(-50%);
-  border-radius: 50%;
-  background: var(--hue-surface-2);
-  border: 1.5px solid var(--hue-border-subtle);
-  z-index: 1;
-  transition:
-    background var(--dur-fast) var(--ease),
     border-color var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease);
 }
-/* 里程碑（打了标签）→ 实心强调色 */
-.row__dot--tag {
-  background: var(--hue-accent);
+.row:hover {
+  background: var(--hue-surface-2);
+  border-color: var(--hue-border-default);
+  box-shadow: var(--hue-shadow-1);
+}
+.row.on {
   border-color: var(--hue-accent);
+  background: var(--hue-active);
 }
-.row__dot--on {
-  box-shadow: 0 0 0 3px rgba(var(--hue-tint-1, 126, 196, 182), 0.22);
+.row.a {
+  box-shadow: inset 3px 0 0 var(--hue-accent);
 }
-
+.row.b {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--hue-accent) 50%, var(--hue-text-3));
+}
+.row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.row__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .row__time {
   font-size: 12px;
   color: var(--hue-text-2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.row__time--now {
+  color: var(--hue-accent);
+  font-weight: 600;
 }
 .row__note {
   flex: 1;
@@ -729,6 +761,13 @@ function fmtTime(ts: number): string {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.row__note--muted {
+  color: var(--hue-text-3);
+  font-weight: 400;
+}
+.row__spacer {
+  flex: 1;
+}
 .row__delta {
   font-size: 11px;
   color: var(--hue-text-3);
@@ -736,17 +775,25 @@ function fmtTime(ts: number): string {
   white-space: nowrap;
 }
 
-/* 对比 A / B 小按钮 */
+/* 对比 A / B 小按钮：默认降噪半透明，hover / 选中才点亮 */
 .row__cmp {
   display: inline-flex;
   gap: 3px;
-  margin-left: 2px;
+  opacity: 0.5;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.row:hover .row__cmp,
+.row.on .row__cmp,
+.row.a .row__cmp,
+.row.b .row__cmp {
+  opacity: 1;
 }
 .cmpbtn {
   width: 20px;
   height: 20px;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1;
+  font-weight: 600;
   border: 1px solid var(--hue-border-subtle);
   border-radius: 4px;
   background: transparent;
@@ -767,38 +814,36 @@ function fmtTime(ts: number): string {
   color: var(--hue-on-accent);
 }
 
-/* 标签 chips */
+/* ── 标签 chips ── */
 .row__tags {
-  flex-basis: 100%;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  margin-top: 2px;
+  gap: 5px;
 }
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 8px;
+  padding: 1px 9px;
   font-size: 11px;
   border-radius: 999px;
-  background: rgba(var(--hue-tint-1, 126, 196, 182), 0.18);
+  background: color-mix(in srgb, var(--hue-accent) 16%, transparent);
   color: var(--hue-text-1);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease);
 }
 .chip:hover {
-  background: rgba(var(--hue-tint-1, 126, 196, 182), 0.3);
+  background: color-mix(in srgb, var(--hue-accent) 28%, transparent);
 }
 .chip__x {
   font-style: normal;
-  opacity: 0.55;
+  opacity: 0.5;
   font-size: 12px;
   line-height: 1;
 }
 .chip--add {
-  padding: 1px 9px;
+  padding: 1px 10px;
   background: transparent;
   border: 1px dashed var(--hue-border-subtle);
   color: var(--hue-text-3);
@@ -809,36 +854,135 @@ function fmtTime(ts: number): string {
   background: transparent;
 }
 .taginput {
-  width: 92px;
+  width: 96px;
   height: 22px;
   font-size: 11px;
-  padding: 0 8px;
+  padding: 0 9px;
   border: 1px solid var(--hue-accent);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--hue-surface);
   color: var(--hue-text-1);
   outline: none;
   font-family: inherit;
 }
 
+/* ── 时间轴：血缘导轨（竖线 + 节点圆点）── */
+.snap__list--tl {
+  gap: 0;
+  padding: 2px 0;
+}
+.snap__list--tl .row {
+  background: transparent;
+  border-color: transparent;
+  padding: 10px 4px 10px 0;
+  border-radius: 0;
+}
+.snap__list--tl .row:hover {
+  background: color-mix(in srgb, var(--hue-surface-2) 55%, transparent);
+}
+.snap__list--tl .row.on {
+  background: var(--hue-active);
+  border-color: transparent;
+  border-radius: var(--radius-md);
+}
+.row__rail {
+  position: relative;
+  flex: 0 0 16px;
+  align-self: stretch;
+}
+.row__rail::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--hue-border-subtle);
+}
+/* 首行（当前工作区锚点）竖线从节点开始向下，末行（最旧）到节点为止 —— 时间轴两端不冒头 */
+.snap__list--tl .tl-now .row__rail::before {
+  top: 18px;
+}
+.snap__list--tl .row:last-child .row__rail::before {
+  bottom: auto;
+  height: 18px;
+}
+.row__dot {
+  position: absolute;
+  left: 3.5px;
+  top: 16px;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--hue-surface-2);
+  border: 1.5px solid var(--hue-border-default);
+  z-index: 1;
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+/* 里程碑（打了标签）→ 实心强调色 */
+.row__dot--tag {
+  background: var(--hue-accent);
+  border-color: var(--hue-accent);
+}
+.row__dot--on {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-accent) 24%, transparent);
+}
+/* 当前工作区锚点：accent 实心 + 光环 */
+.row__dot--now {
+  background: var(--hue-accent);
+  border-color: var(--hue-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-accent) 26%, transparent);
+}
+
+/* 时间轴「当前工作区」锚点行 */
+.tl-now {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 6px 4px 12px 0;
+}
+.tl-now .row__time--now {
+  font-size: 12px;
+}
+
+/* ── diff 预览 ── */
 .snap__diff {
-  max-height: 38%;
+  max-height: 36%;
   overflow: auto;
   border-top: 1px solid var(--hue-border-subtle);
   border-bottom: 1px solid var(--hue-border-subtle);
-  padding: 6px 0;
+  padding: 8px 0;
 }
 .diff__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  gap: 8px;
+  margin-bottom: 6px;
   padding: 0 2px;
 }
 .diff__mode {
   font-size: 11px;
   font-weight: 500;
   color: var(--hue-text-2);
+}
+.diff__stat {
+  display: inline-flex;
+  gap: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.stat--add {
+  color: var(--hue-success);
+  font-weight: 600;
+}
+.stat--del {
+  color: var(--hue-danger);
+  font-weight: 600;
 }
 .diff__clear {
   display: inline-flex;
@@ -851,37 +995,47 @@ function fmtTime(ts: number): string {
   background: transparent;
   color: var(--hue-text-3);
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 .diff__clear:hover {
-  background: var(--bg-hover);
+  background: var(--hue-surface-2);
   color: var(--hue-text-1);
 }
 .diff__none {
   font-size: 11.5px;
   color: var(--hue-text-3);
   text-align: center;
-  padding: 6px;
+  padding: 8px;
 }
 .diff {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 11px;
-  line-height: 1.55;
+  line-height: 1.6;
   white-space: pre;
   color: var(--hue-text-2);
 }
+.diff > span {
+  display: block;
+  padding: 0 8px;
+}
 .diff__add {
-  color: #6fcf97;
-  background: rgba(111, 207, 151, 0.1);
+  color: var(--hue-success);
+  background: color-mix(in srgb, var(--hue-success) 13%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-success) 60%, transparent);
 }
 .diff__del {
-  color: #f3a39d;
-  background: rgba(243, 79, 69, 0.12);
+  color: var(--hue-danger);
+  background: color-mix(in srgb, var(--hue-danger) 13%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-danger) 60%, transparent);
 }
 .diff__ctx {
   color: var(--hue-text-3);
 }
 
+/* ── 操作按钮 ── */
 .snap__acts {
   display: flex;
   gap: 8px;
@@ -892,7 +1046,7 @@ function fmtTime(ts: number): string {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 32px;
+  height: 34px;
   border: 1px solid var(--hue-border-subtle);
   border-radius: var(--radius-md);
   background: transparent;
@@ -910,8 +1064,14 @@ function fmtTime(ts: number): string {
   color: var(--hue-accent);
 }
 .act--del:hover {
-  background: rgba(243, 79, 69, 0.12);
+  background: color-mix(in srgb, var(--hue-danger) 12%, transparent);
   border-color: var(--hue-danger);
   color: var(--hue-danger);
+}
+
+/* ── 无障碍：焦点可见 ── */
+.snap button:focus-visible {
+  outline: 2px solid var(--hue-accent);
+  outline-offset: 2px;
 }
 </style>
