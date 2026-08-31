@@ -234,6 +234,18 @@ const enUS = {
     snapshotClearCompare: 'Clear compare',
     snapshotFilterTag: 'Filter by tag',
     snapshotClearFilter: 'Clear filter',
+    /* ── Snapshots Phase B: timeline / lineage view + lightweight draft branches ── */
+    snapshotViewList: 'List',
+    snapshotViewTimeline: 'Timeline',
+    snapshotBranch: 'Branch',
+    snapshotMainBranch: 'main',
+    snapshotNewDraft: 'New draft',
+    snapshotDraftNamePlaceholder: 'Draft name… (e.g. "alt ending")',
+    snapshotDraftTip: 'Fork an independent draft timeline from the current text',
+    snapshotAdopt: 'Adopt to main',
+    snapshotAdoptTip: 'Load this draft into the editor as your main text',
+    snapshotBranchEmpty: 'No snapshots on this branch',
+    snapshotMilestone: 'Milestone',
     /* ── Writing stats (Batch 2) ── */
     stats: 'Stats',
     charCount: 'Han',

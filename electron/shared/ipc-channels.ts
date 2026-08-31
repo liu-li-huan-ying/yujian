@@ -321,7 +321,9 @@ export interface SnapshotInfo {
   tags?: string[]
   /** 内容哈希（sha1），用于内容寻址去重与血缘展示 */
   contentHash?: string
-  /** 父快照 id（血缘链，线性）：基于其上一份快照；首份为 null */
+  /** 所在分支（git 轻量分支思想）：主线为 'main'，草稿为用户命名分支 */
+  branch?: string
+  /** 父快照 id（血缘链，**同分支内**线性）：基于该分支上一份快照；分支首份为 null */
   parent?: string | null
   /** 快照字符数（用于与当前文档比较显示字数差） */
   charCount: number
