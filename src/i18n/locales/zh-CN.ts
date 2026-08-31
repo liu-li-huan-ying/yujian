@@ -255,6 +255,10 @@ const zhCN = {
     snapshotHunkAdd: '新增',
     snapshotHunkDel: '删除',
     snapshotHunkMod: '修改',
+    snapshotDiffSource: '摘取来源：{src}',
+    snapshotViewUnified: '统一',
+    snapshotViewSplit: '并排',
+    snapshotPickedShort: '已摘取',
     /* ── 写作统计（批次二）── */
     stats: '统计',
     charCount: '汉字',

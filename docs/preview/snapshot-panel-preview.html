@@ -188,19 +188,57 @@
   .tl-now { display:flex; align-items:stretch; gap:10px; padding:6px 4px 12px 0; }
   .tl-now .row__time--now { font-size:12px; }
 
-  .snap__diff { max-height:36%; overflow:auto; border-top:1px solid var(--hue-border-subtle); border-bottom:1px solid var(--hue-border-subtle); padding:8px 0; }
-  .diff__head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; padding:0 2px; }
+  .snap--split { width: 580px; }
+
+  .snap__diff { max-height:38%; overflow:auto; border-top:1px solid var(--hue-border-subtle); border-bottom:1px solid var(--hue-border-subtle); padding:8px 0; }
+  .diff__head { display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin-bottom:6px; padding:0 2px; }
   .diff__mode { font-size:11px; font-weight:500; color:var(--hue-text-2); }
   .diff__stat { display:inline-flex; gap:8px; font-size:11px; font-variant-numeric:tabular-nums; }
   .stat--add { color:var(--hue-success); font-weight:600; }
   .stat--del { color:var(--hue-danger); font-weight:600; }
+  .diff__src { flex:1; min-width:0; font-size:10.5px; color:var(--hue-text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .diff__views { display:inline-flex; padding:1px; gap:1px; background:var(--hue-highlight); border:1px solid var(--hue-border-subtle); border-radius:999px; }
+  .vbtn--mini { padding:2px 8px; font-size:10px; }
   .diff__clear { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border:0; border-radius:var(--radius-sm); background:transparent; color:var(--hue-text-3); cursor:pointer; }
   .diff__none { font-size:11.5px; color:var(--hue-text-3); text-align:center; padding:8px; }
-  .diff { margin:0; font-family:var(--font-mono); font-size:11px; line-height:1.6; white-space:pre; color:var(--hue-text-2); }
-  .diff > span { display:block; padding:0 8px; }
-  .diff__add { color:var(--hue-success); background:color-mix(in srgb, var(--hue-success) 13%, transparent); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-success) 60%, transparent); }
-  .diff__del { color:var(--hue-danger); background:color-mix(in srgb, var(--hue-danger) 13%, transparent); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-danger) 60%, transparent); }
-  .diff__ctx { color:var(--hue-text-3); }
+
+  .diff { margin:0; font-family:var(--font-mono); font-size:11px; line-height:1.65; color:var(--hue-text-2); }
+  .ln { display:flex; align-items:baseline; padding:0 10px 0 0; border-radius:3px; transition:background var(--dur-fast) var(--ease); }
+  .ln:hover { background:var(--hue-surface-2); }
+  .ln__g { flex:0 0 18px; text-align:center; font-style:normal; opacity:.55; user-select:none; color:var(--hue-text-3); }
+  .ln__t { flex:1; min-width:0; white-space:pre; overflow:hidden; }
+  .ln--add { background:color-mix(in srgb, var(--hue-success) 9%, transparent); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-success) 65%, transparent); }
+  .ln--add .ln__g { color:var(--hue-success); opacity:.9; }
+  .ln--del { background:color-mix(in srgb, var(--hue-danger) 9%, transparent); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-danger) 65%, transparent); }
+  .ln--del .ln__g { color:var(--hue-danger); opacity:.9; }
+  .ln--del .ln__t { color:color-mix(in srgb, var(--hue-danger) 70%, var(--hue-text-2)); }
+  .ln--ctx .ln__t { color:var(--hue-text-3); }
+  .ln--empty { background:transparent; }
+
+  .hunk { margin:6px 0; border:1px solid var(--hue-border-subtle); border-radius:var(--radius-md); background:var(--hue-surface); overflow:hidden; transition:border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+  .hunk:hover { border-color:var(--hue-border-default,var(--hue-border-subtle)); box-shadow:var(--hue-shadow-1); }
+  .hunk--add { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--hue-success) 70%, transparent); }
+  .hunk--del { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--hue-danger) 70%, transparent); }
+  .hunk--mod { box-shadow: inset 3px 0 0 var(--hue-accent); }
+  .hunk__bar { display:flex; align-items:center; gap:8px; padding:4px 8px 4px 11px; background:var(--hue-surface-2); border-bottom:1px solid var(--hue-border-subtle); }
+  .hunk__kind { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600; letter-spacing:.02em; color:var(--hue-text-3); }
+  .hunk__kind--add { color:var(--hue-success); }
+  .hunk__kind--del { color:var(--hue-danger); }
+  .hunk__kind--mod { color:var(--hue-accent); }
+  .hunk__range { font-family:var(--font-mono); font-size:10px; color:var(--hue-text-3); opacity:.8; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hunk__spacer { flex:1; }
+  .hunk__pick { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; font-size:11px; font-weight:500; border:1px solid transparent; border-radius:999px; background:var(--hue-accent); color:var(--hue-on-accent); cursor:pointer; }
+  .hunk__pick:hover { filter:brightness(1.06); }
+  .hunk__picked { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; font-size:11px; font-weight:500; border-radius:999px; background:color-mix(in srgb, var(--hue-success) 16%, transparent); color:var(--hue-success); }
+  .hunk--picked { border-color:color-mix(in srgb, var(--hue-success) 50%, var(--hue-border-subtle)); box-shadow: inset 3px 0 0 var(--hue-success), 0 0 0 1px color-mix(in srgb, var(--hue-success) 22%, transparent); animation:hunkPicked 1.4s var(--ease); }
+  @keyframes hunkPicked { 0% { background:color-mix(in srgb, var(--hue-success) 12%, transparent);} 100% { background:var(--hue-surface);} }
+  .hunk__code { margin:0; padding:4px 0 6px; white-space:normal; }
+  .hunk__split { padding:4px 0 6px; }
+  .split__cols { display:grid; grid-template-columns:1fr 1fr; border:1px solid var(--hue-border-subtle); border-radius:var(--radius-sm); overflow:hidden; }
+  .split__col { min-width:0; }
+  .split__col--old { border-right:1px solid var(--hue-border-subtle); }
+  .split__col .ln { border-radius:0; }
+  .split__col .ln__t { padding-right:8px; }
 
   .snap__acts { display:flex; gap:8px; }
   .act { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:5px; height:34px; border:1px solid var(--hue-border-subtle); border-radius:var(--radius-md); background:transparent; color:var(--hue-text-1); font-size:12.5px; cursor:pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
@@ -215,6 +253,10 @@
     <span>视图</span>
     <button id="btnList" class="on" onclick="setView('list')">列表</button>
     <button id="btnTl" onclick="setView('timeline')">时间轴</button>
+    <span style="opacity:.4">·</span>
+    <span>对比</span>
+    <button id="btnUnified" class="on" onclick="setDiff('unified')">统一</button>
+    <button id="btnSplit" onclick="setDiff('split')">并排</button>
     <span style="opacity:.4">·</span>
     <span>皮肤</span>
     <button id="btnDark" class="on" onclick="setMode('dark')">墨玉</button>
@@ -308,9 +350,14 @@
         <div class="diff__head">
           <span class="diff__mode">A↔B 对比</span>
           <span class="diff__stat"><b class="stat--add">+4</b><b class="stat--del">−2</b></span>
+          <span class="diff__src">摘取来源：补充第三章</span>
+          <span class="diff__views">
+            <button class="vbtn vbtn--mini on" id="btnUnifiedP" onclick="setDiff('unified')">统一</button>
+            <button class="vbtn vbtn--mini" id="btnSplitP" onclick="setDiff('split')">并排</button>
+          </span>
           <button class="diff__clear" title="清除对比">✕</button>
         </div>
-        <pre class="diff"><span class="diff__ctx"> 第三章围绕「克制」展开。</span><span class="diff__del"> 旧版罗列了七种装饰手法。</span><span class="diff__add"> 新版只保留三种，并给出取舍理由。</span><span class="diff__ctx"> 读者可在五分钟内建立判断框架。</span><span class="diff__add"> 新增「当不确定时，先删」的原则。</span></pre>
+        <div id="diffBody"></div>
       </div>
 
       <div class="snap__acts">
@@ -399,6 +446,101 @@
         </div>`;
     }
   }
+
+  /* ===== cherry-pick diff 渲染（统一 / 并排） ===== */
+  function ic(name) {
+    const P = {
+      scissors:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>',
+      plus:'<path d="M12 5v14"/><path d="M5 12h14"/>',
+      minus:'<path d="M5 12h14"/>',
+      check:'<path d="M20 6 9 17l-5-5"/>',
+      writing:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'
+    };
+    return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto">' + (P[name]||'') + '</svg>';
+  }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  const HUNKS = [
+    { kind:'mod', range:'@@ -12,3 +12,4 @@', label:'修改',
+      rows:[
+        {t:'ctx',l:'第三章围绕「克制」展开。'},
+        {t:'del',l:'旧版罗列了七种装饰手法。'},
+        {t:'add',l:'新版只保留三种，并给出取舍理由。'},
+        {t:'ctx',l:'读者可在五分钟内建立判断框架。'},
+      ]},
+    { kind:'add', range:'@@ -30,2 +31,4 @@', label:'新增',
+      rows:[
+        {t:'ctx',l:'结尾处强调「少即是多」。'},
+        {t:'add',l:'新增「当不确定时，先删」的原则。'},
+        {t:'add',l:'这一原则贯穿全文。'},
+      ]},
+  ];
+
+  function splitPairsJS(rows) {
+    const out = []; let i = 0;
+    while (i < rows.length) {
+      const r = rows[i];
+      if (r.t === 'ctx') { out.push({ left:{t:'ctx',l:r.l}, right:{t:'ctx',l:r.l} }); i++; }
+      else if (r.t === 'del') {
+        let j = i; while (j < rows.length && rows[j].t === 'del') j++;
+        let k = j; while (k < rows.length && rows[k].t === 'add') k++;
+        const dels = rows.slice(i, j), adds = rows.slice(j, k);
+        const n = Math.max(dels.length, adds.length);
+        for (let m = 0; m < n; m++) out.push({ left: dels[m] ? {t:'del',l:dels[m].l} : null, right: adds[m] ? {t:'add',l:adds[m].l} : null });
+        i = k;
+      } else { out.push({ left:null, right:{t:'add',l:r.l} }); i++; }
+    }
+    return out;
+  }
+
+  function renderDiff(view) {
+    const body = document.getElementById('diffBody');
+    body.innerHTML = HUNKS.map(h => {
+      let inner;
+      if (view === 'unified') {
+        inner = '<pre class="hunk__code">' + h.rows.map(r => {
+          const g = r.t === 'add' ? '+' : r.t === 'del' ? '−' : '·';
+          return '<span class="ln ln--' + r.t + '"><i class="ln__g">' + g + '</i><span class="ln__t">' + esc(r.l) + '</span></span>';
+        }).join('') + '</pre>';
+      } else {
+        const pr = splitPairsJS(h.rows);
+        const col = (side) => pr.map(p => {
+          const cell = p[side];
+          if (!cell) return '<div class="ln ln--empty"><i class="ln__g"></i><span class="ln__t"></span></div>';
+          const cls = cell.t === 'del' ? 'ln--del' : cell.t === 'add' ? 'ln--add' : 'ln--ctx';
+          const g = cell.t === 'del' ? '−' : cell.t === 'add' ? '+' : '·';
+          return '<div class="ln ' + cls + '"><i class="ln__g">' + g + '</i><span class="ln__t">' + esc(cell.l) + '</span></div>';
+        }).join('');
+        inner = '<div class="hunk__split"><div class="split__cols"><div class="split__col split__col--old">' + col('left') + '</div><div class="split__col split__col--new">' + col('right') + '</div></div></div>';
+      }
+      return '<div class="hunk hunk--' + h.kind + '">'
+        + '<div class="hunk__bar">'
+        + '<span class="hunk__kind hunk__kind--' + h.kind + '">' + ic(h.kind === 'add' ? 'plus' : h.kind === 'del' ? 'minus' : 'writing') + ' ' + h.label + '</span>'
+        + '<span class="hunk__range">' + h.range + '</span>'
+        + '<span class="hunk__spacer"></span>'
+        + '<button class="hunk__pick" onclick="pick(this)">' + ic('scissors') + ' 摘取</button>'
+        + '</div>' + inner + '</div>';
+    }).join('');
+  }
+
+  function pick(btn) {
+    const hunk = btn.closest('.hunk');
+    hunk.classList.add('hunk--picked');
+    btn.outerHTML = '<span class="hunk__picked">' + ic('check') + ' 已摘取</span>';
+  }
+
+  function setDiff(v) {
+    var panel = document.getElementById('panel');
+    var split = v === 'split';
+    panel.classList.toggle('snap--split', split);
+    ['btnUnified','btnSplit','btnUnifiedP','btnSplitP'].forEach(function(id){
+      var el = document.getElementById(id);
+      var on = (id.indexOf('Unified') > -1) ? !split : split;
+      el.classList.toggle('on', on);
+    });
+    renderDiff(v);
+  }
+  setDiff('unified');
 </script>
 </body>
 </html>

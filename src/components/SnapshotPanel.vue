@@ -142,6 +142,9 @@ const diffLabel = computed(() =>
   diffMode.value === 'ab' ? L.snapshotCompareAB : diffMode.value === 'selected' ? L.snapshotCompareWithSelected : ''
 )
 
+/* ── diff 视图：统一（unified）/ 并排（split，GitHub 风格）── */
+const diffView = ref<'unified' | 'split'>('unified')
+
 /** 把 diff 结果摊平成「逐行」列表，便于模板渲染 */
 const diffRows = computed<{ type: 'add' | 'del' | 'ctx'; prefix: string; text: string }[]>(() => {
   let a: string | null = null
@@ -186,14 +189,23 @@ interface DiffHunk {
   pickText: string
   kind: 'add' | 'del' | 'mod'
   end: number
+  oldStart: number
+  newStart: number
+  oldSpan: number
+  newSpan: number
 }
 const diffHunks = computed<DiffHunk[]>(() => {
   const rows = diffRows.value
   const hunks: DiffHunk[] = []
   let i = 0
+  // 计算 hunk 之前的累计行号（GitHub 风格 @@ -old +new @@）
+  let baseOld = 0
+  let baseNew = 0
   while (i < rows.length) {
     if (rows[i].type === 'ctx') {
       i++
+      baseOld++
+      baseNew++
       continue
     }
     let j = i
@@ -207,15 +219,93 @@ const diffHunks = computed<DiffHunk[]>(() => {
     const hasAdd = slice.some((r) => r.type === 'add')
     const hasDel = slice.some((r) => r.type === 'del')
     const kind: DiffHunk['kind'] = hasAdd && hasDel ? 'mod' : hasAdd ? 'add' : 'del'
-    hunks.push({ rows: slice, pickText, kind, end })
+    // 行号累计：ctx 之前已计入 baseOld/baseNew；这里从该 hunk 起点位置推导
+    let o = baseOld
+    let n = baseNew
+    for (let k = start; k < end; k++) {
+      const t = rows[k].type
+      if (t === 'del') o++
+      else if (t === 'add') n++
+      else {
+        o++
+        n++
+      }
+    }
+    const oldSpan = slice.filter((r) => r.type !== 'add').length
+    const newSpan = slice.filter((r) => r.type !== 'del').length
+    hunks.push({ rows: slice, pickText, kind, end, oldStart: o, newStart: n, oldSpan, newSpan })
+    // 推进 base：跳过本 hunk 内部，到下一段 ctx 前
+    for (let k = i; k < j; k++) {
+      const t = rows[k].type
+      if (t === 'del') baseOld++
+      else if (t === 'add') baseNew++
+      else {
+        baseOld++
+        baseNew++
+      }
+    }
     i = j
   }
   return hunks
 })
 
+/** 并排视图（GitHub split）：把连续 del/add 配对，ctx 两侧对齐 */
+interface SplitRow {
+  left: { type: 'del' | 'ctx'; text: string } | null
+  right: { type: 'add' | 'ctx'; text: string } | null
+}
+function splitPairs(rows: DiffHunk['rows']): SplitRow[] {
+  const out: SplitRow[] = []
+  let i = 0
+  while (i < rows.length) {
+    const r = rows[i]
+    if (r.type === 'ctx') {
+      out.push({ left: { type: 'ctx', text: r.text }, right: { type: 'ctx', text: r.text } })
+      i++
+    } else if (r.type === 'del') {
+      let j = i
+      while (j < rows.length && rows[j].type === 'del') j++
+      let k = j
+      while (k < rows.length && rows[k].type === 'add') k++
+      const dels = rows.slice(i, j)
+      const adds = rows.slice(j, k)
+      const n = Math.max(dels.length, adds.length)
+      for (let m = 0; m < n; m++) {
+        out.push({
+          left: dels[m] ? { type: 'del', text: dels[m].text } : null,
+          right: adds[m] ? { type: 'add', text: adds[m].text } : null
+        })
+      }
+      i = k
+    } else {
+      out.push({ left: null, right: { type: 'add', text: r.text } })
+      i++
+    }
+  }
+  return out
+}
+
+/* ── 摘取来源标注（让用户清楚「摘的是哪一侧」）── */
+const diffSource = computed<string>(() => {
+  if (diffMode.value === 'ab') {
+    const b = snapshots.branchList.find((s) => s.id === compareB.value)
+    return b ? (b.note || fmtTime(b.createdAt)) : L.snapshotSetB
+  }
+  const cur = snapshots.branchList.find((s) => s.id === snapshots.selectedId)
+  return cur ? (cur.note || fmtTime(cur.createdAt)) : ''
+})
+
+/* ── 摘取成功微态（短暂高亮，给即时反馈）── */
+const pickedHi = ref<number | null>(null)
+let pickedTimer: ReturnType<typeof setTimeout> | null = null
 /** cherry-pick：把选中变更段（B/快照侧内容）摘取到当前文档光标处 */
-function onPick(text: string): void {
+function onPick(text: string, hi: number): void {
   emit('pick', text)
+  pickedHi.value = hi
+  if (pickedTimer) clearTimeout(pickedTimer)
+  pickedTimer = setTimeout(() => {
+    pickedHi.value = null
+  }, 1400)
 }
 
 /* ── 字数差（快照相对当前文档）── */
@@ -283,7 +373,7 @@ function fmtTime(ts: number): string {
 </script>
 
 <template>
-  <div class="snap glass" :class="{ 'snap--tl': view === 'timeline' }" role="dialog" aria-label="版本快照">
+  <div class="snap glass" :class="{ 'snap--tl': view === 'timeline', 'snap--split': diffView === 'split' }" role="dialog" aria-label="版本快照">
     <header class="snap__head">
       <span class="snap__title">{{ L.snapshots }}</span>
       <span class="snap__count">{{ L.snapshotCount.replace('{n}', String(snapshots.branchList.length)) }}</span>
@@ -428,7 +518,7 @@ function fmtTime(ts: number): string {
       </template>
     </div>
 
-    <!-- diff 预览 -->
+    <!-- diff 预览（cherry-pick 单位 = 每个变更段 hunk） -->
     <div v-if="diffMode !== 'none'" class="snap__diff">
       <div class="diff__head">
         <span class="diff__mode">{{ diffLabel }}</span>
@@ -436,40 +526,77 @@ function fmtTime(ts: number): string {
           <b class="stat--add">+{{ diffStats.add }}</b>
           <b class="stat--del">−{{ diffStats.del }}</b>
         </span>
+        <span v-if="hasDiff" class="diff__src" :title="L.snapshotPickTip">{{ L.snapshotDiffSource.replace('{src}', diffSource) }}</span>
+        <span class="diff__views" v-if="hasDiff">
+          <button type="button" class="vbtn vbtn--mini" :class="{ on: diffView === 'unified' }" @click="diffView = 'unified'">{{ L.snapshotViewUnified }}</button>
+          <button type="button" class="vbtn vbtn--mini" :class="{ on: diffView === 'split' }" @click="diffView = 'split'">{{ L.snapshotViewSplit }}</button>
+        </span>
         <button v-if="diffMode === 'ab'" type="button" class="diff__clear" :title="L.snapshotClearCompare" @click="compareA = null; compareB = null">
           <Icon name="x" :size="12" />
         </button>
       </div>
+
       <div v-if="!hasDiff" class="diff__none">— {{ L.snapshotNoDiff }} —</div>
       <div v-else class="diff">
         <div
           v-for="(hunk, hi) in diffHunks"
           :key="hi"
           class="hunk"
-          :class="`hunk--${hunk.kind}`"
+          :class="[`hunk--${hunk.kind}`, { 'hunk--picked': pickedHi === hi }]"
         >
           <div class="hunk__bar">
-            <span class="hunk__tag">{{
-              hunk.kind === 'add' ? L.snapshotHunkAdd : hunk.kind === 'del' ? L.snapshotHunkDel : L.snapshotHunkMod
-            }}</span>
+            <span class="hunk__kind" :class="`hunk__kind--${hunk.kind}`">
+              <Icon :name="hunk.kind === 'add' ? 'plus' : hunk.kind === 'del' ? 'minus' : 'writing'" :size="11" />
+              {{ hunk.kind === 'add' ? L.snapshotHunkAdd : hunk.kind === 'del' ? L.snapshotHunkDel : L.snapshotHunkMod }}
+            </span>
+            <span class="hunk__range">@@ -{{ hunk.oldStart }}{{ hunk.oldSpan > 1 ? ',' + hunk.oldSpan : '' }} +{{ hunk.newStart }}{{ hunk.newSpan > 1 ? ',' + hunk.newSpan : '' }} @@</span>
             <span class="hunk__spacer" />
             <button
-              v-if="hunk.pickText"
+              v-if="hunk.pickText && pickedHi !== hi"
               type="button"
               class="hunk__pick"
               :title="L.snapshotPickTip"
-              @click="onPick(hunk.pickText)"
+              @click="onPick(hunk.pickText, hi)"
             >
               <Icon name="scissors" :size="12" />
               {{ L.snapshotPick }}
             </button>
+            <span v-else-if="pickedHi === hi" class="hunk__picked">
+              <Icon name="check" :size="12" />
+              {{ L.snapshotPickedShort }}
+            </span>
           </div>
-          <pre class="hunk__code"><span
+
+          <!-- 统一视图：内联着色变更（Google Docs 风格） -->
+          <pre v-if="diffView === 'unified'" class="hunk__code"><span
               v-for="(row, ri) in hunk.rows"
               :key="ri"
-              :class="row.type === 'add' ? 'diff__add' : row.type === 'del' ? 'diff__del' : 'diff__ctx'"
-            >{{ row.prefix }}{{ row.text }}
+              class="ln"
+              :class="row.type === 'add' ? 'ln--add' : row.type === 'del' ? 'ln--del' : 'ln--ctx'"
+            ><i class="ln__g">{{ row.type === 'add' ? '+' : row.type === 'del' ? '−' : '·' }}</i><span class="ln__t">{{ row.text }}</span>
 </span></pre>
+
+          <!-- 并排视图（GitHub split）：左旧 / 右新，del+add 配对、ctx 两侧对齐 -->
+          <div v-else class="hunk__split">
+            <div class="split__cols">
+              <div class="split__col split__col--old">
+                <div
+                  v-for="(p, pi) in splitPairs(hunk.rows)"
+                  :key="pi"
+                  class="ln"
+                  :class="[p.left ? (p.left.type === 'del' ? 'ln--del' : 'ln--ctx') : 'ln--empty']"
+                ><i class="ln__g">{{ p.left ? (p.left.type === 'del' ? '−' : '·') : '' }}</i><span class="ln__t">{{ p.left ? p.left.text : '' }}</span></div>
+              </div>
+              <div class="split__col split__col--new">
+                <div
+                  v-for="(p, pi) in splitPairs(hunk.rows)"
+                  :key="pi"
+                  class="ln"
+                  :class="[p.right ? (p.right.type === 'add' ? 'ln--add' : 'ln--ctx') : 'ln--empty']"
+                ><i class="ln__g">{{ p.right ? (p.right.type === 'add' ? '+' : '·') : '' }}</i><span class="ln__t">{{ p.right ? p.right.text : '' }}</span></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -521,6 +648,10 @@ function fmtTime(ts: number): string {
 /* 时间轴视图需要横向空间放血缘导轨与更长的备注，面板相应加宽 */
 .snap--tl {
   width: 460px;
+}
+/* 并排对比（split）需要更宽的空间容纳左右两栏 */
+.snap--split {
+  width: 580px;
 }
 
 /* ── 头部 ── */
@@ -1020,7 +1151,7 @@ function fmtTime(ts: number): string {
 
 /* ── diff 预览 ── */
 .snap__diff {
-  max-height: 36%;
+  max-height: 38%;
   overflow: auto;
   border-top: 1px solid var(--hue-border-subtle);
   border-bottom: 1px solid var(--hue-border-subtle);
@@ -1029,8 +1160,8 @@ function fmtTime(ts: number): string {
 .diff__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   margin-bottom: 6px;
   padding: 0 2px;
 }
@@ -1052,6 +1183,29 @@ function fmtTime(ts: number): string {
 .stat--del {
   color: var(--hue-danger);
   font-weight: 600;
+}
+/* 摘取来源：让用户清楚「摘的是哪一侧」 */
+.diff__src {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--hue-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 统一 / 并排 切换 */
+.diff__views {
+  display: inline-flex;
+  padding: 1px;
+  gap: 1px;
+  background: var(--hue-highlight);
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: 999px;
+}
+.vbtn--mini {
+  padding: 2px 8px;
+  font-size: 10px;
 }
 .diff__clear {
   display: inline-flex;
@@ -1078,30 +1232,63 @@ function fmtTime(ts: number): string {
   text-align: center;
   padding: 8px;
 }
+
+/* 变更行（统一视图）：行号槽 + 内联着色（Google Docs 风格） */
 .diff {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 11px;
-  line-height: 1.6;
-  white-space: pre;
+  line-height: 1.65;
   color: var(--hue-text-2);
 }
-.diff > span {
-  display: block;
-  padding: 0 8px;
+.ln {
+  display: flex;
+  align-items: baseline;
+  padding: 0 10px 0 0;
+  border-radius: 3px;
+  transition: background var(--dur-fast) var(--ease);
 }
-.diff__add {
-  color: var(--hue-success);
-  background: color-mix(in srgb, var(--hue-success) 13%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-success) 60%, transparent);
+.ln:hover {
+  background: var(--hue-surface-2);
 }
-.diff__del {
-  color: var(--hue-danger);
-  background: color-mix(in srgb, var(--hue-danger) 13%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-danger) 60%, transparent);
-}
-.diff__ctx {
+.ln__g {
+  flex: 0 0 18px;
+  text-align: center;
+  font-style: normal;
+  opacity: 0.55;
+  user-select: none;
   color: var(--hue-text-3);
+}
+.ln__t {
+  flex: 1;
+  min-width: 0;
+  white-space: pre;
+  overflow: hidden;
+}
+.ln--add {
+  background: color-mix(in srgb, var(--hue-success) 9%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-success) 65%, transparent);
+}
+.ln--add .ln__g {
+  color: var(--hue-success);
+  opacity: 0.9;
+}
+.ln--del {
+  background: color-mix(in srgb, var(--hue-danger) 9%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hue-danger) 65%, transparent);
+}
+.ln--del .ln__g {
+  color: var(--hue-danger);
+  opacity: 0.9;
+}
+.ln--del .ln__t {
+  color: color-mix(in srgb, var(--hue-danger) 70%, var(--hue-text-2));
+}
+.ln--ctx .ln__t {
+  color: var(--hue-text-3);
+}
+.ln--empty {
+  background: transparent;
 }
 
 /* ── diff 按变更段聚合成 hunk（cherry-pick 单位）── */
@@ -1179,16 +1366,89 @@ function fmtTime(ts: number): string {
 }
 .hunk__code {
   margin: 0;
-  padding: 4px 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.6;
-  white-space: pre;
-  color: var(--hue-text-2);
+  padding: 4px 0 6px;
+  white-space: normal;
 }
-.hunk__code > span {
-  display: block;
-  padding: 0 8px 0 11px;
+/* 并排视图（GitHub split）：左旧 / 右新 */
+.hunk__split {
+  padding: 4px 0 6px;
+}
+.split__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.split__col {
+  min-width: 0;
+}
+.split__col--old {
+  border-right: 1px solid var(--hue-border-subtle);
+}
+.split__col .ln {
+  border-radius: 0;
+}
+.split__col .ln__t {
+  padding-right: 8px;
+}
+
+/* hunk 头：kind 标签 + 行号范围 + 摘取 */
+.hunk__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--hue-text-3);
+}
+.hunk__kind--add {
+  color: var(--hue-success);
+}
+.hunk__kind--del {
+  color: var(--hue-danger);
+}
+.hunk__kind--mod {
+  color: var(--hue-accent);
+}
+.hunk__range {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--hue-text-3);
+  opacity: 0.8;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hunk__picked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hue-success) 16%, transparent);
+  color: var(--hue-success);
+}
+/* 摘取成功后整块轻微高亮，给即时反馈 */
+.hunk--picked {
+  border-color: color-mix(in srgb, var(--hue-success) 50%, var(--hue-border-subtle));
+  box-shadow:
+    inset 3px 0 0 var(--hue-success),
+    0 0 0 1px color-mix(in srgb, var(--hue-success) 22%, transparent);
+  animation: hunkPicked 1.4s var(--ease);
+}
+@keyframes hunkPicked {
+  0% {
+    background: color-mix(in srgb, var(--hue-success) 12%, transparent);
+  }
+  100% {
+    background: var(--hue-surface);
+  }
 }
 
 /* ── 操作按钮 ── */

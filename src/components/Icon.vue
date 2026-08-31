@@ -13,6 +13,7 @@ const props = defineProps<{
 /** 每个图标是 <svg> 内部的一段 path / circle / line 片段 */
 const PATHS: Record<string, string> = {
   plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
   file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
   'file-text':
     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
