@@ -295,8 +295,11 @@ function registerIpc(): void {
       vaultPath: string,
       filePath: string,
       content: string,
-      note?: string
-    ): Promise<SnapshotInfo> => createSnapshot(vaultPath, filePath, content, note)
+      note?: string,
+      tags?: string[],
+      branch?: string
+    ): Promise<SnapshotInfo> =>
+      createSnapshot(vaultPath, filePath, content, note, tags, branch)
   )
 
   ipcMain.handle(

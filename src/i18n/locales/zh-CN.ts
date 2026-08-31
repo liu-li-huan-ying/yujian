@@ -233,6 +233,18 @@ const zhCN = {
     snapshotClearCompare: '清除对比',
     snapshotFilterTag: '按标签筛选',
     snapshotClearFilter: '清除筛选',
+    /* ── 版本快照 Phase B：时间轴 / 血缘视图 + 轻量草稿分支 ── */
+    snapshotViewList: '列表',
+    snapshotViewTimeline: '时间轴',
+    snapshotBranch: '分支',
+    snapshotMainBranch: '主线',
+    snapshotNewDraft: '另起草稿',
+    snapshotDraftNamePlaceholder: '草稿名…（如「换个结尾」）',
+    snapshotDraftTip: '基于当前正文开一条独立草稿时间轴，互不干扰',
+    snapshotAdopt: '采纳到主稿',
+    snapshotAdoptTip: '把这份草稿内容载入编辑器，成为正文',
+    snapshotBranchEmpty: '该分支暂无快照',
+    snapshotMilestone: '里程碑',
     /* ── 写作统计（批次二）── */
     stats: '统计',
     charCount: '汉字',

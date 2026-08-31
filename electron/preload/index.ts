@@ -176,15 +176,16 @@ const api = {
   snapshotList: (vaultPath: string, filePath: string): Promise<SnapshotInfo[]> =>
     ipcRenderer.invoke(IPC.SNAPSHOT_LIST, vaultPath, filePath),
 
-  /** 保存一份快照（note / tags 可选）；内容哈希相同则自动去重 */
+  /** 保存一份快照（note / tags / branch 可选）；内容哈希相同则自动去重（blob 跨分支共享） */
   snapshotCreate: (
     vaultPath: string,
     filePath: string,
     content: string,
     note?: string,
-    tags?: string[]
+    tags?: string[],
+    branch?: string
   ): Promise<SnapshotInfo> =>
-    ipcRenderer.invoke(IPC.SNAPSHOT_CREATE, vaultPath, filePath, content, note, tags),
+    ipcRenderer.invoke(IPC.SNAPSHOT_CREATE, vaultPath, filePath, content, note, tags, branch),
 
   /** 读取某快照内容（用于回滚） */
   snapshotRestore: (vaultPath: string, filePath: string, id: string): Promise<string> =>

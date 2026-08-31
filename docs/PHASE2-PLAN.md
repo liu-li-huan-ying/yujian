@@ -138,6 +138,7 @@
 * **状态栏单位 i18n**：切换中/英后右下角显示 `字/词/′` 或 `chars/words/min`，与统计弹层单位一致（`U.unitHan/unitWord/unitMin`）。
 * **快照标注**：版本快照功能已于 2026-08-30 经用户运行期验证可用，原「⚠ 实现但未测试」标注已从代码注释、面板 UI 横幅与文档中移除（见 §3.3、ARCHITECTURE §5.10）。
 * **快照 git 化 Phase A（2026-08-31 落地）**：在批次二快照之上引入 git 风格能力——`index.json` 元数据层 + `sha1` 内容哈希去重（相同正文只存一份 `.md`，引用计数删除）、命名标签 `tags[]`（内联增删 + 按标签筛选）、任意两点 A↔B 对比（`diffLines`），旧全量 `.md` 首次读取自动 `migrate` 成新结构、不丢历史。存储/IPC/前端/UI 全链路落地，typecheck + build 验证通过（见 `docs/SNAPSHOT-GIT-DESIGN.md`、ARCHITECTURE §5.10）。
+* **快照 git 化 Phase B（2026-08-31 落地）**：① **线性时间轴/血缘视图**——面板加「列表/时间轴」切换，时间轴为竖直提交图（血缘导轨竖线 + 节点圆点，带标签的快照为里程碑实心强调，最新在上），时间轴模式面板加宽至 440px；② **轻量草稿分支**——`branch` 字段（默认 `main`）、分支 chips 切换、「另起草稿」以当前正文 Fork 独立时间轴、`parent` 只认同分支上一条（无 merge）、blob 去重跨分支共享；草稿分支下「恢复」变「采纳到主稿」并自动切回主线；未做「删除整个分支」（删净快照即自然消失，规避批量删除）。向后兼容：Phase A 的 index 无 `branch`，读取时补齐；同时修正 preload/main handler 丢弃 `tags` 的缺陷。typecheck + build 通过（见 `docs/SNAPSHOT-GIT-DESIGN.md`、ARCHITECTURE §5.10）。
 * **左侧搜索增强全局替换**：保留左侧文件树搜索框，新增玉质「全局替换」区块（`vault:replace`），仅在搜索命中文件范围内做字面量替换、写回磁盘并自动重载当前文档（见 §3.2、ARCHITECTURE §5.10）。
 * **文件树 UI redesign**：`FileTree.vue` 重写——目录/文件用不同 `Icon`、选中态改强调色文字 + 左侧 2px 高亮条（`::before`）、嵌套层级用细玉质分隔线表达归属，整体更契合玉质体系；顶部栏不再保留「搜索」图标按钮（其唤起的 in-doc FindPanel 入口已于 2026-08-30 按用户要求移除，仅保留左侧文件树全局搜索框，避免与全局搜索重复）。
 
