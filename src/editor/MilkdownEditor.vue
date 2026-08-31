@@ -508,6 +508,38 @@ function revealLine(line: number): void {
   view.focus()
 }
 
+/**
+ * 在光标处插入一段 Markdown（所见即所得）：
+ * 用 parserCtx 把 markdown 解析成 ProseMirror 节点，再 tr.insert 到当前选区，
+ * 保证标题/列表/代码块等语法被正确渲染（而非当成纯文本字面量）。
+ * 解析或插入失败（如非法结构）时兜底整篇重灌并把内容追加到文末，确保不丢字。
+ * 返回是否成功，便于上层（EditorHost）决定是否还需其它回退。
+ */
+function insertMarkdownAtCursor(md: string): boolean {
+  if (!crepe || !md.trim()) return false
+  const view = getEditorView()
+  if (!view) return false
+  const from = view.state.selection.from
+  try {
+    const content = crepe.editor.action((ctx) => {
+      const parser = ctx.get(parserCtx)
+      const doc = parser(md)
+      return doc ? doc.content : null
+    })
+    if (!content || content.size === 0) return false
+    view.dispatch(view.state.tr.insert(from, content))
+    return true
+  } catch {
+    try {
+      const cur = getMarkdown()
+      void setMarkdown(`${cur}\n\n${md}`)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
 defineExpose({
   setMarkdown,
   getMarkdown,
@@ -515,6 +547,7 @@ defineExpose({
   markdownToHtml,
   getSelectionHTML,
   getSelectionMarkdown,
+  insertMarkdownAtCursor,
   setReadonly,
   getEditorView,
   setFind,

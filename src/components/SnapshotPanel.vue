@@ -28,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'restore', id: string): void
   (e: 'delete', id: string): void
+  (e: 'pick', text: string): void
   (e: 'close'): void
 }>()
 
@@ -173,6 +174,49 @@ const diffStats = computed(() => {
   }
   return { add, del }
 })
+
+/**
+ * 把扁平 diff 按「变更段」聚合成 hunks（相邻变更合并、±1 行上下文、边界不重叠）。
+ * 每个 hunk 的 pickText = B 侧（快照 / 对比中的 B）新增或修改的内容——
+ * 即「从旧版/对比方摘一段回来」要插入当前文档的原文。纯删除段（仅当前稿有、旧版无）
+ * 没有可摘取的来源，pickText 为空、不显示摘取按钮。
+ */
+interface DiffHunk {
+  rows: { type: 'add' | 'del' | 'ctx'; prefix: string; text: string }[]
+  pickText: string
+  kind: 'add' | 'del' | 'mod'
+  end: number
+}
+const diffHunks = computed<DiffHunk[]>(() => {
+  const rows = diffRows.value
+  const hunks: DiffHunk[] = []
+  let i = 0
+  while (i < rows.length) {
+    if (rows[i].type === 'ctx') {
+      i++
+      continue
+    }
+    let j = i
+    while (j < rows.length && rows[j].type !== 'ctx') j++
+    let start = Math.max(0, i - 1)
+    const end = Math.min(rows.length, j + 1)
+    if (hunks.length && start < hunks[hunks.length - 1].end) start = hunks[hunks.length - 1].end
+    const slice = rows.slice(start, end)
+    const pickLines = slice.filter((r) => r.type === 'add').map((r) => r.text)
+    const pickText = pickLines.length ? `${pickLines.join('\n')}\n` : ''
+    const hasAdd = slice.some((r) => r.type === 'add')
+    const hasDel = slice.some((r) => r.type === 'del')
+    const kind: DiffHunk['kind'] = hasAdd && hasDel ? 'mod' : hasAdd ? 'add' : 'del'
+    hunks.push({ rows: slice, pickText, kind, end })
+    i = j
+  }
+  return hunks
+})
+
+/** cherry-pick：把选中变更段（B/快照侧内容）摘取到当前文档光标处 */
+function onPick(text: string): void {
+  emit('pick', text)
+}
 
 /* ── 字数差（快照相对当前文档）── */
 function deltaChars(charCount: number): string {
@@ -397,12 +441,37 @@ function fmtTime(ts: number): string {
         </button>
       </div>
       <div v-if="!hasDiff" class="diff__none">— {{ L.snapshotNoDiff }} —</div>
-      <pre v-else class="diff"><span
-          v-for="(row, i) in diffRows"
-          :key="i"
-          :class="row.type === 'add' ? 'diff__add' : row.type === 'del' ? 'diff__del' : 'diff__ctx'"
-        >{{ row.prefix }}{{ row.text }}
+      <div v-else class="diff">
+        <div
+          v-for="(hunk, hi) in diffHunks"
+          :key="hi"
+          class="hunk"
+          :class="`hunk--${hunk.kind}`"
+        >
+          <div class="hunk__bar">
+            <span class="hunk__tag">{{
+              hunk.kind === 'add' ? L.snapshotHunkAdd : hunk.kind === 'del' ? L.snapshotHunkDel : L.snapshotHunkMod
+            }}</span>
+            <span class="hunk__spacer" />
+            <button
+              v-if="hunk.pickText"
+              type="button"
+              class="hunk__pick"
+              :title="L.snapshotPickTip"
+              @click="onPick(hunk.pickText)"
+            >
+              <Icon name="scissors" :size="12" />
+              {{ L.snapshotPick }}
+            </button>
+          </div>
+          <pre class="hunk__code"><span
+              v-for="(row, ri) in hunk.rows"
+              :key="ri"
+              :class="row.type === 'add' ? 'diff__add' : row.type === 'del' ? 'diff__del' : 'diff__ctx'"
+            >{{ row.prefix }}{{ row.text }}
 </span></pre>
+        </div>
+      </div>
     </div>
 
     <!-- 操作：恢复（草稿分支=采纳到主稿） / 删除 当前选中 -->
@@ -1033,6 +1102,93 @@ function fmtTime(ts: number): string {
 }
 .diff__ctx {
   color: var(--hue-text-3);
+}
+
+/* ── diff 按变更段聚合成 hunk（cherry-pick 单位）── */
+.hunk {
+  margin: 6px 0;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--hue-surface);
+  overflow: hidden;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.hunk:hover {
+  border-color: var(--hue-border-default);
+  box-shadow: var(--hue-shadow-1);
+}
+.hunk--add {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--hue-success) 70%, transparent);
+}
+.hunk--del {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--hue-danger) 70%, transparent);
+}
+.hunk--mod {
+  box-shadow: inset 3px 0 0 var(--hue-accent);
+}
+.hunk__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 11px;
+  background: var(--hue-surface-2);
+  border-bottom: 1px solid var(--hue-border-subtle);
+}
+.hunk__tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--hue-text-3);
+  text-transform: none;
+}
+.hunk--add .hunk__tag {
+  color: var(--hue-success);
+}
+.hunk--del .hunk__tag {
+  color: var(--hue-danger);
+}
+.hunk--mod .hunk__tag {
+  color: var(--hue-accent);
+}
+.hunk__spacer {
+  flex: 1;
+}
+.hunk__pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
+  cursor: pointer;
+  transition:
+    filter var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+.hunk__pick:hover {
+  filter: brightness(1.06);
+}
+.hunk__pick:active {
+  filter: brightness(0.94);
+}
+.hunk__code {
+  margin: 0;
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--hue-text-2);
+}
+.hunk__code > span {
+  display: block;
+  padding: 0 8px 0 11px;
 }
 
 /* ── 操作按钮 ── */

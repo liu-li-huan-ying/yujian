@@ -459,6 +459,13 @@ async function onSnapshotRestore(id: string): Promise<void> {
   }
 }
 
+/** 快照 cherry-pick：把 diff 中某变更段（旧版/B 侧内容）摘取到当前文档光标处 */
+function onSnapshotPick(text: string): void {
+  if (!text) return
+  host.value?.insertText(text)
+  showToast(U.snapshotPicked, 'ok')
+}
+
 /** 删除快照（主进程走系统回收站） */
 async function onSnapshotDelete(id: string): Promise<void> {
   await snapshots.remove(vaultPath.value, filePath.value, id)
@@ -1128,6 +1135,7 @@ onBeforeUnmount(() => {
           :current-text="host?.getMarkdown() ?? ''"
           @restore="onSnapshotRestore"
           @delete="onSnapshotDelete"
+          @pick="onSnapshotPick"
           @close="snapshotOpen = false"
         />
 
