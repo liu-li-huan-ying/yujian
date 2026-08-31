@@ -256,6 +256,10 @@ const enUS = {
     snapshotHunkAdd: 'Added',
     snapshotHunkDel: 'Removed',
     snapshotHunkMod: 'Modified',
+    snapshotDiffSource: 'Pick source: {src}',
+    snapshotViewUnified: 'Unified',
+    snapshotViewSplit: 'Split',
+    snapshotPickedShort: 'Picked',
     /* ── Writing stats (Batch 2) ── */
     stats: 'Stats',
     charCount: 'Han',
