@@ -313,6 +313,18 @@ const zhCN = {
     linkCheckBreakdown: 'Wiki {w} · 链接 {l} · 图片 {i}',
     linkCheckLocate: '定位到 {n} 行',
     linkCheckContext: '所在行：',
+    /* ── 双向链接 / 反链面板（批次二：PKM 核心）── */
+    backlinks: '反链',
+    backlinksTitle: '链接到当前笔记',
+    backlinksEmpty: '暂无反链 —— 还没有其他笔记指向这里',
+    backlinksScanning: '正在加载反链…',
+    backlinksNoVault: '请先打开笔记库',
+    backlinksClose: '关闭',
+    backlinksRerun: '刷新',
+    backlinksHint: '点击任意反链可跳转到引用该笔记的文档与行',
+    backlinksOf: '反链 · {n}',
+    wikilinkOpenFail: '无法打开目标笔记',
+    wikilinkCreated: '已创建笔记「{n}」',
     /* ── 完整性自检（批次一：数据安全）── */
     integrity: '完整性自检',
     integrityRerun: '重新扫描',

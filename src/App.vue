@@ -12,6 +12,7 @@ import HelpPanel from './components/HelpPanel.vue'
 import TabBar from './components/TabBar.vue'
 import SnapshotPanel from './components/SnapshotPanel.vue'
 import LinkCheckPanel from './components/LinkCheckPanel.vue'
+import BacklinksPanel from './components/BacklinksPanel.vue'
 import IntegrityPanel from './components/IntegrityPanel.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import ConflictDialog from './components/ConflictDialog.vue'
@@ -472,6 +473,7 @@ const outlineVisible = ref(true)
 const snapshots = useSnapshotsStore()
 const snapshotOpen = ref(false)
 const linkCheckOpen = ref(false)
+const backlinksOpen = ref(false)
 const integrityOpen = ref(false)
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
@@ -560,6 +562,38 @@ function onIntegrity(): void {
 /** 打开整库备份 / 恢复浮层（标题栏「更多」入口） */
 function onBackup(): void {
   backupOpen.value = true
+}
+
+/** 打开反链面板（标题栏「更多」入口）：展示有哪些笔记链接到当前文档 */
+function onBacklinks(): void {
+  backlinksOpen.value = true
+}
+
+/** 编辑器内点击 [[wikilink]] 芯片：解析目标 → 已存在则跳转，不存在则一键创建该笔记 */
+async function onWikilink(payload: { target: string; anchor?: string | null }): Promise<void> {
+  if (!vaultPath.value) {
+    await openVault()
+    return
+  }
+  const resolved = await window.api.resolveWikiTarget(vaultPath.value, payload.target)
+  if (resolved) {
+    await openPath(resolved)
+    return
+  }
+  // 目标不存在：以目标文件名一键创建笔记并打开（批次二需求：missing → one-click create）
+  const base = payload.target.split(/[\\/]/).pop()?.split('#')[0].trim()
+  if (!base) {
+    showToast(U.wikilinkOpenFail, 'err')
+    return
+  }
+  try {
+    const created = await window.api.createDoc(vaultPath.value, base)
+    await refreshTree()
+    await openPath(created)
+    showToast(U.wikilinkCreated.replace('{n}', created.split(/[\\/]/).pop() ?? base), 'ok')
+  } catch {
+    showToast(U.wikilinkOpenFail, 'err')
+  }
 }
 
 /** 自检浮层回报结果：状态栏据此展示告警标记（点击重开浮层） */
@@ -980,6 +1014,7 @@ onBeforeUnmount(() => {
       @link-check="linkCheckOpen = true"
       @integrity="onIntegrity"
       @backup="onBackup"
+      @backlinks="onBacklinks"
       @writing-aids="writingAidsOpen = true"
       @save="saveFile"
       @save-as="saveFileAs"
@@ -1033,6 +1068,7 @@ onBeforeUnmount(() => {
         :lang-key="langVer"
         @saved="lastSavedAt = Date.now()"
         @error="onEditorError"
+        @wikilink="onWikilink"
       />
 
         <SnapshotPanel
@@ -1051,6 +1087,14 @@ onBeforeUnmount(() => {
           :vault-path="vaultPath"
           @close="linkCheckOpen = false"
           @open="onOpenBrokenLink"
+        />
+
+        <BacklinksPanel
+          v-if="backlinksOpen"
+          :vault-path="vaultPath"
+          :active-path="filePath"
+          @close="backlinksOpen = false"
+          @open="onOpenResult"
         />
 
         <IntegrityPanel

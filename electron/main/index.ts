@@ -366,6 +366,16 @@ function registerIpc(): void {
       VaultBackup.restoreVault(zipPath, targetRoot)
   )
 
+  // 双链：把 [[wikilink]] 目标解析为 vault 内绝对路径（找不到返回 null，由前端决定创建或提示）
+  ipcMain.handle(IPC.VAULT_RESOLVE_WIKILINK, (_event, root: string, target: string) =>
+    VaultIndex.resolveWikiTarget(root, target)
+  )
+
+  // 双链：反链查询——哪些笔记链接到指定文档，附引用行上下文片段
+  ipcMain.handle(IPC.VAULT_GET_BACKLINKS, (_event, root: string, absPath: string) =>
+    VaultIndex.getBacklinksWithContext(root, absPath)
+  )
+
   // ── 会话持久化（崩溃恢复）──
 
   ipcMain.handle(IPC.SESSION_GET, () => readSession())

@@ -15,6 +15,12 @@ import { renderPreview } from './features/mermaid'
 import { emojiInputRule, emojiDecorationPlugin } from './features/emoji'
 import { htmlInlineSchema, remarkHtmlInline } from './features/htmlInline'
 import {
+  wikiLinkId,
+  wikiLinkSchema,
+  remarkWikilink,
+  wikiLinkInputRule
+} from './features/wikilink'
+import {
   highlightSchema,
   inlineMarkInputRules,
   subSchema,
@@ -54,6 +60,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'ready'): void
+  /** 点击编辑器内 [[wikilink]] 芯片：向上传递目标与锚点，由 App 解析并跳转/创建 */
+  (e: 'wikilink', payload: { target: string; anchor?: string | null }): void
 }>()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -199,6 +207,20 @@ function onEditorClick(e: MouseEvent): void {
 }
 
 /**
+ * 双向链接跳转：点击编辑器内 [[wikilink]] 芯片（contenteditable=false 原子节点）即导航。
+ * 因芯片不可编辑，点它本就是明确的跳转意图；向上 emit 由 App 决定打开现有笔记或一键新建。
+ */
+function onWikilinkClick(e: MouseEvent): void {
+  const target = e.target as HTMLElement | null
+  const chip = target?.closest(`span[data-type="${wikiLinkId}"]`) as HTMLElement | null
+  if (!chip) return
+  e.preventDefault()
+  const t = chip.getAttribute('data-target') ?? ''
+  if (!t) return
+  emit('wikilink', { target: t, anchor: chip.getAttribute('data-anchor') || null })
+}
+
+/**
  * 脚注双向跳转（零 DOM 注入，避免与 ProseMirror 托管 DOM 冲突）：
  * - 点正文里的引用 <sup data-type="footnote_reference"> → 滚到底部定义
  * - 点底部定义的 <dt>（带 ↩ 提示）→ 滚回正文第一个引用
@@ -326,6 +348,10 @@ async function init(defaultValue?: string): Promise<void> {
   // 标签不显示、只显示渲染结果，且 Markdown 往返保真（导出写回原样 HTML）
   crepe.editor.use(remarkHtmlInline)
   crepe.editor.use(htmlInlineSchema)
+  // 双向链接 [[wikilink]]：remark 改写 mdast + 真节点渲染 + 输入规则（敲 ]] 即转节点）
+  crepe.editor.use(remarkWikilink)
+  crepe.editor.use(wikiLinkSchema)
+  crepe.editor.use(wikiLinkInputRule)
   // 行内数学 $…$ 改由 MathJax 渲染（接管 math_inline 节点显示）
   crepe.editor.use($prose(() => mathInlineNodeViewPlugin()))
   // 块级数学 $$…$$ 走 renderPreview（language='latex'）。Crepe 的 Latex 特性会在 create()
@@ -351,6 +377,8 @@ async function init(defaultValue?: string): Promise<void> {
   host.value?.addEventListener('click', onEditorClick)
   // 脚注双向跳转（点引用跳定义、点定义 dt 跳回引用）
   host.value?.addEventListener('click', onFootnoteClick)
+  // 双向链接芯片点击跳转
+  host.value?.addEventListener('click', onWikilinkClick)
   // 视图就绪后补发可能在就绪前到达的高亮请求（首次搜索早于 crepe.create 完成时）
   flushPendingFind()
   emit('ready')
@@ -365,6 +393,7 @@ onBeforeUnmount(() => {
   imgObserver = null
   host.value?.removeEventListener('click', onEditorClick)
   host.value?.removeEventListener('click', onFootnoteClick)
+  host.value?.removeEventListener('click', onWikilinkClick)
   void crepe?.destroy()
   crepe = null
 })

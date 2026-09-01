@@ -984,6 +984,31 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 压测 remark-gfm 序列化层（编辑器 to-markdown 同一底层），19 项用例：往返幂等、增/删行、增/删列、合并列、200 次随机突变序列往返稳定、对齐信息保留。
 * 动机：Obsidian 有「表格反复操作损坏」的实证先例（见 `docs/PRODUCT-POLISH-IDEAS.md`）。本压测已全绿（19/19），确认玉笺表格经序列化层不丢列 / 不丢行 / 不乱码 / 不自激振荡。
 
+### 5.15 Phase 3 批次二：双向链接与反链面板（2026-09-02，已落地）
+
+> 对应 `docs/PHASE3-PLAN.md` 批次二。PKM 最高杠杆能力——`[[wikilink]]` 在编辑区内即真节点，点击即跳转 / 一键创建，反链面板实时呈现「谁链接到我」。
+
+**A. 编辑器内真节点（`src/editor/features/wikilink.ts`）**
+
+* `remarkWikilink`（$remark）：递归改写正文文本里的 `[[...]]` 为自定义 mdast 节点 `wikiLink`（拆 `目标` / `别名|` / `#锚点`）。
+* `wikiLinkSchema`（$nodeSchema）：行内原子节点 → `toDOM` 渲染 `.yj-wikilink > .yj-wikilink__label`（玉质药丸芯片，`src/styles/editor.css`）；`toMarkdown` handler **原样输出** `[[target]]` / `[[target|alias]]`（守 §5.2 往返保真红线 4/6，绝不用装饰 + 导出后处理）。
+* `wikiLinkInputRule`（$inputRule）：敲完 `]]` 即刻把 `[[目标]]` 转成节点（否则当下敲了没反应）。
+* `MilkdownEditor` 注册三者，并在宿主 click 上侦测 `span[data-type="wiki_link"]`，`preventDefault` 后 `emit('wikilink', { target, anchor })`；`EditorHost` 透传至 `App`。
+
+**B. 跳转 / 一键创建（`App.onWikilink`）**
+
+* `resolveWikiTarget(root, target)`（IPC `vault:resolveWikilink`）经统一索引的 `byBase`/`byRel` 路径映射解析目标绝对路径；支持文件名或相对路径、忽略 `.md`、忽略 `./`。
+* 目标存在 → `openPath(resolved)` 打开；不存在 → `createDoc(root, baseName(target))` 一键创建并打开（PHASE3 需求：missing → one-click create），toast 提示 `wikilinkCreated`。
+
+**C. 反链面板（`src/components/BacklinksPanel.vue`）**
+
+* 玻璃浮层，入口：标题栏「更多 ⌄ · 反链」（`Icon` 新增 `backlink` 三节点图标）。
+* 消费索引已派生的 `backLinks`，经 `getBacklinksWithContext(root, absPath)`（IPC `vault:getBacklinks`）抽出每条来源笔记的**引用行 + 上下文片段**（`BacklinkItem { path, line, snippet }`）。
+* 列表行展示来源文件名 / 行号 / 引用片段，点击 → `onOpenResult`（复用搜索跳转，打开并 `revealLine`）。
+* 切文档 / 重命名 / 删除后随 watcher 刷新索引，面板 `watch(activePath)` 静默刷新；无库 / 无打开文档 / 空反链均有温和空态。
+
+**D. 索引消费（无新增索引层）**：批次零的 `vaultIndex.ts` 已派生 `backLinks`（目标 → 来源绝对路径集），本批次仅新增查询函数与 IPC，沿用既有的 `ensureIndex` 静默重建契约。
+
 ***
 
 ## 6. 技术写作场景专项设计
@@ -1069,7 +1094,7 @@ export interface SessionState {
 | **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                                | 安装包体积优化，可用                                                                           |
 | **8. 分发**      | electron-builder 打包                             | 产出 Windows 安装包，可安装运行                                                                 |
 | **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+凝神(打字机/禅)模式+导出增强+写作辅助+断链检查 | ✅ 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二已落地（版本快照·写作统计·凝神模式）；批次三已落地（导出增强·写作辅助·断链检查，见 `docs/PHASE2-PLAN.md`） |
-| **10. Phase 3** | PKM：批次零(缺陷+统一索引地基)→一(数据安全)→二(双链+反链)→三(标签+MOC+关系图谱)→四(中文排版+体验)→五(技术写作+发布) | ✅ 批次零已落地（统一索引层`vaultIndex.ts`+`minisearch`死依赖移除）；✅ 批次一已落地（完整性自检·整库备份恢复·外部修改冲突三选一·表格压测19/19，见 `docs/PHASE3-PLAN.md`）；批次二~五待启动 |
+| **10. Phase 3** | PKM：批次零(缺陷+统一索引地基)→一(数据安全)→二(双链+反链)→三(标签+MOC+关系图谱)→四(中文排版+体验)→五(技术写作+发布) | ✅ 批次零已落地（统一索引层`vaultIndex.ts`+`minisearch`死依赖移除）；✅ 批次一已落地（完整性自检·整库备份恢复·外部修改冲突三选一·表格压测19/19）；✅ 批次二已落地（wikilink 真节点·点击跳转/一键创建·反链面板消费索引 `backLinks`，见 §5.15）；批次三~五待启动 |
 
 > 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
 
