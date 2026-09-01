@@ -198,6 +198,7 @@ const enUS = {
     hideReplace: 'Hide Replace',
     caseSensitive: 'Match Case',
     wholeWord: 'Whole Word',
+    regex: 'Regex',
     prev: 'Previous',
     next: 'Next',
     replaceOne: 'Replace',
@@ -211,6 +212,9 @@ const enUS = {
     scopeDoc: 'This doc',
     scopeDocHint: 'Open a document first',
     noResult: 'No results for “{q}”',
+    findCount: 'Match {n} of {m}',
+    findPrev: 'Previous',
+    findNext: 'Next',
     searching: 'Searching…',
     /* ── Version snapshots (Batch 2) ── */
     snapshots: 'Snapshots',

@@ -122,6 +122,8 @@ export interface SearchOptions {
   caseSensitive?: boolean
   /** 全词匹配（默认 false） */
   wholeWord?: boolean
+  /** 正则模式：query 直接作为正则表达式（默认 false，即字面量匹配） */
+  regex?: boolean
 }
 
 export interface SearchFileResult {

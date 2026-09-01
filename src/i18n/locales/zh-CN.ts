@@ -197,6 +197,7 @@ const zhCN = {
     hideReplace: '隐藏替换',
     caseSensitive: '区分大小写',
     wholeWord: '全词匹配',
+    regex: '正则',
     prev: '上一个',
     next: '下一个',
     replaceOne: '替换',
@@ -210,6 +211,9 @@ const zhCN = {
     scopeDoc: '本文档',
     scopeDocHint: '请先打开一个文档',
     noResult: '未找到「{q}」相关内容',
+    findCount: '第 {n} / {m} 个',
+    findPrev: '上一处',
+    findNext: '下一处',
     searching: '搜索中…',
     /* ── 版本快照（批次二）── */
     snapshots: '快照',

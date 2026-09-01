@@ -758,7 +758,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 | **HTML**        | 克隆 ProseMirror DOM + 独立 CSS 模板             | **所见即所得导出**——你在编辑器里看到什么，导出的就是什么              |
 | **PDF**         | `webContents.printToPDF()`                | Electron 原生能力，无需额外依赖；已加自动目录 / A4 分页控制 / 可选封面页   |
 | **LaTeX**       | `src/export/markdownToLatex.ts`           | **纯 TS 零依赖**，不引入 pandoc；公式与代码块原样保留             |
-| **Word (docx)** | 手写 OOXML + `jszip`（`src/export/docx.ts`） | 取 `<article>` 内层 → Mermaid `<svg>` 光栅化为 PNG → 拼装 DOCX 包（含 styles/numbering/图片/超链接） |
+| **Word (docx)** | 手写 OOXML + `jszip`（`src/export/docx.ts`） | 取 `<article>` 内层 → Mermaid `<svg>` 光栅化为 PNG → 拼装 DOCX 包（含 styles/numbering/图片/超链接）；脚注 → `word/footnotes.xml`，正文引用 → `<w:footnoteReference>` |
 | **EPUB**        | `jszip@3.10.1` 手写 OPF（`src/export/epub.ts`） | EPUB3：`mimetype`(STORE 首条) / content.opf / nav.xhtml / 内联 SVG |
 | **RTF**         | 零依赖手写 RTF 1.9（`src/export/rtf.ts`）        | `\ansicpg936` 中文；标题/列表/引用/代码/图片/链接；`\u` 带符号转义    |
 | **ODT**         | `jszip@3.10.1` 手写 ODF 1.2（`src/export/odt.ts`） | content.xml / styles.xml / manifest.xml / Pictures/   |
@@ -829,7 +829,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * **统一方案**：主进程 `electron/main/vault.ts` 的 `searchVault(root, query, opts?, file?)` 与 `replaceInVault(root, query, replacement, opts?, file?)` 各加一个可选 `file` 参数——
   * 传 `file`：只对这一单个文件查找（不递归），即「本文档」范围；
   * 不传 `file`：对整个 vault 递归，即「全部」范围。
-  后端其余逻辑（按行切分命中、替换回写、原子写）两范围完全共用。IPC 通道 `VAULT_SEARCH` / `VAULT_REPLACE` 与 preload 的 `searchVault / replaceInVault` 签名同步透传 `file`。
+  后端其余逻辑（按行切分命中、替换回写、原子写）两范围完全共用。IPC 通道 `VAULT_SEARCH` / `VAULT_REPLACE` 与 preload 的 `searchVault / replaceInVault` 签名同步透传 `file`。`SearchOptions` 另含 `regex` 开关，主进程 `buildSearchRegex` 与前端 `buildRegex` 共用，正则模式 query 直接作正则、非法时降级字面量。
 * **前端 `Sidebar`**：只保留一个搜索框 + 一个 `SearchResults` 渲染器 + 一个替换面板。`scopeFile()` 在「本文档」范围返回 `props.activePath`、在「全部」返回 `undefined`，作为第 4/5 实参传入 `searchVault / replaceInVault`；命中结果一律**点击跳转**（复用既有 `onOpenResult(path, line)` → `EditorHost.revealLine`），不再有 ‹ › 逐个步进。结果元信息用 `SearchResults` 的 `singleFile` 属性区分：`本文档` 显示「N 处命中」，`全部` 显示「N 处命中 · M 个文件」。
 * **取舍**：放弃了 ‹ › 逐个步进（即用户最初觉得「所见即所得下只是跳转不够直观」那部分体验），换来零代码冗余与两种范围完全一致的交互。命中定位在**两种编辑模式都可用**（见下方「命中行定位：不再强制切源码」）。
 * **2026-08-30 补回：两端命中常驻高亮（对称体验）**：用户认可源码模式用 CodeMirror `Decoration` 常驻高亮全部命中的体验，故在统一引擎之上补回该视图层高亮；随后因追求两端一致，进一步补回所见即所得 ProseMirror `Decoration` 装饰，使其在两种模式对称高亮。
@@ -1028,7 +1028,7 @@ export interface SessionState {
 | **6. 导出**      | HTML / PDF / 单 md                               | 导出结果与编辑器内观感一致                                                                        |
 | **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                                | 安装包体积优化，可用                                                                           |
 | **8. 分发**      | electron-builder 打包                             | 产出 Windows 安装包，可安装运行                                                                 |
-| **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+凝神(打字机/禅)模式+导出增强+写作辅助+断链检查 | 🔧 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二已落地（版本快照·写作统计·凝神模式）；批次三待排期（见 `docs/PHASE2-PLAN.md`） |
+| **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+凝神(打字机/禅)模式+导出增强+写作辅助+断链检查 | ✅ 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二已落地（版本快照·写作统计·凝神模式）；批次三已落地（导出增强·写作辅助·断链检查，见 `docs/PHASE2-PLAN.md`） |
 
 > 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
 

@@ -226,7 +226,7 @@ function insertAtCursor(text: string): void {
  */
 function setFind(
   query?: string,
-  opts?: { caseSensitive?: boolean; wholeWord?: boolean },
+  opts?: { caseSensitive?: boolean; wholeWord?: boolean; regex?: boolean },
   currentLine?: number
 ): void {
   if (!view) return
@@ -235,6 +235,7 @@ function setFind(
         query,
         caseSensitive: !!opts?.caseSensitive,
         wholeWord: !!opts?.wholeWord,
+        regex: !!opts?.regex,
         currentLine
       }
     : null

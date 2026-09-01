@@ -23,6 +23,7 @@ export interface WysiwygFindState {
   query: string
   caseSensitive: boolean
   wholeWord: boolean
+  regex?: boolean
   currentLine?: number
   /**
    * 当前结果行的源码文本。源码行号与渲染行号口径不同（Markdown 空行渲染后不产生节点，
@@ -146,7 +147,7 @@ function buildDecos(doc: PMNode, fs: WysiwygFindState): DecorationSet {
   if (!fs.query) return DecorationSet.empty
   // 部分复杂节点的文本范围可能让内联装饰计算异常；容错包裹，避免单次失败拖垮整条事务
   try {
-    const re = buildRegex(fs.query, fs.caseSensitive, fs.wholeWord)
+    const re = buildRegex(fs.query, fs.caseSensitive, fs.wholeWord, fs.regex)
     const decos: Decoration[] = []
     doc.descendants((node, pos) => {
       if (!node.isText || !node.text) return

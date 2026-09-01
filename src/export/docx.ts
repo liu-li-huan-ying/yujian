@@ -139,6 +139,28 @@ export async function buildDocx(html: string, ctx: SerializeCtx): Promise<Uint8A
 
   const base: RPr = { b: false, i: false, u: false, mono: false }
 
+  // ── 脚注：从正文抽取定义，正文引用改为 Word 脚注引用 ──
+  // 导出 HTML 中脚注以 <sup data-type="footnote_reference" data-label="N">（正文引用）
+  // 与 <dl data-type="footnote_definition" data-label="N">（底部定义）表达。
+  // 收集定义进 map、正文引用改为 <w:footnoteReference>，底部定义整段从正文移除，
+  // 改由 word/footnotes.xml 承载（与 markdown 脚注语义一致：节末列注）。
+  const footnoteDefs = new Map<string, string>()
+  const defEls = Array.from(
+    article.querySelectorAll('dl[data-type="footnote_definition"]')
+  ) as HTMLElement[]
+  for (const dl of defEls) {
+    const label = dl.getAttribute('data-label') ?? ''
+    if (!label) continue
+    const dd = (dl.querySelector('dd') ?? dl) as HTMLElement
+    dd.querySelectorAll('a.footnote-backref, a[href^="#fnref"]').forEach((b) => b.remove())
+    const inner = Array.from(dd.childNodes).map((c) => runsFrom(c, base)).join('')
+    footnoteDefs.set(label, inner)
+    dl.remove()
+  }
+  // 清理脚注容器与分隔线，避免正文残留空节 / 多余横线
+  article.querySelectorAll('.footnotes, .footnotes-sep, hr.footnotes-sep').forEach((n) => n.remove())
+  const hasFootnotes = footnoteDefs.size > 0
+
   function runsFrom(node: Node, p: RPr): string {
     if (node.nodeType === Node.TEXT_NODE) {
       const t = node.textContent || ''
@@ -176,6 +198,16 @@ export async function buildDocx(html: string, ctx: SerializeCtx): Promise<Uint8A
           .map((c) => runsFrom(c, np))
           .join('')
         return rid ? `<w:hyperlink r:id="${rid}">${inner}</w:hyperlink>` : inner
+      }
+      case 'sup': {
+        // 脚注引用：渲染为 Word 脚注引用（上标），定义在 word/footnotes.xml
+        if (el.getAttribute('data-type') === 'footnote_reference') {
+          const label = el.getAttribute('data-label') || ''
+          if (label && footnoteDefs.has(label)) {
+            return `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="${wx(label)}"/></w:r>`
+          }
+        }
+        break
       }
       default:
         break
@@ -347,6 +379,23 @@ export async function buildDocx(html: string, ctx: SerializeCtx): Promise<Uint8A
     return `<w:abstractNum w:abstractNumId="${id}"><w:multiLevelType w:val="hybridMultilevel"/>${levels}</w:abstractNum>`
   }
 
+  function footnotesXml(): string {
+    const sep =
+      `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>`
+    const cont =
+      `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>`
+    const items = Array.from(footnoteDefs.entries())
+      .map(
+        ([label, inner]) =>
+          `<w:footnote w:id="${wx(label)}"><w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${wx(label)}. </w:t></w:r>${inner}</w:p></w:footnote>`
+      )
+      .join('')
+    return (
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+      `<w:footnotes xmlns:w="${W_NS}">${sep}${cont}${items}</w:footnotes>`
+    )
+  }
+
   const coreXml =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
     `<cp:coreProperties xmlns:cp="${CP_NS}" xmlns:dc="${DC_NS}" xmlns:dcterms="${DCTERMS_NS}" xmlns:xsi="${XSI_NS}">` +
@@ -371,6 +420,9 @@ export async function buildDocx(html: string, ctx: SerializeCtx): Promise<Uint8A
     `<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>` +
     `<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>` +
     imgRels.map((r) => `<Override PartName="/word/media/${r.name}" ContentType="${r.mime}"/>`).join('') +
+    (hasFootnotes
+      ? `<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>`
+      : '') +
     `</Types>`
 
   const pkgRels =
@@ -398,6 +450,9 @@ export async function buildDocx(html: string, ctx: SerializeCtx): Promise<Uint8A
           `<Relationship Id="${h.rid}" Type="${R_NS}/hyperlink" Target="${wx(h.href)}" TargetMode="External"/>`
       )
       .join('') +
+    (hasFootnotes
+      ? `<Relationship Id="rIdFootnotes" Type="${R_NS}/footnotes" Target="footnotes.xml"/>`
+      : '') +
     `</Relationships>`
 
   const zip = new JSZip()
@@ -411,6 +466,13 @@ export async function buildDocx(html: string, ctx: SerializeCtx): Promise<Uint8A
   zip.file('docProps/app.xml', appXml)
   for (const r of imgRels) {
     if (r.bytes.length) zip.file(`word/media/${r.name}`, r.bytes)
+  }
+  if (hasFootnotes) {
+    zip.file('word/footnotes.xml', footnotesXml())
+    zip.file(
+      'word/_rels/footnotes.xml.rels',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${REL_NS}"></Relationships>`
+    )
   }
 
   return zip.generateAsync({ type: 'uint8array' })
