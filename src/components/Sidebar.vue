@@ -274,6 +274,12 @@ const searchInput = ref<HTMLInputElement | null>(null)
 
 defineExpose({ focusSearch, nextHit, prevHit })
 
+/** 当前打开 vault 的文件夹名（路径最后一段）；未开库时为 null */
+const vaultName = computed(() => {
+  if (!props.vaultPath) return null
+  return props.vaultPath.split(/[\\/]/).filter(Boolean).pop() ?? props.vaultPath
+})
+
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
@@ -499,9 +505,19 @@ function startDrag(e: PointerEvent): void {
 <template>
   <aside class="sidebar jade" :class="{ 'is-collapsed': !visible }" :style="{ width: `${(visible ?? true) ? width : 0}px` }">
     <header class="sidebar__head">
-      <span class="sidebar__title" :title="vaultPath ?? ''">
-        {{ vaultPath ? L.sidebarTitle : L.sidebarNoVault }}
-      </span>
+      <div class="sidebar__lead">
+        <span class="sidebar__kicker">
+          <Icon name="folder" :size="11" />
+          {{ L.sidebarTitle }}
+        </span>
+        <span
+          class="sidebar__name"
+          :class="{ 'is-empty': !vaultName }"
+          :title="vaultPath ?? L.sidebarNoVault"
+        >
+          {{ vaultName ?? L.sidebarNoVault }}
+        </span>
+      </div>
 
       <div class="sidebar__acts">
         <button
@@ -842,17 +858,47 @@ function startDrag(e: PointerEvent): void {
   justify-content: space-between;
   gap: 8px;
   flex-shrink: 0;
-  height: var(--h-crumb);
-  padding: 0 6px 0 12px;
+  height: auto;
+  min-height: var(--h-crumb);
+  padding: 7px 6px 7px 12px;
 }
 
-.sidebar__title {
-  overflow: hidden;
-  font-size: 12px;
+/* 顶栏左侧：眉标（面板身份）+ 当前库名 两层级 */
+.sidebar__lead {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* 眉标：小号大写/字距拉开的「分区标签」观感 */
+.sidebar__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  color: var(--hue-text-3);
+  text-transform: uppercase;
+}
+
+/* 主标题：当前 vault 文件夹名，超长省略，完整路径留作 hover title */
+.sidebar__name {
+  font-size: 13px;
   font-weight: 500;
-  color: var(--hue-text-2);
+  line-height: 1.3;
+  color: var(--hue-text-1);
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sidebar__name.is-empty {
+  color: var(--hue-text-3);
+  font-weight: 400;
 }
 
 .sidebar__acts {
