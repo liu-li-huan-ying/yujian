@@ -504,7 +504,7 @@ function startDrag(e: PointerEvent): void {
 
 <template>
   <aside class="sidebar jade" :class="{ 'is-collapsed': !visible }" :style="{ width: `${(visible ?? true) ? width : 0}px` }">
-    <header class="sidebar__head">
+    <header v-if="vaultPath" class="sidebar__head">
       <div class="sidebar__lead">
         <span class="sidebar__kicker">
           <Icon name="folder" :size="11" />
