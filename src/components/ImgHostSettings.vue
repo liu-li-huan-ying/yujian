@@ -3,7 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import type { ImgHostConfig } from '../../electron/shared/ipc-channels'
 import { i18n } from '../i18n'
 
-const props = defineProps<{
+defineProps<{
   /** 是否有已保存的文档（决定是否允许上传图片） */
   hasDoc: boolean
 }>()

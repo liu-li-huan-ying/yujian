@@ -46,26 +46,46 @@ export function kindExt(k: ExportKind): string {
   )[k]
 }
 
-/** 保存对话框的文件类型过滤 */
-export function kindFilter(k: ExportKind): { name: string; extensions: string[] } {
+/**
+ * 保存对话框文件类型名所需的 9 条译文。
+ * 由上层从 i18n 的 ui 命名空间传入（复用「导出菜单」已有译文，不新增 key），
+ * 这样本模块保持纯净——不 import 任何 i18n，也不假设当前语言。
+ */
+export interface ExportFilterLabels {
+  exportMenuMd: string
+  exportMenuTxt: string
+  exportMenuHtml: string
+  exportMenuPdf: string
+  exportMenuLatex: string
+  exportMenuDocx: string
+  exportMenuEpub: string
+  exportMenuRtf: string
+  exportMenuOdt: string
+}
+
+/** 保存对话框的文件类型过滤（名称随界面语言走） */
+export function kindFilter(
+  k: ExportKind,
+  U: ExportFilterLabels
+): { name: string; extensions: string[] } {
   switch (k) {
     case 'md':
-      return { name: 'Markdown 文档', extensions: ['md', 'markdown'] }
+      return { name: U.exportMenuMd, extensions: ['md', 'markdown'] }
     case 'txt':
-      return { name: '纯文本', extensions: ['txt'] }
+      return { name: U.exportMenuTxt, extensions: ['txt'] }
     case 'html':
-      return { name: 'HTML 网页', extensions: ['html', 'htm'] }
+      return { name: U.exportMenuHtml, extensions: ['html', 'htm'] }
     case 'pdf':
-      return { name: 'PDF 文档', extensions: ['pdf'] }
+      return { name: U.exportMenuPdf, extensions: ['pdf'] }
     case 'latex':
-      return { name: 'LaTeX 源文件', extensions: ['tex'] }
+      return { name: U.exportMenuLatex, extensions: ['tex'] }
     case 'docx':
-      return { name: 'Word 文档', extensions: ['docx'] }
+      return { name: U.exportMenuDocx, extensions: ['docx'] }
     case 'epub':
-      return { name: 'EPUB 电子书', extensions: ['epub'] }
+      return { name: U.exportMenuEpub, extensions: ['epub'] }
     case 'rtf':
-      return { name: 'RTF 富文本', extensions: ['rtf'] }
+      return { name: U.exportMenuRtf, extensions: ['rtf'] }
     case 'odt':
-      return { name: 'OpenDocument 文本', extensions: ['odt'] }
+      return { name: U.exportMenuOdt, extensions: ['odt'] }
   }
 }

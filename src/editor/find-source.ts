@@ -1,5 +1,6 @@
 import { StateField, StateEffect, type EditorState, type Range } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView } from '@codemirror/view'
+import { buildRegex } from '../utils/regex'
 
 /** 源码模式搜索高亮状态：由统一搜索的 query / 选项驱动，currentLine 标记当前结果所在行 */
 export interface SourceFindState {
@@ -11,16 +12,6 @@ export interface SourceFindState {
 
 /** 侧栏经 EditorHost 把当前搜索状态推给 CodeMirror；传 null 即清空高亮 */
 export const setSourceFind = StateEffect.define<SourceFindState | null>()
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildRegex(query: string, caseSensitive: boolean, wholeWord: boolean): RegExp {
-  let pattern = escapeRegExp(query)
-  if (wholeWord) pattern = `\\b${pattern}\\b`
-  return new RegExp(pattern, caseSensitive ? 'g' : 'gi')
-}
 
 /** 扫描整篇文档，给每个命中区间打上 .cm-find；当前结果所在行的命中额外加 .cm-find--current */
 function buildDecos(state: EditorState, st: SourceFindState): DecorationSet {

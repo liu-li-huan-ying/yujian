@@ -110,7 +110,7 @@ function onKey(e: KeyboardEvent): void {
           :placeholder="L.writingGoalPlaceholder"
           @input="onGoalInput"
         />
-        <span class="goal__hint">{{ L.goalProgress }}：{{ stats.han }} / {{ goal || 0 }}</span>
+        <span class="goal__hint">{{ L.goalProgress }}{{ stats.han }} / {{ goal || 0 }}</span>
       </div>
     </div>
   </div>

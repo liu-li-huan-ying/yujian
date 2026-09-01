@@ -33,6 +33,21 @@
 
 > **关于 Tauri 的最终判断**：不是"麻烦"，是**不可行**。Tauri 在 Windows 上链接需要 `link.exe`（MSVC），且运行依赖 WebView2 Runtime，你本机两个都缺。即使愿意装，代价是 5\~8GB 的 Visual Studio C++  workloads，而你已明确表示不想装。Electron 不需要任何 C++ 工具链（官方提供预编译二进制），是当前唯一顺畅的路径。
 
+### 0.2 开发宗旨与原则（2026-08-31 确立）
+
+以下八条是本项目的**最高指导原则**，高于任何局部便利或短期省事。所有架构决策、代码取舍、依赖选型都必须向它们对齐；当两条原则冲突时，越靠前的优先级越高。
+
+1. **不保留向后兼容。** 过时的直接删，别加兼容层、别写 migration、别留 fallback。
+2. **选能满足当前需求的最简单实现。** 不要预防性抽象，不要多此一举的配置层。
+3. **系统分层长。** 先跑通一个最小的端到端版本，再往上加东西。绝不为了未完成的复杂度拆掉能跑的东西。
+4. **组件保持模块化，关注点分离。**
+5. **优先用成熟的、有人维护的库。** 没有明确理由别自己重写。
+6. **先翻项目里已有的依赖能做什么，再考虑加新包或自己写。** 别上来就假设库里没有。
+7. **架构决策往长了做。** 不接受"先这样以后再换"的临时方案。
+8. **先看成熟产品怎么解决同一个问题，用已验证的模式，别从零发明。**
+
+> 据此原则，本项目**不维护历史兼容代码**：移除功能即彻底删除组件 + 接线 + 文档，不留半截死代码或残留入口；新增能力先盘点仓库已有同类实现，避免重复造车。
+
 ***
 
 ## 1. 需求边界与优先级
@@ -714,6 +729,16 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 上传动作在 **main 进程**执行，规避浏览器 CORS 与密钥泄露
 * 维护 `srcMap: 本地相对路径 → 远程 URL`，导出时可一键批量替换为图床链接（公众号等平台必须）
 
+**编辑器内显示（jade-asset:// 协议，2026-09-01 落地）：**
+
+* **问题**：文档模型里图片是**相对路径**（保真红线，绝不改写）。旧实现把显示用 `src` 改写成 `file://` 绝对路径——但开发模式渲染进程跑在 `http://localhost`，Chromium 会拦截 `http` 源加载 `file://` 资源，导致开发期图片全裂（生产用 `loadFile` 的 `file://` 源则正常）。这就是"有时正常有时裂"的根因。
+* **方案**：自定义特权协议 `jade-asset://`，开发 / 生产统一生效。
+  * 渲染层 `MilkdownEditor.vue` 的 `rewriteImages` / `imgToAssetUrl`：把相对 / `file://` 图改写成 `jade-asset://local/<encodeURIComponent(绝对路径)>`（`https:` / `data:` / `blob:` / 已是 `jade-asset:` 的跳过，避免循环改写）；`http:` 远程图也跳过。
+  * 主进程 `electron/main/index.ts` 顶层 `protocol.registerSchemesAsPrivileged([{ scheme:'jade-asset', privileges:{ standard, secure, stream, supportFetchAPI, bypassCSP } }])`（须在 `app ready` 前注册），`app.whenReady` 内 `protocol.handle('jade-asset', handleJadeAsset)` 按绝对路径 `readFileSync` 读盘、以 `Response` 返回字节流。
+  * 文档模型仍是相对路径，**往返保真不变**。
+* **导出衔接**：`src/export/imageInline.ts` 的 `inlineImages` 识别 `jade-asset://` 并解码回绝对路径（`decodeJadeAsset` 提取 `local/` 后段 → `decodeURIComponent`）再内联为 data URL，避免 WYSIWYG 导出（`getHTML()` 读实时 DOM，含 `jade-asset://`）丢图。
+* **两个易错点（已踩坑）**：① `new URL(...).pathname` 已对中文做一层百分号编码，渲染层须先 `decodeURIComponent` 再 `encodeURIComponent` 一次，否则主进程只解一层致中文路径仍是 `%XX` 读不到；② 协议层会在绝对路径前多塞一个前导斜杠（`//C:/...` 或 `//Users/...`），主进程 handler 须 `replace(/^\//,'')` 再 `replace(/^\/([A-Za-z]:)/,'$1')` 归一。
+
 ### 5.5 搜索（MiniSearch）
 
 * 索引字段：`title`（权重 3）、`content`（权重 1）、`path`、`tags`
@@ -753,7 +778,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * **二进制序列化分层**：`buildExportContent` 对二进制格式调用 `serializeBinary(kind, canonicalHtml, ctx)`（`src/export/serialize.ts`），按 kind 分派到 `docx.ts` / `epub.ts` / `rtf.ts` / `odt.ts` 四个 builder；Mermaid `<svg>` 统一先经 `rasterizeSvgToImg` 光栅化为 PNG（DOCX/RTF/ODT），EPUB 保留内联 SVG。
 * **LaTeX 转换的关键设计——转义与「公式 / 代码 / 链接」互斥**：先把行内代码、行内公式 `$...$`、显示公式 `$$...$$`、图片、链接、脚注抽成占位符，再对剩余文本做 LaTeX 特殊字符转义（`\ & % $ # _ { } ~ ^`），最后回填。否则链接 URL 里的 `_`、公式里的 `\`、宏名里的 `#` 都会被转义破坏。
 * **PDF 分页**：顶层 `@page { size: A4; margin: 20mm 18mm }`；`@media print` 内 `.yujian-cover, .yujian-toc { break-after: page }`、`.yujian-doc h1 { break-before: page }`、`pre, table, figure, .mermaid, img { break-inside: avoid }`、`h1,h2,h3 { break-after: avoid }`（标题不孤行）。紧跟封面 / 目录的标题用 `.yujian-cover + h1 { break-before: avoid }` 取消分页，避免产生空白页。
-* **图片内联**：`src/export/imageInline.ts` 用 `DOMParser` 解析产物，按**文档所在目录**解析相对路径（玉笺约定：文档同级同名 `.assets`），经 `file:readBase64` 读取后替换 `src`；已是 `data:` / `http(s):` 的跳过。**PDF 强制内联**——它经隐藏窗口加载 `tmpdir` 下的临时 HTML，相对路径图片本就取不到，这是此前 PDF 丢图的根因。
+* **图片内联**：`src/export/imageInline.ts` 用 `DOMParser` 解析产物；**`jade-asset://` 引用先解码回绝对路径**（见 §5.4）再内联；其余按**文档所在目录**解析相对路径（玉笺约定：文档同级同名 `.assets`），经 `file:readBase64` 读取后替换 `src`；已是 `data:` / `http(s):` 的跳过。**PDF 强制内联**——它经隐藏窗口加载 `tmpdir` 下的临时 HTML，相对路径图片本就取不到，这是此前 PDF 丢图的根因。
 * **Mermaid 内嵌**：`src/export/mermaidSvg.ts` 复用既有 `mermaid` 依赖把 ```mermaid 渲染成 SVG 内嵌，失败则保留原代码块（优雅降级）。内嵌后不再注入 CDN 脚本，产物离线可用。
 * **渲染任意 Markdown**：`MilkdownEditor.markdownToHtml(md)` 复用 Milkdown 的 `parserCtx` + `schemaCtx` + `DOMSerializer`，**不需要第二个编辑器实例**（不违反单实例红线），是多文件合订与选中范围导出的共同基础。
 * **导出范围**：选中走 `getSelectionHTML()`（ProseMirror 选区 `serializeFragment`），源码模式取选区 Markdown 再渲染，两种模式产出同构；LaTeX 走 `getSelectionMarkdown()`（Milkdown `serializerCtx`，选区结构不合法时 try/catch 兜底）。无选区回退整篇并 toast 提示，不静默降级。

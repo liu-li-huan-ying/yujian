@@ -119,21 +119,43 @@ function resolveDocDir(): string | null {
   return props.filePath.replace(/[\\/][^\\/]+$/, '').replace(/\\/g, '/')
 }
 
-/** 把编辑器 DOM 内所有相对路径图片改写为 file:// 绝对路径（仅显示，不改文档模型） */
+/**
+ * 把编辑器 DOM 内所有相对/绝对 file 图片改写成 `jade-asset://` 协议 URL
+ * （仅显示，不改文档模型）。主进程按绝对路径读盘返回字节流，
+ * 规避开发模式（http://localhost 源）加载 file:// 资源被浏览器拦截的问题。
+ */
 function rewriteImages(root: HTMLElement): void {
   const dir = resolveDocDir()
   if (!dir) return
   root.querySelectorAll('img').forEach((img) => {
     const src = img.getAttribute('src') ?? ''
-    // 已是可解析来源（http/https/data/blob/file）则不处理，避免循环改写
-    if (!src || /^(https?:|data:|blob:|file:)/i.test(src)) return
-    try {
-      const abs = new URL(src, 'file://' + dir + '/').href
-      img.setAttribute('src', abs)
-    } catch {
-      // 非法的相对路径：忽略，保持原样
-    }
+    // 已是可直接显示的来源（http/https/data/blob/本协议）则不处理，避免循环改写
+    if (!src || /^(https?:|data:|blob:|jade-asset:)/i.test(src)) return
+    const assetUrl = imgToAssetUrl(src, dir)
+    if (assetUrl) img.setAttribute('src', assetUrl)
   })
+}
+
+/**
+ * 把单个图片引用解析为 `jade-asset://local/<encodeURIComponent(绝对路径)>`。
+ * - 相对路径：以文档目录为基址拼接，取 pathname 得到绝对路径；
+ * - 绝对 file:// 路径（偶发）：取其 pathname 复用。
+ * 返回 null 表示该引用无需改写（http/data/blob 等）。
+ */
+function imgToAssetUrl(src: string, dir: string): string | null {
+  if (/^(https?:|data:|blob:)/i.test(src)) return null
+  try {
+    // new URL(...).pathname 会对非 ASCII 做一层百分号编码，先解码得到真实绝对路径，
+    // 再整体 encodeURIComponent 一次，避免主进程解码后中文仍是 %XX 导致读不到文件。
+    const raw = /^file:/i.test(src)
+      ? new URL(src).pathname
+      : new URL(src, 'file://' + dir + '/').pathname
+    const decoded = decodeURIComponent(raw)
+    if (!decoded) return null
+    return 'jade-asset://local/' + encodeURIComponent(decoded)
+  } catch {
+    return null
+  }
 }
 
 function setupImageResolver(): void {

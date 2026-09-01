@@ -1,6 +1,7 @@
 import { Plugin, PluginKey, type EditorState } from '@milkdown/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/prose/view'
 import type { Node as PMNode } from '@milkdown/prose/model'
+import { buildRegex } from '../utils/regex'
 
 /**
  * 所见即所得模式搜索命中高亮（ProseMirror Decoration）。
@@ -44,16 +45,6 @@ let findState: WysiwygFindState | null = null
 /** 外部（milkdown.setFind）写入当前高亮状态，供 apply 回退 / 自愈使用 */
 export function setFindState(fs: WysiwygFindState | null): void {
   findState = fs && fs.query ? fs : null
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildRegex(query: string, caseSensitive: boolean, wholeWord: boolean): RegExp {
-  let pattern = escapeRegExp(query)
-  if (wholeWord) pattern = `\\b${pattern}\\b`
-  return new RegExp(pattern, caseSensitive ? 'g' : 'gi')
 }
 
 /**

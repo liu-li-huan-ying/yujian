@@ -88,7 +88,8 @@ const enUS = {
     toastNoContent: 'Document has no content',
     toastExporting: 'Generating ',
     toastNoSelection: 'No selection, exporting the whole document',
-    toastImgHostPublishOk: ' images uploaded to host',
+    toastImgHostPublishOk: '{n} images uploaded to host',
+    toastImgHostPartialFail: ', {n} failed',
     toastImgHostPublishFail: 'Upload failed: ',
     toastImgHostNoImages: 'No local images in document',
     imgHostSettingsTitle: 'Image Hosting Settings',
@@ -270,7 +271,7 @@ const enUS = {
     selectionStats: 'Selection',
     writingGoal: 'Writing goal',
     writingGoalPlaceholder: 'Target count',
-    goalProgress: 'Progress',
+    goalProgress: 'Progress:',
     /* ── Status bar stat units (zh/en consistent) ── */
     unitHan: 'chars',
     unitWord: 'words',
@@ -307,7 +308,7 @@ const enUS = {
     linkCheckFilterActive: 'Filter',
     linkCheckBreakdown: 'Wiki {w} · Link {l} · Image {i}',
     linkCheckLocate: 'Go to line {n}',
-    linkCheckContext: 'Source line',
+    linkCheckContext: 'Source line:',
     zenAnchor: 'Anchor position',
     zenAnchorHint: 'Where the current line is pinned in the viewport',
     zenAnchorThird: 'Upper 1/3',
@@ -357,7 +358,39 @@ const enUS = {
       snipMermaid: 'Diagram',
       snipMath: 'Math block',
       toastApplied: 'Document properties updated'
-    }
+    },
+    /* ── P2-3: window buttons / export-menu groups / context menu / sidebar controls / loading / search / error states / dialog defaults ── */
+    loading: 'Loading',
+    loadRetry: 'Retry',
+    dialogConfirm: 'OK',
+    dialogCancel: 'Cancel',
+    searchHits: '{n} hit(s)',
+    searchHitsFiles: '{n} hit(s) · {f} file(s)',
+    mathError: '⚠ Formula failed to render',
+    mermaidError: 'Invalid diagram syntax',
+    tocTitle: 'Contents',
+    untitledDoc: 'Untitled document',
+    untitled: 'Untitled',
+    snapshotRestored: 'Restored to this snapshot',
+    snapshotReadFail: 'Failed to read snapshot',
+    snapshotDeleted: 'Snapshot deleted',
+    exportGroupText: 'Text',
+    exportGroupLayout: 'Layout / Web',
+    exportGroupOffice: 'Office / E-book',
+    winMinimize: 'Minimize',
+    winMaximize: 'Maximize',
+    winRestore: 'Restore',
+    ctxNewFile: 'New file',
+    ctxNewFolder: 'New folder',
+    ctxRename: 'Rename',
+    ctxDelete: 'Delete',
+    sidebarOpenVault: 'Open vault',
+    sidebarSearch: 'Search',
+    sidebarClear: 'Clear',
+    sidebarClearSearch: 'Clear search',
+    sidebarSearchScope: 'Search scope',
+    sidebarDeleteConfirm: 'Confirm deletion',
+    snapDialog: 'Version snapshots'
   },
 
   /* ── Help panel: shortcuts + guide ── */
@@ -423,5 +456,4 @@ const enUS = {
   }
 }
 
-export type Locale = typeof enUS
 export default enUS

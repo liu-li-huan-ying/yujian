@@ -17,7 +17,7 @@ export interface MenuEntry {
   separatorTitle?: string
 }
 
-const props = defineProps<{
+defineProps<{
   items: MenuEntry[]
   /** 菜单相对触发按钮的对齐方向，默认右对齐（贴右边缘） */
   align?: 'left' | 'right'

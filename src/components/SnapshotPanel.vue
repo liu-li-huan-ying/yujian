@@ -373,7 +373,7 @@ function fmtTime(ts: number): string {
 </script>
 
 <template>
-  <div class="snap glass" :class="{ 'snap--tl': view === 'timeline', 'snap--split': diffView === 'split' }" role="dialog" aria-label="版本快照">
+  <div class="snap glass" :class="{ 'snap--tl': view === 'timeline', 'snap--split': diffView === 'split' }" role="dialog" :aria-label="L.snapDialog">
     <header class="snap__head">
       <span class="snap__title">{{ L.snapshots }}</span>
       <span class="snap__count">{{ L.snapshotCount.replace('{n}', String(snapshots.branchList.length)) }}</span>

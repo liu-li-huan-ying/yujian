@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { $nodeSchema, $remark } from '@milkdown/kit/utils'
 
 /**
@@ -167,7 +168,9 @@ export const htmlInlineSchema = $nodeSchema(htmlInlineId, () => ({
     dom.className = 'yj-html-inline'
     const inner = document.createElement('span')
     inner.contentEditable = 'false'
-    inner.innerHTML = node.attrs.value
+    // 只消毒「渲染」路径：文档原始 HTML 可能含 <img onerror> / <svg onload> 等，
+    // 必须清洗后再注入 DOM；序列化（toMarkdown）仍写原始值，往返保真不受影响。
+    inner.innerHTML = DOMPurify.sanitize(node.attrs.value)
     dom.appendChild(inner)
     return dom
   },

@@ -8,7 +8,9 @@
  */
 
 import { enhanceFootnotes, replaceEmojiInHtml, parseHtml } from './domUtils'
+import { escapeXml } from '../utils/html'
 import { renderLatexContent } from '../editor/features/mathjax'
+import { i18n } from '../i18n'
 
 export interface ExportOptions {
   /** 引入 KaTeX CSS，让公式排版更精细（默认 true） */
@@ -193,15 +195,6 @@ kbd {
 }
 `
 
-/** HTML 转义（合订面板拼接篇章标题时复用，避免文档名里的特殊字符破坏结构） */
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
 interface TocEntry {
   /** 标题层级 1~6 */
   level: number
@@ -235,16 +228,16 @@ function buildToc(bodyHtml: string): { html: string; entries: TocEntry[] } {
 function tocHtml(entries: TocEntry[]): string {
   if (!entries.length) return ''
   const items = entries
-    .map((e) => `<li class="toc-lv${e.level}"><a href="#${e.id}">${escapeHtml(e.text)}</a></li>`)
+    .map((e) => `<li class="toc-lv${e.level}"><a href="#${e.id}">${escapeXml(e.text)}</a></li>`)
     .join('')
-  return `<nav class="yujian-toc"><h1 class="toc-title">目录</h1><ul>${items}</ul></nav>`
+  return `<nav class="yujian-toc"><h1 class="toc-title">${i18n.ui.tocTitle}</h1><ul>${items}</ul></nav>`
 }
 
 /** 封面 HTML：标题 / 作者 / 日期，缺省项不渲染 */
 function coverHtml(meta: { title: string; author?: string; date?: string }): string {
-  const lines = [`<h1 class="cover-title">${escapeHtml(meta.title)}</h1>`]
-  if (meta.author) lines.push(`<p class="cover-author">${escapeHtml(meta.author)}</p>`)
-  if (meta.date) lines.push(`<p class="cover-date">${escapeHtml(meta.date)}</p>`)
+  const lines = [`<h1 class="cover-title">${escapeXml(meta.title)}</h1>`]
+  if (meta.author) lines.push(`<p class="cover-author">${escapeXml(meta.author)}</p>`)
+  if (meta.date) lines.push(`<p class="cover-date">${escapeXml(meta.date)}</p>`)
   return `<section class="yujian-cover">${lines.join('')}</section>`
 }
 
@@ -255,8 +248,8 @@ function coverHtml(meta: { title: string; author?: string; date?: string }): str
  */
 export function buildExportHtml(bodyHtml: string, title: string, opts: ExportOptions = {}): string {
   const meta = opts.meta ?? {}
-  const docTitle = meta.title || title || '未命名文档'
-  const safeTitle = escapeHtml(docTitle)
+  const docTitle = meta.title || title || i18n.ui.untitledDoc
+  const safeTitle = escapeXml(docTitle)
   const headExtras: string[] = []
 
   // 目录：先给正文标题补锚点，再据层级生成（HTML 可跳转、PDF 带缩进）
@@ -289,7 +282,7 @@ export function buildExportHtml(bodyHtml: string, title: string, opts: ExportOpt
 
   if (opts.mermaid !== false) {
     headExtras.push(
-      '<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script>'
+      '<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>'
     )
     headExtras.push(`<script>
   window.addEventListener('load', function () {
@@ -306,7 +299,7 @@ export function buildExportHtml(bodyHtml: string, title: string, opts: ExportOpt
       mermaid.run();
     }
   });
-<\/script>`)
+</script>`)
   }
 
   return `<!DOCTYPE html>

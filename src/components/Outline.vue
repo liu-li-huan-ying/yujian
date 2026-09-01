@@ -31,12 +31,12 @@ watch(
 </script>
 
 <template>
-  <aside class="outline jade" :class="{ 'is-collapsed': !visible }" aria-label="文档大纲">
+  <aside class="outline jade" :class="{ 'is-collapsed': !visible }" :aria-label="L.outline">
     <header class="outline__head">
       <span class="outline__title">{{ L.outline }}</span>
     </header>
 
-    <nav ref="listEl" class="outline__body" aria-label="文档大纲">
+    <nav ref="listEl" class="outline__body" :aria-label="L.outline">
       <ul v-if="items.length" class="outline__list">
         <li
           v-for="item in items"

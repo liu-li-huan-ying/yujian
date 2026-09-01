@@ -1,4 +1,6 @@
 import type { CodeBlockConfig } from '@milkdown/kit/component/code-block'
+import { escapeXml } from '../../utils/html'
+import { i18n } from '../../i18n'
 
 /**
  * Mermaid 图表渲染 —— 挂在 Crepe 代码块的 `renderPreview` 钩子上。
@@ -43,17 +45,9 @@ async function ensureMermaid(): Promise<MermaidApi> {
   return mermaid
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
 function errorHtml(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err)
-  return `<div class="mermaid-error"><strong>图表语法有误</strong><p>${escapeHtml(message)}</p></div>`
+  return `<div class="mermaid-error"><strong>${i18n.ui.mermaidError}</strong><p>${escapeXml(message)}</p></div>`
 }
 
 async function renderSvg(code: string): Promise<string> {

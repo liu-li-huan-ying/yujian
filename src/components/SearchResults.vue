@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { escapeXml } from '../utils/html'
+import { escapeRegExp } from '../utils/regex'
 import type { SearchFileResult } from '../../electron/shared/ipc-channels'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
+const L = t.ui
 
 const props = defineProps<{
   results: SearchFileResult[]
@@ -22,16 +28,12 @@ function displayName(name: string): string {
 }
 
 /** 转义后再高亮，防止文件内容里的 HTML 标签造成 XSS */
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
 function highlight(text: string): string {
-  const safe = escapeHtml(text)
-  const q = escapeHtml(props.query).trim()
+  const safe = escapeXml(text)
+  const q = escapeXml(props.query).trim()
   if (!q) return safe
   const flags = props.caseSensitive ? 'g' : 'gi'
-  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
+  const re = new RegExp(escapeRegExp(q), flags)
   return safe.replace(re, (m) => `<mark>${m}</mark>`)
 }
 
@@ -40,8 +42,8 @@ const totalHits = computed(() => props.results.reduce((n, f) => n + f.hits.lengt
 /** 命中计数文案：单文件范围只报命中数，全库范围附带文件数 */
 const metaText = computed(() =>
   props.singleFile
-    ? `${totalHits.value} 处命中`
-    : `${totalHits.value} 处命中 · ${props.results.length} 个文件`
+    ? L.searchHits.replace('{n}', String(totalHits.value))
+    : L.searchHitsFiles.replace('{n}', String(totalHits.value)).replace('{f}', String(props.results.length))
 )
 </script>
 

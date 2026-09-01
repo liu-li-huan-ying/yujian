@@ -3,6 +3,10 @@ out/
 dist/
 release/
 
+# 本地 npm 缓存 / 临时目录（沙箱环境下 --cache 落地的本地缓存）
+_npmcache/
+tmp/
+
 # 智能体工作数据（本地记忆、环境探测记录），不进版本库
 .workbuddy/
 

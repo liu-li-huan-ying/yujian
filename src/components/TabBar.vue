@@ -4,6 +4,7 @@ import Icon from './Icon.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import { useTabsStore } from '../store/tabs'
 import { useI18n } from '../i18n'
+import { baseName } from '../utils/path'
 
 const tabs = useTabsStore()
 const { t } = useI18n()
@@ -17,10 +18,6 @@ const emit = defineEmits<{
   (e: 'close-others', path: string): void
   (e: 'close-to-right', path: string): void
 }>()
-
-function baseName(path: string): string {
-  return (path.split(/[\\/]/).pop() ?? 'document').replace(/\.(md|markdown)$/i, '')
-}
 
 const isActive = (path: string): boolean => path === tabs.activePath
 const showDot = (path: string): boolean => isActive(path) && props.dirty
