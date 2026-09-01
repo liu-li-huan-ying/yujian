@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
+const L = t.ui
+
 defineProps<{
   /** 加载状态：idle 隐藏；loading 顶栏进度；error/timeout 错误提示卡 */
   status: 'idle' | 'loading' | 'error' | 'timeout'
@@ -12,7 +17,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 <template>
   <div v-if="status !== 'idle'" class="loadbar" :class="`loadbar--${status}`">
     <!-- 顶栏 indeterminate 进度条：覆盖两种模式的加载/渲染 -->
-    <div v-if="status === 'loading'" class="loadbar__track" role="progressbar" aria-label="加载中">
+    <div v-if="status === 'loading'" class="loadbar__track" role="progressbar" :aria-label="L.loading">
       <div class="loadbar__fill" />
     </div>
 
@@ -30,7 +35,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
         <circle cx="8" cy="11.4" r="0.85" fill="currentColor" />
       </svg>
       <span class="loadbar__msg">{{ message }}</span>
-      <button class="loadbar__retry" type="button" @click="emit('retry')">重试</button>
+      <button class="loadbar__retry" type="button" @click="emit('retry')">{{ L.loadRetry }}</button>
     </div>
   </div>
 </template>

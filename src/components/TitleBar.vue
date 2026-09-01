@@ -87,14 +87,14 @@ const exportItems = (): MenuEntry[] => {
     disabled: !props.canExport
   })
   return [
-    { separatorTitle: '文本' },
+    { separatorTitle: L.exportGroupText },
     item('export-md', L.exportMenuMd),
     item('export-txt', L.exportMenuTxt),
-    { separatorTitle: '排版 / 网页' },
+    { separatorTitle: L.exportGroupLayout },
     item('export-html', L.exportMenuHtml),
     item('export-pdf', L.exportMenuPdf),
     item('export-latex', L.exportMenuLatex),
-    { separatorTitle: '办公 / 电子书' },
+    { separatorTitle: L.exportGroupOffice },
     item('export-docx', L.exportMenuDocx),
     item('export-epub', L.exportMenuEpub),
     item('export-rtf', L.exportMenuRtf),
@@ -111,13 +111,23 @@ const exportItems = (): MenuEntry[] => {
 }
 
 function onExportSelect(action: string): void {
-  if (action.startsWith('export-')) emit(action as any)
-  else if (action === 'export-compile') emit('export-compile')
-  else if (action === 'toggle-toc') emit('export-option', 'toc')
-  else if (action === 'toggle-cover') emit('export-option', 'cover')
-  else if (action === 'toggle-inline') emit('export-option', 'inline')
-  else if (action === 'toggle-selection') emit('export-option', 'selection')
-  else if (action === 'toggle-preview') emit('export-option', 'preview')
+  switch (action) {
+    case 'export-md': emit('export-md'); break
+    case 'export-txt': emit('export-txt'); break
+    case 'export-html': emit('export-html'); break
+    case 'export-pdf': emit('export-pdf'); break
+    case 'export-latex': emit('export-latex'); break
+    case 'export-docx': emit('export-docx'); break
+    case 'export-epub': emit('export-epub'); break
+    case 'export-rtf': emit('export-rtf'); break
+    case 'export-odt': emit('export-odt'); break
+    case 'export-compile': emit('export-compile'); break
+    case 'toggle-toc': emit('export-option', 'toc'); break
+    case 'toggle-cover': emit('export-option', 'cover'); break
+    case 'toggle-inline': emit('export-option', 'inline'); break
+    case 'toggle-selection': emit('export-option', 'selection'); break
+    case 'toggle-preview': emit('export-option', 'preview'); break
+  }
 }
 
 /* ── 更多下拉（设置 / 文件）── */
@@ -298,7 +308,7 @@ onMounted(() => {
 
     <!-- macOS 用原生红绿灯，不渲染自绘按钮 -->
     <div v-if="!isMac" class="win">
-      <button class="win__btn" type="button" title="最小化" @click="minimize()">
+      <button class="win__btn" type="button" :title="L.winMinimize" @click="minimize()">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1" />
         </svg>
@@ -307,7 +317,7 @@ onMounted(() => {
       <button
         class="win__btn"
         type="button"
-        :title="maximized ? '向下还原' : '最大化'"
+        :title="maximized ? L.winRestore : L.winMaximize"
         @click="toggleMaximize()"
       >
         <svg v-if="maximized" width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -319,7 +329,7 @@ onMounted(() => {
         </svg>
       </button>
 
-      <button class="win__btn win__btn--close" type="button" title="关闭" @click="close()">
+      <button class="win__btn win__btn--close" type="button" :title="L.close" @click="close()">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path
             d="M1.4 1.4l7.2 7.2M8.6 1.4l-7.2 7.2"

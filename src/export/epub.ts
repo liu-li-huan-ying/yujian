@@ -3,8 +3,10 @@
  * 纯 JS / 无外部二进制依赖。Mermaid 图表以内联 <svg> 保留（EPUB 支持 SVG）。
  */
 import JSZip from 'jszip'
-import { parseHtml, collectImages, escapeXml } from './domUtils'
+import { parseHtml, collectImages } from './domUtils'
+import { escapeXml } from '../utils/html'
 import type { SerializeCtx } from './serialize'
+import { i18n } from '../i18n'
 
 interface NavItem {
   id: string
@@ -29,9 +31,9 @@ function buildNav(items: NavItem[], title: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="zh-CN">
-<head><meta charset="utf-8"/><title>${escapeXml(title)} · 目录</title></head>
+<head><meta charset="utf-8"/><title>${escapeXml(title)} · ${i18n.ui.tocTitle}</title></head>
 <body>
-<nav epub:type="toc" id="toc"><h1>${escapeXml(title)} · 目录</h1><ol>${lis}</ol></nav>
+<nav epub:type="toc" id="toc"><h1>${escapeXml(title)} · ${i18n.ui.tocTitle}</h1><ol>${lis}</ol></nav>
 </body>
 </html>`
 }

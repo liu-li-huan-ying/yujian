@@ -21,14 +21,16 @@ import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult, ExportPayload } from '../electron/shared/ipc-channels'
-import { buildExportHtml, renderLatexBlocksInExport } from './export/docTemplate'
 import { inlineImages } from './export/imageInline'
-import { embedMermaidSvg } from './export/mermaidSvg'
 import { parseFrontmatter } from './editor/frontmatter'
-import { markdownToLatex } from './export/markdownToLatex'
-import { isBinary, kindExt, kindFilter, type ExportKind } from './export/types'
-import { serializeBinary } from './export/serialize'
-import { htmlToPlainText } from './export/domUtils'
+import { type ExportKind } from './export/types'
+import {
+  buildExportContent,
+  kindLabel,
+  bytesToBase64,
+  type BuiltExport,
+  type ExportContext
+} from './export/buildExport'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
 import { useTabsStore } from './store/tabs'
@@ -56,7 +58,7 @@ const sidebarWidth = ref(224)
 const pendingPath = ref<string | null>(null)
 
 const fileName = computed(() =>
-  filePath.value ? filePath.value.split(/[\\/]/).pop() ?? '' : '未命名'
+  filePath.value ? filePath.value.split(/[\\/]/).pop() ?? '' : U.untitled
 )
 
 const modeLabel = computed(() =>
@@ -452,9 +454,9 @@ async function onSnapshotRestore(id: string): Promise<void> {
     const content = await window.api.snapshotRestore(vaultPath.value!, filePath.value!, id)
     if (content == null) return
     host.value?.loadMarkdownExternal(content)
-    showToast('已恢复到该快照', 'ok')
+    showToast(U.snapshotRestored, 'ok')
   } catch {
-    showToast('快照读取失败', 'err')
+    showToast(U.snapshotReadFail, 'err')
   } finally {
     snapshotOpen.value = false
   }
@@ -470,7 +472,7 @@ function onSnapshotPick(text: string): void {
 /** 删除快照（主进程走系统回收站） */
 async function onSnapshotDelete(id: string): Promise<void> {
   await snapshots.remove(vaultPath.value, filePath.value, id)
-  showToast('已删除快照', 'ok')
+  showToast(U.snapshotDeleted, 'ok')
 }
 
 /** 更新写作目标并持久化 */
@@ -527,13 +529,9 @@ async function onPublishImages(): Promise<void> {
   } else if (!res.ok) {
     showToast(`${U.toastImgHostPublishFail}${res.error ?? ''}`, 'err')
   } else {
-    const failedText = res.failed > 0 ? `，${res.failed} ${U.statusUnsaved}` : ''
-    showToast(`${U.toastImgHostPublishOk}${res.uploaded}${failedText}`, 'ok')
+    const failedText = res.failed > 0 ? U.toastImgHostPartialFail.replace('{n}', String(res.failed)) : ''
+    showToast(U.toastImgHostPublishOk.replace('{n}', String(res.uploaded)) + failedText, 'ok')
   }
-}
-
-function baseName(path: string): string {
-  return (path.split(/[\\/]/).pop() ?? 'document').replace(/\.(md|markdown)$/i, '')
 }
 
 /**
@@ -584,241 +582,9 @@ async function readAsDataUrl(absPath: string): Promise<string | null> {
   return res.ok && res.dataUrl ? res.dataUrl : null
 }
 
-/**
- * 导出当前文档。三种产物共用一条管道：取正文 → 变换 → 通用写盘 / 打印。
- * @param kind  html 网页 / pdf 文档 / latex 源文件
- * @param scope all 整篇 / selection 当前选中（无选区时回退整篇并提示，不静默降级）
- */
-/** 构建好的导出产物（尚未写盘 / 打印） */
-interface BuiltExport {
-  /** 落盘文本（md/txt/html/latex）；二进制格式的预览用 HTML 也暂存此处 */
-  content: string
-  /** 二进制格式（docx/epub/rtf/odt）的成品字节；存在时主进程按字节写盘 */
-  binary?: Uint8Array
-  /** 二进制产物的 MIME */
-  mime?: string
-  /** 默认文件名（含扩展名） */
-  defaultName: string
-  filters?: { name: string; extensions: string[] }[]
-  kind: ExportKind
-}
-
 /** 导出前预览状态 */
 const showPreview = ref(false)
 const previewState = ref<BuiltExport | null>(null)
-
-/**
- * 构建导出产物内容（不写盘）。
- * 与「写盘」拆开，是为了让导出前预览能插在两者之间——预览与落盘共用同一份内容，
- * 不重复渲染。
- * @param override 多文件合订时传入：拼接好的正文 HTML / Markdown 原文与合订标题，
- *                 此时不再走编辑器的「选中 / 整篇」范围逻辑。
- *                 forceInline 为 true 时（合订）强制内联图片与图表，确保跨目录自包含。
- */
-async function buildExportContent(
-  kind: ExportKind,
-  scope: 'all' | 'selection' = 'all',
-  override?: {
-    title?: string
-    meta?: { title?: string; author?: string; date?: string }
-    bodyHtml?: string
-    markdown?: string
-    forceInline?: boolean
-  }
-): Promise<BuiltExport | null> {
-  const isCompile = !!override
-  if (!isCompile && !filePath.value) {
-    showToast(U.toastNoDoc, 'err')
-    return null
-  }
-  const base = override?.title ?? baseName(filePath.value ?? '')
-  const meta = override?.meta ?? readExportMeta(base)
-  // 范围：优先取调用方指定，其次跟随菜单里的「仅导出选中内容」选项（合订不适用）
-  const useSel = !isCompile && (scope === 'selection' || exportPrefs.value.selection)
-
-  let content = ''
-  let binary: Uint8Array | undefined
-  let mime: string | undefined
-  let defaultName = ''
-  let filters: { name: string; extensions: string[] }[] | undefined
-
-  // ── Markdown：直接透传正文（无需经过 HTML 渲染）──
-  if (kind === 'md') {
-    let md = override?.markdown ?? ''
-    if (!isCompile) {
-      md = useSel ? host.value?.getSelectionMarkdown() ?? '' : ''
-      if (useSel && !md.trim()) {
-        showToast(U.toastNoSelection, 'info')
-        md = host.value?.getMarkdown() ?? ''
-      } else if (!useSel) {
-        md = host.value?.getMarkdown() ?? ''
-      }
-    }
-    if (!md.trim()) {
-      showToast(U.toastNoContent, 'err')
-      return null
-    }
-    content = md
-    defaultName = base + '.md'
-    filters = [kindFilter('md')]
-    return { content, defaultName, filters, kind }
-  }
-
-  // ── 纯文本：取正文 HTML 后剥离标签 ──
-  if (kind === 'txt') {
-    let body = override?.bodyHtml ?? ''
-    if (!isCompile) {
-      body = useSel ? host.value?.getSelectionHTML() ?? '' : ''
-      if (useSel && !body) {
-        showToast(U.toastNoSelection, 'info')
-        body = (await host.value?.getHTML()) ?? ''
-      } else if (!useSel) {
-        body = (await host.value?.getHTML()) ?? ''
-      }
-    }
-    if (!body) {
-      showToast(U.toastNoContent, 'err')
-      return null
-    }
-    let html = buildExportHtml(body, base, { math: false, mermaid: false, toc: false, cover: false, meta })
-    // 只取正文 <article> 内容做纯文本化，避免把封面 / 样式噪声带进去
-    const artMatch = /<article[^>]*>([\s\S]*?)<\/article>/.exec(html)
-    content = htmlToPlainText(artMatch ? artMatch[1] : html)
-    defaultName = base + '.txt'
-    filters = [kindFilter('txt')]
-    return { content, defaultName, filters, kind }
-  }
-
-  // ── LaTeX：由 Markdown 原文转换 ──
-  if (kind === 'latex') {
-    let md = override?.markdown ?? ''
-    if (!isCompile) {
-      md = useSel ? host.value?.getSelectionMarkdown() ?? '' : ''
-      if (useSel && !md.trim()) {
-        showToast(U.toastNoSelection, 'info')
-        md = host.value?.getMarkdown() ?? ''
-      } else if (!useSel) {
-        md = host.value?.getMarkdown() ?? ''
-      }
-    }
-    if (!md.trim()) {
-      showToast(U.toastNoContent, 'err')
-      return null
-    }
-    content = markdownToLatex(md, { meta })
-    defaultName = base + '.tex'
-    filters = [kindFilter('latex')]
-    return { content, defaultName, filters, kind }
-  }
-
-  // ── HTML / PDF / 二进制（docx/epub/rtf/odt）：共用「规范化 HTML」作为中间表示 ──
-  let body = override?.bodyHtml ?? ''
-  if (!isCompile) {
-    body = useSel ? host.value?.getSelectionHTML() ?? '' : ''
-    if (useSel && !body) {
-      showToast(U.toastNoSelection, 'info')
-      body = (await host.value?.getHTML()) ?? ''
-    } else if (!useSel) {
-      body = (await host.value?.getHTML()) ?? ''
-    }
-  }
-  if (!body) {
-    showToast(U.toastNoContent, 'err')
-    return null
-  }
-
-  // 二进制格式：强制内联图片与图表（保证自包含），且不走 PDF 的那套选项
-  const embed = kind === 'pdf' || exportPrefs.value.inline || isBinary(kind) || override?.forceInline === true
-  const doc = buildExportHtml(body, base, {
-    math: true,
-    mermaid: !embed,
-    // PDF 恒带自动目录（纸质阅读需要导航）；二进制格式自建目录，故关闭 HTML 内目录；
-    // HTML 由选项决定。封面统一由选项控制。
-    toc: kind === 'pdf' || (kind === 'html' && exportPrefs.value.toc),
-    cover: exportPrefs.value.cover,
-    meta
-  })
-  let finalized = doc
-  if (embed) {
-    // 合订的图片已在拼接前按各自文档目录内联过，此处不二次处理
-    if (!isCompile && filePath.value) {
-      finalized = await inlineImages(finalized, filePath.value, readAsDataUrl)
-    }
-    finalized = await embedMermaidSvg(finalized)
-    // LaTeX 代码块：导出前用 MathJax 渲染成 SVG（编辑器预览已支持，导出保持一致）
-    finalized = await renderLatexBlocksInExport(finalized)
-  }
-
-  if (isBinary(kind)) {
-    // 序列化前先把标题锚点补上（二进制格式各自建目录用），再转字节
-    try {
-      binary = await serializeBinary(kind, finalized, {
-        title: meta.title || base,
-        author: meta.author,
-        date: meta.date
-      })
-    } catch (e) {
-      console.error('[export] 序列化二进制格式失败：', e)
-      showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
-      return null
-    }
-    // 预览用：渲染同一份规范化 HTML（图片内联、Mermaid 已是 SVG）
-    content = finalized
-    mime = mimeFor(kind)
-    defaultName = base + '.' + kindExt(kind)
-    filters = [kindFilter(kind)]
-    return { content, binary, mime, defaultName, filters, kind }
-  }
-
-  // HTML / PDF：直接落盘文本
-  content = finalized
-  defaultName = base + (kind === 'html' ? '.html' : '.pdf')
-  filters = kind === 'html' ? [kindFilter('html')] : undefined
-  return { content, defaultName, filters, kind }
-}
-
-/** 二进制格式的 MIME（写入 .odt/.docx 等需要，主要用于日志与未来扩展） */
-function mimeFor(kind: ExportKind): string {
-  switch (kind) {
-    case 'docx':
-      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    case 'epub':
-      return 'application/epub+zip'
-    case 'rtf':
-      return 'application/rtf'
-    case 'odt':
-      return 'application/vnd.oasis.opendocument.text'
-    default:
-      return 'application/octet-stream'
-  }
-}
-
-/** 导出格式 → 简短中文标签（toast / 按钮使用） */
-function kindLabel(kind: ExportKind): string {
-  return (
-    {
-      md: U.exportMd,
-      txt: U.exportTxt,
-      html: U.exportHtml,
-      pdf: U.exportPdf,
-      latex: U.exportLatex,
-      docx: U.exportDocx,
-      epub: U.exportEpub,
-      rtf: U.exportRtf,
-      odt: U.exportOdt
-    } as Record<ExportKind, string>
-  )[kind]
-}
-
-/** Uint8Array → base64（避免大数组一次性 String.fromCharCode 爆栈） */
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)))
-  }
-  return btoa(bin)
-}
 
 /** 写盘 / 打印：与构建分离，预览确认后直接复用已构建的内容 */
 async function writeExport(built: BuiltExport): Promise<void> {
@@ -850,6 +616,19 @@ async function writeExport(built: BuiltExport): Promise<void> {
   }
 }
 
+/** 把 App 级导出环境打包成 ExportContext，注入给纯构建逻辑 */
+function exportContext(): ExportContext {
+  return {
+    filePath: filePath.value,
+    exportPrefs: exportPrefs.value,
+    host: host.value,
+    readExportMeta,
+    readAsDataUrl,
+    showToast,
+    U
+  }
+}
+
 /**
  * 导出当前文档。三种产物共用一条管道：取正文 → 变换 → 预览（可选）→ 通用写盘 / 打印。
  * @param kind  html 网页 / pdf 文档 / latex 源文件
@@ -863,11 +642,11 @@ async function doExport(
     showToast(U.toastNoDoc, 'err')
     return
   }
-  const label = kindLabel(kind)
+  const label = kindLabel(kind, U)
   showToast(`${U.toastExporting}${label}…`, 'info')
 
   try {
-    const built = await buildExportContent(kind, scope)
+    const built = await buildExportContent(kind, scope, undefined, exportContext())
     if (!built) return // buildExportContent 内部已给出原因提示（无内容 / 无选区等）
 
     // 开启「导出前预览」：先呈现产物，用户确认后再落盘（落盘时会弹出系统保存对话框）
@@ -930,7 +709,7 @@ async function onCompile(payload: {
     return
   }
   showCompile.value = false
-  const label = kindLabel(payload.kind)
+  const label = kindLabel(payload.kind, U)
   showToast(`${U.toastExporting}${label}…`, 'info')
 
   try {
@@ -957,7 +736,7 @@ async function onCompile(payload: {
       bodyHtml: combinedHtml,
       markdown: combinedMd,
       forceInline: true
-    })
+    }, exportContext())
     if (!built) return
 
     if (payload.preview) {

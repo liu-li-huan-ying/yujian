@@ -312,13 +312,13 @@ function onContextMenu(payload: { x: number; y: number; node: FileNode }): void 
   menu.value = payload
 }
 
-function buildMenuItems(node: FileNode): MenuItem[] {
+function buildMenuItems(_node: FileNode): MenuItem[] {
   const items: MenuItem[] = [
-    { action: 'new-file', label: '新建文件' },
-    { action: 'new-folder', label: '新建文件夹' },
+    { action: 'new-file', label: L.ctxNewFile },
+    { action: 'new-folder', label: L.ctxNewFolder },
     { action: 'sep', label: '', separator: true },
-    { action: 'rename', label: node.type === 'dir' ? '重命名' : '重命名' },
-    { action: 'delete', label: '删除', danger: true }
+    { action: 'rename', label: L.ctxRename },
+    { action: 'delete', label: L.ctxDelete, danger: true }
   ]
   return items
 }
@@ -477,8 +477,8 @@ function startDrag(e: PointerEvent): void {
         <button
           class="icon-btn"
           type="button"
-          title="新建文档"
-          aria-label="新建文档"
+          :title="L.newDoc"
+          :aria-label="L.newDoc"
           @click="emit('new-doc')"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
@@ -495,8 +495,8 @@ function startDrag(e: PointerEvent): void {
         <button
           class="icon-btn"
           type="button"
-          title="打开笔记库"
-          aria-label="打开笔记库"
+          :title="L.sidebarOpenVault"
+          :aria-label="L.sidebarOpenVault"
           @click="emit('open-vault')"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
@@ -522,7 +522,7 @@ function startDrag(e: PointerEvent): void {
           class="search__input"
           type="text"
           :placeholder="L.findPlaceholder"
-          aria-label="搜索"
+          :aria-label="L.sidebarSearch"
           @keydown.esc="clearSearch"
           @keydown.enter="onSearchEnter"
         />
@@ -530,8 +530,8 @@ function startDrag(e: PointerEvent): void {
           v-if="searchQuery"
           class="search__clear"
           type="button"
-          title="清除"
-          aria-label="清除搜索"
+          :title="L.sidebarClear"
+          :aria-label="L.sidebarClearSearch"
           @click="clearSearch"
         >
           ×
@@ -539,7 +539,7 @@ function startDrag(e: PointerEvent): void {
       </div>
 
       <!-- 范围切换：全部（文件夹内）/ 本文档 -->
-      <div v-if="vaultPath" class="scope" role="tablist" aria-label="搜索范围">
+      <div v-if="vaultPath" class="scope" role="tablist" :aria-label="L.sidebarSearchScope">
         <button
           class="scope__opt"
           :class="{ on: searchScope === 'vault' }"
@@ -728,7 +728,7 @@ function startDrag(e: PointerEvent): void {
     <ConfirmDialog
       v-if="confirmState"
       :open="confirmState.open"
-      title="删除确认"
+      :title="L.sidebarDeleteConfirm"
       :message="`确定要删除「${confirmState.node.name}」吗？此操作不可撤销。`"
       confirm-label="删除"
       danger

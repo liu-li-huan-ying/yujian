@@ -32,6 +32,20 @@ function isRemoteOrInline(src: string): boolean {
 }
 
 /**
+ * 把渲染层用的 `jade-asset://local/<encodeURIComponent(绝对路径)>` 还原为磁盘绝对路径。
+ * 与 electron/main/index.ts 的 handleJadeAsset 对称：编码层会在绝对路径前多塞一个
+ * 前导斜杠（/C:/... 或 /Users/...），这里去掉并做 Windows 盘符归一。
+ */
+function decodeJadeAssetUrl(src: string): string | null {
+  const m = /^jade-asset:\/\/local\/(.*)$/i.exec(src.trim())
+  if (!m) return null
+  let abs = decodeURIComponent(m[1])
+  abs = abs.replace(/^\/+/, '')
+  abs = abs.replace(/^\/([A-Za-z]:)/, '$1')
+  return abs || null
+}
+
+/**
  * 把 HTML 中相对路径的 `<img>` 替换为 data URL。
  * @param html          完整 HTML 文档字符串
  * @param docPath       当前文档路径（相对路径的解析基准）
@@ -46,7 +60,15 @@ export async function inlineImages(
   const imgs = Array.from(doc.querySelectorAll('img'))
   for (const img of imgs) {
     const src = img.getAttribute('src')
-    if (!src || isRemoteOrInline(src)) continue
+    if (!src) continue
+    // 渲染层把图片改写为 jade-asset:// 协议 URL（仅显示用），导出时需还原为绝对路径再内联
+    if (/^jade-asset:\/\//i.test(src)) {
+      const abs = decodeJadeAssetUrl(src)
+      const dataUrl = abs ? await readAsDataUrl(abs) : null
+      if (dataUrl) img.setAttribute('src', dataUrl)
+      continue
+    }
+    if (isRemoteOrInline(src)) continue
     const dataUrl = await readAsDataUrl(resolveRelative(docPath, src))
     if (dataUrl) img.setAttribute('src', dataUrl)
   }

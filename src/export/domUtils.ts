@@ -124,16 +124,6 @@ export function htmlToPlainText(html: string): string {
   return s.trim()
 }
 
-/** XML 文本转义（EPUB / ODT 的标签内容） */
-export function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
 /**
  * 脚注双向跳转（导出 HTML 用）：在离屏副本 DOM 上注入真实锚点与回跳链接。
  * - 正文引用 <sup data-type="footnote_reference" data-label="N"> → id + 包一层 <a href="#fn-N">
@@ -208,24 +198,3 @@ export function replaceEmojiInHtml(root: ParentNode): void {
  * 现已废弃删除 —— 它们改由 features/inlineMarks.ts 的**真节点**渲染成 <mark>/<sup>/<sub>，
  * 导出 DOM 里本来就是语义标签，无需再按文本正则二次转换。
  */
-
-/** 把任意「Blob / Buffer / ArrayBuffer / TypedArray」统一成 Uint8Array */
-export async function toUint8Array(res: unknown): Promise<Uint8Array> {
-  if (res == null) throw new Error('序列化结果为空')
-  // 浏览器原生 Blob
-  if (typeof Blob !== 'undefined' && res instanceof Blob) {
-    return new Uint8Array(await res.arrayBuffer())
-  }
-  // 已经是 TypedArray
-  if (ArrayBuffer.isView(res)) {
-    const v = res as ArrayBufferView
-    return new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
-  }
-  if (res instanceof ArrayBuffer) return new Uint8Array(res)
-  // Node Buffer（渲染进程有 Buffer polyfill）或带 arrayBuffer() 的对象
-  const anyRes = res as { arrayBuffer?: () => Promise<ArrayBuffer> }
-  if (typeof anyRes.arrayBuffer === 'function') {
-    return new Uint8Array(await anyRes.arrayBuffer())
-  }
-  throw new Error('未知的序列化结果类型')
-}

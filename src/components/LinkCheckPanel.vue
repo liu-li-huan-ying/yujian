@@ -72,7 +72,7 @@ function fileDir(p: string): string {
   return i >= 0 ? p.slice(0, i) : ''
 }
 function rowTitle(it: BrokenLinkItem): string {
-  return `${it.raw}\n${L.linkCheckContext}：${it.context}\n${L.linkCheckLocate.replace('{n}', String(it.line))}`
+  return `${it.raw}\n${L.linkCheckContext}${it.context}\n${L.linkCheckLocate.replace('{n}', String(it.line))}`
 }
 
 async function run(): Promise<void> {

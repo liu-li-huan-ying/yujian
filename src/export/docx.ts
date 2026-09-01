@@ -11,9 +11,9 @@ import JSZip from 'jszip'
 import {
   parseHtml,
   rasterizeSvgToImg,
-  collectImages,
-  escapeXml
+  collectImages
 } from './domUtils'
+import { escapeXml } from '../utils/html'
 import type { SerializeCtx } from './serialize'
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'

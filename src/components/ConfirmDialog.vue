@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
+const L = t.ui
 
 const props = defineProps<{
   open: boolean
@@ -38,7 +42,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <p class="modal__msg">{{ message }}</p>
       <div class="modal__acts">
         <button class="btn" type="button" @click="emit('cancel')">
-          {{ cancelLabel ?? '取消' }}
+          {{ cancelLabel ?? L.dialogCancel }}
         </button>
         <button
           class="btn"
@@ -46,7 +50,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           type="button"
           @click="emit('confirm')"
         >
-          {{ confirmLabel ?? '确定' }}
+          {{ confirmLabel ?? L.dialogConfirm }}
         </button>
       </div>
     </div>

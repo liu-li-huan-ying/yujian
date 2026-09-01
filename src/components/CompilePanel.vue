@@ -4,6 +4,7 @@ import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
 import type { FileNode } from '../../electron/shared/ipc-channels'
 import type { ExportKind } from '../export/types'
+import { baseName } from '../utils/path'
 
 const { t } = useI18n()
 const L = t.ui
@@ -76,15 +77,11 @@ function setAll(value: boolean): void {
   rows.value.forEach((r) => (r.checked = value))
 }
 
-function baseName(path: string): string {
-  return (path.split(/[\\/]/).pop() ?? 'vault').replace(/\.(md|markdown)$/i, '')
-}
-
 function confirm(): void {
   if (!selectedCount.value) return
   emit('compile', {
     files: rows.value.filter((r) => r.checked).map((r) => r.path),
-    title: title.value.trim() || baseName(props.vaultPath ?? '合订文档'),
+    title: title.value.trim() || baseName(props.vaultPath ?? '合订文档', 'vault'),
     newPagePerDoc: newPage.value,
     kind: kind.value,
     preview: preview.value

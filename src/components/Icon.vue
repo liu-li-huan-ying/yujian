@@ -4,7 +4,7 @@
  * 统一线宽、圆角端点、无填充；颜色继承 currentColor，默认 --text-secondary。
  * 设计令牌见 UI-DESIGN.md §8。新增图标只需在 PATHS 增补内部 SVG 片段。
  */
-const props = defineProps<{
+defineProps<{
   name: string
   /** 像素尺寸，默认 16（标题栏图标） */
   size?: number

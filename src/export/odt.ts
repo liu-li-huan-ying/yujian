@@ -3,12 +3,9 @@
  * 纯 JS / 无外部二进制依赖。Mermaid 图表先光栅化为 PNG 再嵌入（ODT 图片为位图）。
  */
 import JSZip from 'jszip'
-import { parseHtml, rasterizeSvgToImg, collectImages, escapeXml } from './domUtils'
+import { parseHtml, rasterizeSvgToImg, collectImages } from './domUtils'
+import { escapeXml } from '../utils/html'
 import type { SerializeCtx } from './serialize'
-
-function odtEscape(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
 
 function pxToCm(v: string | null): number {
   if (!v) return 0
@@ -19,7 +16,7 @@ function pxToCm(v: string | null): number {
 
 function inline(node: Node, out: string[]): void {
   if (node.nodeType === Node.TEXT_NODE) {
-    out.push(odtEscape(node.textContent || ''))
+    out.push(escapeXml(node.textContent || ''))
     return
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return
@@ -45,7 +42,7 @@ function inline(node: Node, out: string[]): void {
       break
     case 'code':
       out.push('<text:span text:style-name="mono">')
-      out.push(odtEscape(el.textContent || ''))
+      out.push(escapeXml(el.textContent || ''))
       out.push('</text:span>')
       break
     case 'br':
@@ -53,7 +50,7 @@ function inline(node: Node, out: string[]): void {
       break
     case 'a': {
       const href = el.getAttribute('href') || ''
-      out.push(`<text:a xlink:type="simple" xlink:href="${odtEscape(href)}">`)
+      out.push(`<text:a xlink:type="simple" xlink:href="${escapeXml(href)}">`)
       inlineChildren(el, out)
       out.push('</text:a>')
       break
@@ -69,7 +66,7 @@ function inlineChildren(el: Element, out: string[]): void {
 function block(node: Node, out: string[], imgs: { name: string }[]): void {
   if (node.nodeType === Node.TEXT_NODE) {
     const t = (node.textContent || '').trim()
-    if (t) out.push(`<text:p>${odtEscape(t)}</text:p>`)
+    if (t) out.push(`<text:p>${escapeXml(t)}</text:p>`)
     return
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return
@@ -101,7 +98,7 @@ function block(node: Node, out: string[], imgs: { name: string }[]): void {
       break
     case 'pre':
       out.push('<text:p text:style-name="code">')
-      out.push(odtEscape(el.textContent || ''))
+      out.push(escapeXml(el.textContent || ''))
       out.push('</text:p>')
       break
     case 'ul':
@@ -145,7 +142,7 @@ function block(node: Node, out: string[], imgs: { name: string }[]): void {
         Array.from(tr.querySelectorAll('th,td')).forEach((cell) => {
           out.push('<table:table-cell>')
           out.push('<text:p>')
-          out.push(odtEscape((cell.textContent || '').replace(/\s+/g, ' ').trim()))
+          out.push(escapeXml((cell.textContent || '').replace(/\s+/g, ' ').trim()))
           out.push('</text:p>')
           out.push('</table:table-cell>')
         })

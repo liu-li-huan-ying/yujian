@@ -1,5 +1,7 @@
 import { Plugin } from '@milkdown/kit/prose/state'
 import type { Node as PMNode } from '@milkdown/kit/prose/model'
+import { escapeXml } from '../../utils/html'
+import { i18n } from '../../i18n'
 
 /**
  * MathJax 数学渲染 —— 替代 Crepe 内置的 KaTeX 渲染层。
@@ -82,13 +84,6 @@ function loadMathJax(): Promise<MathJaxApi> {
   return mjPromise
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 /**
  * 出错时的降级展示：只给一个错误徽标，完整原因放 title（悬停可见）。
@@ -100,7 +95,7 @@ function escapeHtml(text: string): string {
  */
 function errorHtml(err: unknown, _source: string): string {
   const message = err instanceof Error ? err.message : String(err)
-  return `<span class="math-error" title="${escapeHtml(message)}">⚠ 公式无法渲染</span>`
+  return `<span class="math-error" title="${escapeXml(message)}">${i18n.ui.mathError}</span>`
 }
 
 /* ── \label / \ref / \eqref 交叉引用 ──────────────
@@ -512,11 +507,11 @@ async function renderLatexDoc(content: string): Promise<string> {
         const svg = await renderMathToSvg(seg.value, seg.display)
         parts.push(`<span class="latex-math">${svg}</span>`)
       } catch {
-        parts.push(`<span class="math-error">${escapeHtml(seg.value.slice(0, 120))}</span>`)
+        parts.push(`<span class="math-error">${escapeXml(seg.value.slice(0, 120))}</span>`)
       }
     } else {
       const text = stripLatex(seg.value).trim()
-      if (text) parts.push(`<p class="latex-text">${escapeHtml(text)}</p>`)
+      if (text) parts.push(`<p class="latex-text">${escapeXml(text)}</p>`)
     }
   }
   return `<div class="latex-doc">${parts.join('')}</div>`

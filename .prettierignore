@@ -1,0 +1,9 @@
+out/
+dist/
+release/
+node_modules/
+_npmcache/
+tmp/
+*.mjs
+package-lock.json
+*.md
