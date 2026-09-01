@@ -1,0 +1,1135 @@
+<!doctype html>
+<html lang="zh-CN" data-skin="celadon" data-mode="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>玉笺 Phase 3 · 前瞻 UI 演示</title>
+<style>
+/* ============================================================
+   设计令牌（完整复刻 tokens.css：结构层 / 材质层 / 五皮肤色相层 / 派生层）
+   本演示严格只引用 --hue-* 令牌，不硬编码色值，故五皮肤×明暗自动生效。
+   ============================================================ */
+:root{
+  --font-ui:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","Sarasa Mono SC","Cascadia Code",Menlo,Consolas,monospace;
+  --h-titlebar:38px;--h-statusbar:26px;--h-tabbar:34px;--w-sidebar:236px;--w-outline:220px;
+  --w-column:clamp(640px,52vw,860px);
+  --radius-sm:4px;--radius-md:6px;--radius-lg:8px;
+  --ease:cubic-bezier(.2,0,.2,1);--ease-zen:cubic-bezier(.22,1,.36,1);
+  --dur-fast:120ms;--dur-base:180ms;--dur-slow:280ms;
+  --material-highlight-top:rgba(255,255,255,.055);
+  --material-tint-1-alpha:.13;--material-tint-2-alpha:.1;--material-noise-opacity:.045;
+  --material-blur:28px;--material-saturate:160%;
+  --noise-texture:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  --bg-hover:rgba(255,255,255,.05);
+  --border-subtle:rgba(255,255,255,.06);--border-default:rgba(255,255,255,.1);
+  --hue-mark:226,190,120;--hue-key:150,205,194;
+}
+[data-skin='celadon'][data-mode='dark']{--hue-base:#23292b;--hue-bar:#1f2527;--hue-tint-1:126,196,182;--hue-tint-2:95,168,160;--hue-mark:226,190,120;--hue-key:150,205,194;--hue-accent:#5fa8a0;--hue-editor:#1c1e1f;--hue-code:rgba(255,255,255,.035);--hue-text-1:#e8e9e7;--hue-text-2:#a3a7a5;--hue-text-3:#8b908e;--hue-success:#4ec9a0;--hue-danger:#f2685f;--hue-active:rgba(95,168,160,.16);--hue-highlight:rgba(255,255,255,.055);--hue-border-subtle:rgba(255,255,255,.055);}
+[data-skin='celadon'][data-mode='light']{--hue-base:#eff2f0;--hue-bar:#f3f5f3;--hue-tint-1:184,214,206;--hue-tint-2:196,222,216;--hue-mark:200,158,52;--hue-key:116,168,158;--hue-accent:#248077;--hue-editor:#fcfcfb;--hue-code:#f3f5f3;--hue-text-1:#1b1d1c;--hue-text-2:#575b5a;--hue-text-3:#6e7372;--hue-success:#2e8b6b;--hue-danger:#c93f36;--hue-active:rgba(36,128,119,.11);--hue-highlight:rgba(255,255,255,.85);--hue-border-subtle:rgba(0,0,0,.065);--material-tint-1-alpha:.42;--material-tint-2-alpha:.34;--material-highlight-top:rgba(255,255,255,.85);}
+[data-skin='sky'][data-mode='dark']{--hue-base:#212a2f;--hue-bar:#1d242a;--hue-tint-1:140,190,214;--hue-tint-2:94,157,190;--hue-mark:228,186,118;--hue-key:152,198,224;--hue-accent:#5e9dbe;--hue-editor:#1b2125;--hue-code:rgba(255,255,255,.035);--hue-text-1:#e8eef2;--hue-text-2:#9fafb8;--hue-text-3:#86969f;--hue-success:#4ec9a0;--hue-danger:#f2685f;--hue-active:rgba(94,157,190,.16);--hue-highlight:rgba(255,255,255,.055);--hue-border-subtle:rgba(255,255,255,.055);}
+[data-skin='moon'][data-mode='dark']{--hue-base:#23282c;--hue-bar:#1f2428;--hue-tint-1:180,196,206;--hue-tint-2:147,167,180;--hue-mark:214,198,158;--hue-key:190,204,214;--hue-accent:#93a7b4;--hue-editor:#1c2024;--hue-code:rgba(255,255,255,.035);--hue-text-1:#e9edf0;--hue-text-2:#a0aab2;--hue-text-3:#878f96;--hue-success:#4ec9a0;--hue-danger:#f2685f;--hue-active:rgba(147,167,180,.16);--hue-highlight:rgba(255,255,255,.055);--hue-border-subtle:rgba(255,255,255,.055);}
+[data-skin='dai'][data-mode='dark']{--hue-base:#262430;--hue-bar:#21202b;--hue-tint-1:178,168,212;--hue-tint-2:139,124,184;--hue-mark:234,186,128;--hue-key:190,180,222;--hue-accent:#8b7cb8;--hue-editor:#1f1e28;--hue-code:rgba(255,255,255,.035);--hue-text-1:#eceaf1;--hue-text-2:#a8a3b8;--hue-text-3:#8e89a0;--hue-success:#5bc49a;--hue-danger:#f2685f;--hue-active:rgba(139,124,184,.16);--hue-highlight:rgba(255,255,255,.055);--hue-border-subtle:rgba(255,255,255,.055);}
+[data-skin='amber'][data-mode='dark']{--hue-base:#2a2620;--hue-bar:#251f19;--hue-tint-1:221,186,120;--hue-tint-2:199,154,78;--hue-mark:132,202,180;--hue-key:232,198,140;--hue-accent:#c79a4e;--hue-editor:#221e18;--hue-code:rgba(255,255,255,.035);--hue-text-1:#f1ece1;--hue-text-2:#b6a98f;--hue-text-3:#988c74;--hue-success:#5bbf8e;--hue-danger:#ef7a5f;--hue-active:rgba(199,154,78,.16);--hue-highlight:rgba(255,255,255,.05);--hue-border-subtle:rgba(255,255,255,.05);}
+[data-skin][data-mode='dark']{--hue-surface:#262c2e;--hue-surface-2:#2c3336;--hue-on-accent:#14201e;--hue-code-fg:#8fd0c6;--hue-shadow-1:0 6px 20px rgba(0,0,0,.42);--hue-shadow-2:0 10px 30px rgba(0,0,0,.5);--hue-scrollbar-thumb:rgba(255,255,255,.14);--hue-scrollbar-thumb-hover:rgba(255,255,255,.26);--hue-scrollbar-track:transparent;--float-bg:rgba(32,37,38,.66);}
+[data-skin][data-mode='light']{--hue-surface:#ffffff;--hue-surface-2:#f6f8f7;--hue-on-accent:#ffffff;--hue-code-fg:#2b8378;--hue-shadow-1:0 8px 24px rgba(20,30,28,.14);--hue-shadow-2:0 12px 32px rgba(20,30,28,.18);--hue-scrollbar-thumb:rgba(0,0,0,.15);--hue-scrollbar-thumb-hover:rgba(0,0,0,.28);--hue-scrollbar-track:transparent;--float-bg:rgba(245,248,246,.8);}
+
+/* 材质：玉质（框架层，静态） */
+.jade{position:relative;background:linear-gradient(180deg,var(--material-highlight-top) 0%,transparent 20%),radial-gradient(120% 62% at 12% 0%,rgba(var(--hue-tint-1),var(--material-tint-1-alpha)) 0%,transparent 62%),radial-gradient(95% 55% at 85% 105%,rgba(var(--hue-tint-2),var(--material-tint-2-alpha)) 0%,transparent 58%),var(--hue-base);}
+.jade::after{content:'';position:absolute;inset:0;background-image:var(--noise-texture);opacity:var(--material-noise-opacity);mix-blend-mode:overlay;pointer-events:none;}
+/* 材质：玻璃（浮起层，实时模糊） */
+.glass{background:rgba(32,37,38,.66);backdrop-filter:blur(var(--material-blur)) saturate(var(--material-saturate));-webkit-backdrop-filter:blur(var(--material-blur)) saturate(var(--material-saturate));border:1px solid rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 18px 48px rgba(0,0,0,.38);}
+[data-skin][data-mode='light'] .glass,.glass[data-mode='light']{background:rgba(245,248,246,.78);border:1px solid rgba(20,30,28,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 18px 48px rgba(20,30,28,.18);}
+/* 材质：浮起小控件（图谱控制条 / 提示 / 凝神浮条 / Toast，明暗自动适配，替代硬编码半透明） */
+.float{background:var(--float-bg);backdrop-filter:blur(var(--material-blur)) saturate(var(--material-saturate));-webkit-backdrop-filter:blur(var(--material-blur)) saturate(var(--material-saturate));border:1px solid var(--hue-border-subtle);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 10px 30px rgba(0,0,0,.34);}
+
+/* ============================================================ 基础 ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:var(--font-ui);background:var(--hue-base);color:var(--hue-text-1);font-size:14px;line-height:1.6;overflow:hidden;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:var(--hue-scrollbar-thumb);border-radius:6px;}
+::-webkit-scrollbar-thumb:hover{background:var(--hue-scrollbar-thumb-hover);}
+::-webkit-scrollbar-track{background:var(--hue-scrollbar-track);}
+button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer;}
+:focus-visible{outline:2px solid var(--hue-accent);outline-offset:2px;border-radius:3px;}
+/* 统一微交互过渡（提升质感，不破坏既有布局） */
+button,.tab,.vt,.tree .node,.sr-item,.bl-item,.tag-item,.cmd-row,.pitem,.chip,.f-tg,.tbtn,.snap,.aid,.tb,.mi,.bl-group .gh,.oi,.outline .oi,.read-progress .fill{transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease),opacity var(--dur-fast) var(--ease),width var(--dur-slow) var(--ease);}
+
+/* ============================================================ 演示控制条 ============================================================ */
+.demo-bar{height:44px;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--hue-bar);border-bottom:1px solid var(--hue-border-subtle);font-size:12px;color:var(--hue-text-2);flex-shrink:0;z-index:80;}
+.demo-bar .tag{font-size:11px;color:var(--hue-text-3);padding:2px 8px;border:1px dashed var(--border-default);border-radius:99px;}
+.demo-bar .seg{display:flex;background:var(--hue-code);border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--hue-border-subtle);}
+.demo-bar .seg button{padding:5px 10px;font-size:12px;color:var(--hue-text-2);}
+.demo-bar .seg button.on{background:var(--hue-active);color:var(--hue-accent);}
+.demo-bar .sep{width:1px;height:20px;background:var(--hue-border-subtle);}
+.demo-bar .spacer{flex:1;}
+.demo-bar .tbtn{padding:5px 11px;border-radius:var(--radius-md);color:var(--hue-text-2);border:1px solid var(--hue-border-subtle);background:var(--hue-code);}
+.demo-bar .tbtn:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.demo-bar .tbtn.accent{color:var(--hue-on-accent);background:var(--hue-accent);border-color:transparent;}
+
+/* ============================================================ 真实标题栏（对齐 TitleBar.vue，jade 材质） ============================================================ */
+.app{height:calc(100vh - 44px);display:flex;flex-direction:column;background:var(--hue-editor);}
+.titlebar{height:var(--h-titlebar);flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--hue-bar);border-bottom:1px solid var(--hue-border-subtle);position:relative;z-index:6;}
+.titlebar .tb-drag{display:flex;align-items:center;gap:7px;flex:1;min-width:0;cursor:default;}
+.titlebar .tb-name{font-size:13px;color:var(--hue-text-1);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.titlebar .tb-dot{width:7px;height:7px;border-radius:50%;background:rgb(var(--hue-mark));flex-shrink:0;}
+.titlebar .tb-actions{display:flex;align-items:center;gap:3px;}
+.titlebar .grp{display:flex;align-items:center;gap:2px;}
+.titlebar .sep{width:1px;height:20px;background:var(--hue-border-subtle);margin:0 4px;}
+.titlebar .tbtn{height:28px;min-width:28px;padding:0 7px;display:flex;align-items:center;justify-content:center;gap:3px;border-radius:var(--radius-md);color:var(--hue-text-3);font-size:13px;}
+.titlebar .tbtn:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.titlebar .tbtn.on{color:var(--hue-accent);background:var(--hue-active);}
+.titlebar .seg{display:flex;background:var(--hue-code);border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--hue-border-subtle);}
+.titlebar .seg button{height:28px;padding:0 11px;font-size:12px;color:var(--hue-text-3);}
+.titlebar .seg button.on{background:var(--hue-active);color:var(--hue-accent);}
+.titlebar .chev{font-size:9px;opacity:.6;margin-left:1px;}
+/* 标题栏下拉菜单（导出 / 更多，对齐 TitleMenu） */
+.tmenu{position:absolute;top:calc(var(--h-titlebar) - 3px);right:10px;z-index:70;min-width:236px;border-radius:var(--radius-md);padding:6px;display:none;}
+.tmenu.left{right:auto;left:10px;}
+.tmenu.show{display:block;}
+.tmenu .mi{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px;border-radius:var(--radius-sm);color:var(--hue-text-1);font-size:13px;cursor:pointer;}
+.tmenu .mi:hover{background:var(--hue-highlight);}
+.tmenu .mi .ic{width:16px;text-align:center;color:var(--hue-text-3);}
+.tmenu .mi.action{color:var(--hue-accent);}
+.tmenu .mi .chk{margin-left:auto;font-size:11px;color:var(--hue-accent);width:14px;text-align:center;}
+.tmenu .mi .chk.off{color:var(--hue-text-3);}
+.tmenu .seph{font-size:10.5px;letter-spacing:.06em;color:var(--hue-text-3);padding:7px 10px 2px;}
+.tmenu .sep{height:1px;background:var(--hue-border-subtle);margin:5px 6px;}
+
+.body{flex:1;display:flex;min-height:0;}
+.left,.right{width:var(--w-sidebar);flex-shrink:0;display:flex;flex-direction:column;min-height:0;}
+.right{width:var(--w-outline);}
+.editor-wrap{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;background:var(--hue-editor);}
+
+/* 多标签栏（v1.1.0 已发布功能：多文档标签） */
+.tabbar{height:var(--h-tabbar);flex-shrink:0;display:flex;align-items:flex-end;gap:2px;padding:0 8px;background:var(--hue-bar);border-bottom:1px solid var(--hue-border-subtle);}
+.tabbar .tab{height:28px;display:flex;align-items:center;gap:7px;padding:0 6px 0 12px;border-radius:var(--radius-md) var(--radius-md) 0 0;color:var(--hue-text-3);font-size:12.5px;max-width:190px;cursor:pointer;position:relative;}
+.tabbar .tab .fname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tabbar .tab .x{width:18px;height:18px;display:grid;place-items:center;border-radius:4px;color:var(--hue-text-3);font-size:13px;flex-shrink:0;}
+.tabbar .tab .x:hover{background:var(--hue-highlight);color:var(--hue-text-1);}
+.tabbar .tab.active{background:var(--hue-editor);color:var(--hue-text-1);box-shadow:inset 0 2px 0 var(--hue-accent);}
+.tabbar .tab .dot{width:6px;height:6px;border-radius:50%;background:var(--hue-success);flex-shrink:0;}
+.tabbar .newtab{width:28px;height:28px;display:grid;place-items:center;color:var(--hue-text-3);border-radius:var(--radius-md);font-size:15px;flex-shrink:0;}
+.tabbar .newtab:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+
+/* 阅读进度（ReadingProgress.vue，已实现） */
+.read-progress{height:2px;flex-shrink:0;background:transparent;position:relative;}
+.read-progress .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--hue-accent),rgba(var(--hue-tint-1),.7));border-radius:0 2px 2px 0;}
+
+/* 查找替换栏（已实现：正则开关 + 第 N/共 M 计数 + F3 循环导航 + 替换） */
+.findbar{height:38px;flex-shrink:0;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--hue-bar);border-bottom:1px solid var(--hue-border-subtle);}
+.findbar .f-input{height:26px;width:200px;padding:0 9px;background:var(--hue-code);border:1px solid var(--hue-border-subtle);border-radius:var(--radius-sm);color:var(--hue-text-1);font-size:12.5px;font-family:var(--font-ui);}
+.findbar .f-input.f-rep{width:150px;}
+.findbar .f-tg{height:26px;min-width:26px;padding:0 7px;border-radius:var(--radius-sm);color:var(--hue-text-3);font-size:11.5px;border:1px solid var(--hue-border-subtle);font-family:var(--font-mono);}
+.findbar .f-tg:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.findbar .f-tg.on{color:var(--hue-accent);background:var(--hue-active);border-color:transparent;}
+.findbar .f-count{font-size:12px;color:var(--hue-text-2);min-width:78px;text-align:center;font-variant-numeric:tabular-nums;}
+.findbar .f-count.zero{color:var(--hue-danger);}
+.findbar .f-nav{height:26px;width:26px;border-radius:var(--radius-sm);color:var(--hue-text-3);font-size:13px;}
+.findbar .f-nav:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.findbar .f-sep{width:1px;height:18px;background:var(--hue-border-subtle);}
+.findbar .f-btn{height:26px;padding:0 10px;border-radius:var(--radius-sm);color:var(--hue-text-2);font-size:12px;border:1px solid var(--hue-border-subtle);}
+.findbar .f-btn:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.findbar .f-spacer{flex:1;}
+.findbar .f-x{height:26px;width:26px;border-radius:var(--radius-sm);color:var(--hue-text-3);font-size:13px;}
+.findbar .f-x:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+
+.editor-scroll{flex:1;overflow:auto;min-height:0;}
+.editor{width:var(--w-column);max-width:100%;margin:0 auto;padding:34px 24px 160px;}
+
+/* 视图切换 tab（信息架构核心：左右栏各一组，同一时刻只显示一个视图） */
+.viewtabs{height:30px;flex-shrink:0;display:flex;align-items:center;gap:2px;padding:0 8px;border-bottom:1px solid var(--hue-border-subtle);}
+.viewtabs .vt{height:28px;padding:0 11px;display:flex;align-items:center;gap:6px;border-radius:var(--radius-md);color:var(--hue-text-3);font-size:12px;}
+.viewtabs .vt:hover{color:var(--hue-text-2);}
+.viewtabs .vt.on{background:var(--hue-active);color:var(--hue-accent);box-shadow:inset 0 -2px 0 var(--hue-accent);}
+.viewtabs .vt .badge{font-size:11px;color:var(--hue-text-3);background:var(--hue-surface-2);border-radius:var(--radius-sm);padding:0 6px;min-width:18px;text-align:center;}
+.view-body{flex:1;overflow:auto;min-height:0;}
+
+/* 文件树 */
+.tree{padding:6px 4px;}
+.tree .node{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;border-radius:var(--radius-sm);color:var(--hue-text-2);font-size:13px;cursor:pointer;}
+.tree .node:hover{background:var(--hue-highlight);}
+.tree .node.cur{background:var(--hue-active);color:var(--hue-text-1);box-shadow:inset 2px 0 0 var(--hue-accent);}
+.tree .node .tw{width:14px;text-align:center;color:var(--hue-text-3);}
+.tree .node .nested{margin-left:14px;}
+.tree .node.folder{color:var(--hue-text-1);font-weight:500;}
+
+/* 左栏搜索（已实现：文件夹/全文 + 正则 + 计数 + 替换） */
+.search-pane{padding:8px 8px 4px;}
+.search-pane .s-input{height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--hue-code);border:1px solid var(--hue-border-subtle);border-radius:var(--radius-md);color:var(--hue-text-3);font-size:12.5px;}
+.search-pane .s-input input{flex:1;background:none;border:none;outline:none;color:var(--hue-text-1);font-family:var(--font-ui);font-size:12.5px;}
+.search-pane .s-scope{display:flex;gap:2px;margin:8px 2px;}
+.search-pane .s-scope button{flex:1;height:26px;border-radius:var(--radius-sm);color:var(--hue-text-3);font-size:12px;border:1px solid var(--hue-border-subtle);}
+.search-pane .s-scope button.on{background:var(--hue-active);color:var(--hue-accent);border-color:transparent;}
+.search-pane .s-toggles{display:flex;gap:4px;margin:6px 2px 4px;}
+.search-pane .s-toggles .f-tg{height:24px;flex:1;border-radius:var(--radius-sm);color:var(--hue-text-3);font-size:11px;border:1px solid var(--hue-border-subtle);font-family:var(--font-mono);}
+.search-pane .s-toggles .f-tg.on{background:var(--hue-active);color:var(--hue-accent);border-color:transparent;}
+.search-pane .s-count{font-size:11.5px;color:var(--hue-text-3);padding:2px 4px 8px;}
+.search-pane .s-count b{color:var(--hue-text-1);}
+.search-pane .s-result{display:flex;flex-direction:column;gap:2px;}
+.sr-item{display:flex;flex-direction:column;gap:2px;padding:7px 9px;border-radius:var(--radius-sm);cursor:pointer;}
+.sr-item:hover{background:var(--hue-highlight);}
+.sr-item.cur{background:var(--hue-active);}
+.sr-item .f{font-size:12.5px;color:var(--hue-text-1);}
+.sr-item .c{font-size:11.5px;color:var(--hue-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sr-item .c .hit{background:rgba(var(--hue-mark),.22);color:var(--hue-text-1);border-radius:2px;padding:0 2px;}
+
+/* 标签面板 */
+.tags{padding:8px 6px;}
+.tag-filter{height:28px;margin:0 6px 8px;display:flex;align-items:center;gap:6px;padding:0 9px;background:var(--hue-code);border:1px solid var(--hue-border-subtle);border-radius:var(--radius-md);color:var(--hue-text-3);font-size:12px;}
+.tag-item{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--radius-sm);cursor:pointer;color:var(--hue-text-2);font-size:13px;}
+.tag-item:hover{background:var(--hue-highlight);}
+.tag-item .hash{color:var(--hue-text-3);}
+.tag-item .name{color:var(--hue-text-1);}
+.tag-item .cnt{margin-left:auto;font-size:11px;color:var(--hue-text-3);min-width:20px;text-align:center;}
+.tag-item.lvl2{padding-left:24px;}
+.tag-empty{padding:24px 12px;text-align:center;color:var(--hue-text-3);font-size:12px;}
+
+/* 右栏：大纲 / 反链 / 统计 / 断链 */
+.outline .oi{display:flex;align-items:center;gap:8px;padding:4px 12px;color:var(--hue-text-2);font-size:13px;cursor:pointer;border-radius:var(--radius-sm);}
+.outline .oi:hover{background:var(--hue-highlight);}
+.outline .oi.lv2{padding-left:26px;font-size:12.5px;}
+.outline .oi .dot{width:6px;height:6px;border-radius:2px;background:var(--hue-text-3);}
+
+/* 反链面板 */
+.backlinks{display:flex;flex-direction:column;height:100%;}
+.bl-group{margin-top:4px;}
+.bl-group > .gh{display:flex;align-items:center;gap:6px;padding:8px 12px 4px;font-size:12px;color:var(--hue-text-3);font-weight:500;cursor:pointer;}
+.bl-group > .gh .chev{transition:transform var(--dur-fast);}
+.bl-group.collapsed .gh .chev{transform:rotate(-90deg);}
+.bl-group.collapsed .items{display:none;}
+.bl-item{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-radius:var(--radius-sm);cursor:pointer;position:relative;}
+.bl-item:hover{background:var(--hue-highlight);}
+.bl-item .fname{font-size:13px;color:var(--hue-text-1);display:flex;align-items:center;gap:6px;}
+.bl-item .fname .ic{width:14px;color:var(--hue-text-3);}
+.bl-item .ctx{font-size:12px;color:var(--hue-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bl-item .ctx .hit{background:rgba(var(--hue-mark),.22);color:var(--hue-text-1);border-radius:2px;padding:0 2px;}
+.bl-item .wrap{position:absolute;right:10px;top:10px;width:24px;height:24px;display:grid;place-items:center;border-radius:var(--radius-sm);color:var(--hue-text-3);background:var(--hue-code);}
+.bl-item .wrap:hover{color:var(--hue-accent);}
+.bl-empty{padding:28px 14px;text-align:center;color:var(--hue-text-3);font-size:12px;}
+
+/* 统计面板（StatsPopover，已实现：字数/阅读时长/写作目标进度） */
+.stats{padding:12px;}
+.stats .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.stats .cell{background:var(--hue-code);border-radius:var(--radius-md);padding:10px 12px;}
+.stats .cell .v{font-size:20px;font-weight:600;color:var(--hue-text-1);font-variant-numeric:tabular-nums;}
+.stats .cell .k{font-size:11px;color:var(--hue-text-3);margin-top:2px;}
+.stats .goal{font-size:12px;color:var(--hue-text-2);margin-bottom:6px;display:flex;justify-content:space-between;}
+.stats .bar{height:8px;border-radius:99px;background:var(--hue-code);overflow:hidden;}
+.stats .bar .fill{height:100%;width:56%;background:var(--hue-accent);border-radius:99px;}
+
+/* 断链检查面板（LinkCheckPanel，已实现 + Phase3 扩展） */
+.linkcheck .lc-item{display:flex;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);}
+.linkcheck .lc-item:hover{background:var(--hue-highlight);}
+.linkcheck .lc-item .sev{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0;background:var(--hue-danger);}
+.linkcheck .lc-item .sev.warn{background:rgb(var(--hue-mark));}
+.linkcheck .lc-main{font-size:13px;color:var(--hue-text-1);}
+.linkcheck .lc-sub{font-size:11.5px;color:var(--hue-text-3);margin-top:1px;}
+.linkcheck .lc-act{margin-top:5px;display:flex;gap:6px;}
+.linkcheck .lc-act .btn2{font-size:11.5px;padding:3px 9px;border-radius:var(--radius-sm);border:1px solid var(--hue-border-subtle);color:var(--hue-text-2);}
+.linkcheck .lc-act .btn2.accent{color:var(--hue-on-accent);background:var(--hue-accent);border-color:transparent;}
+.linkcheck .lc-act .btn2:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.linkcheck .lc-act .btn2.accent:hover{filter:brightness(1.08);}
+
+/* ============================================================ 编辑区（含中文排版渲染层） ============================================================ */
+.crumb{font-size:12px;color:var(--hue-text-3);margin-bottom:10px;display:flex;gap:6px;align-items:center;}
+.crumb b{color:var(--hue-text-2);font-weight:500;}
+.editor h1{font-size:25px;line-height:1.35;margin-bottom:14px;font-weight:600;}
+.editor h2{font-size:19px;margin:22px 0 10px;font-weight:600;color:var(--hue-text-1);}
+.editor p{margin:10px 0;color:var(--hue-text-1);}
+.editor code{font-family:var(--font-mono);background:var(--hue-code);color:var(--hue-code-fg);padding:1px 5px;border-radius:var(--radius-sm);font-size:12.5px;}
+.editor ul{margin:8px 0 8px 22px;color:var(--hue-text-1);}
+.editor li{margin:4px 0;}
+.editor a{color:var(--hue-accent);text-decoration:none;}
+/* 中文强调：禁用斜体，改强调色 + 着重号（W3C 建议） */
+.zh-em{font-style:normal !important;color:var(--hue-accent);text-emphasis:dot var(--hue-accent);text-emphasis-position:under;}
+/* 中文排版：汉字↔拉丁/数字 之间自动 ¼em 视觉间距（渲染层，源文件不改） */
+.cjs-gap{display:inline-block;width:.25em;}
+/* 全角标点挤压（CSS 渐进） */
+.editor{punctuation-trim:trim-start;text-spacing-trim:space-first;}
+.editor .callout{margin:14px 0;padding:10px 14px;border-left:3px solid var(--hue-accent);background:var(--hue-active);border-radius:0 var(--radius-md) var(--radius-md) 0;color:var(--hue-text-1);font-size:13px;}
+.editor .wikilink{color:var(--hue-accent);cursor:pointer;border-bottom:1px solid rgba(var(--hue-tint-1),.4);}
+.editor .wikilink.broken{color:var(--hue-danger);border-bottom-color:rgba(242,104,95,.5);}
+
+/* ============================================================ 状态栏 ============================================================ */
+.statusbar{height:var(--h-statusbar);flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 14px;background:var(--hue-bar);border-top:1px solid var(--hue-border-subtle);font-size:11.5px;color:var(--hue-text-3);}
+.statusbar .clickable{cursor:pointer;display:flex;align-items:center;gap:4px;}
+.statusbar .clickable:hover{color:var(--hue-text-1);}
+.statusbar .saved{display:flex;align-items:center;gap:5px;color:var(--hue-success);}
+.statusbar .saved .d{width:7px;height:7px;border-radius:50%;background:var(--hue-success);}
+.statusbar .alert{display:flex;align-items:center;gap:5px;color:rgb(var(--hue-mark));cursor:pointer;padding:2px 6px;border-radius:99px;}
+.statusbar .alert .d{width:7px;height:7px;border-radius:50%;background:rgb(var(--hue-mark));}
+.statusbar .spacer{flex:1;}
+
+/* ============================================================ 浮层：命令面板 ============================================================ */
+.overlay{position:fixed;inset:0;z-index:40;opacity:0;visibility:hidden;transition:opacity var(--dur-base) var(--ease),visibility var(--dur-base) var(--ease);background:rgba(0,0,0,.26);}
+.overlay.show{opacity:1;visibility:visible;}
+@keyframes pop{from{opacity:0;transform:translate(-50%,-46%) scale(.97);}to{opacity:1;transform:translate(-50%,-50%) scale(1);}}
+@keyframes popCmd{from{opacity:0;transform:translateX(-50%) translateY(-10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+.overlay.show .panel{animation:pop var(--dur-base) var(--ease);}
+.overlay.show .cmd-palette{animation:popCmd var(--dur-base) var(--ease);}
+.cmd-palette{position:absolute;top:15vh;left:50%;transform:translateX(-50%);width:560px;max-width:92vw;border-radius:var(--radius-lg);overflow:hidden;}
+.cmd-palette .in{height:40px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--border-subtle);}
+.cmd-palette .in .ic{color:var(--hue-text-3);font-size:14px;flex-shrink:0;}
+.cmd-palette .in input{flex:1;background:none;border:none;outline:none;color:var(--hue-text-1);font-size:16px;font-family:inherit;}
+.cmd-palette .in input::placeholder{color:var(--hue-text-3);}
+.cmd-palette .list{max-height:46vh;overflow:auto;padding:6px;}
+.cmd-grp{font-size:11px;letter-spacing:.05em;color:var(--hue-text-3);padding:8px 10px 4px;text-transform:uppercase;}
+.cmd-row{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:var(--radius-md);cursor:pointer;color:var(--hue-text-1);}
+.cmd-row .ic{width:16px;color:var(--hue-text-3);}
+.cmd-row .lbl{font-size:13.5px;}
+.cmd-row .sub{font-size:11.5px;color:var(--hue-text-3);margin-left:2px;}
+.cmd-row .kbd{margin-left:auto;display:flex;gap:3px;}
+.cmd-row .kbd kbd{font-family:var(--font-mono);font-size:10px;color:var(--hue-text-2);background:rgba(var(--hue-key),.16);padding:1px 6px;border-radius:4px;}
+.cmd-row.active,.cmd-row:hover{background:var(--hue-active);}
+.cmd-row.active .ic{color:var(--hue-accent);}
+
+/* ============================================================ 浮层：快照 / 写作辅助 / 完整性 / 冲突 / 表格（共用外壳 .panel） ============================================================ */
+.panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:540px;max-width:94vw;border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;max-height:84vh;}
+.panel .ph{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border-subtle);}
+.panel .ph .pic{width:15px;color:var(--hue-accent);}
+.panel .ph .pt{font-size:13px;font-weight:500;color:var(--hue-text-1);}
+.panel .ph .pc{margin-left:auto;font-size:11px;color:var(--hue-text-3);background:var(--hue-surface-2);padding:1px 8px;border-radius:99px;}
+.panel .ph .px{width:26px;height:26px;display:grid;place-items:center;border-radius:var(--radius-sm);color:var(--hue-text-3);}
+.panel .ph .px:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.panel .chips{display:flex;gap:6px;padding:10px 14px 4px;flex-wrap:wrap;}
+.chip{height:28px;padding:0 10px;display:flex;align-items:center;gap:6px;border-radius:var(--radius-md);border:1px solid var(--hue-border-subtle);color:var(--hue-text-2);font-size:12px;background:var(--hue-code);}
+.chip.on{background:var(--hue-active);color:var(--hue-accent);border-color:transparent;}
+.chip .cc{font-size:11px;background:var(--hue-surface-2);border-radius:99px;padding:0 6px;color:var(--hue-text-3);}
+.panel .plist{flex:1;overflow:auto;padding:6px 10px;}
+.pitem{display:flex;gap:10px;padding:9px 8px;border-radius:var(--radius-sm);}
+.pitem:hover{background:var(--hue-highlight);}
+.pitem .sev{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0;}
+.pitem .sev.err{background:var(--hue-danger);}
+.pitem .sev.warn{background:rgb(var(--hue-mark));}
+.pitem .sev.info{background:var(--hue-text-3);}
+.pitem .pmain{font-size:13px;color:var(--hue-text-1);}
+.pitem .psub{font-size:11px;color:var(--hue-text-3);}
+.panel .pfoot{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-top:1px solid var(--border-subtle);}
+.btn{padding:7px 14px;border-radius:var(--radius-md);font-size:13px;}
+.btn.minor{color:var(--hue-text-2);border:1px solid var(--hue-border-subtle);}
+.btn.minor:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.btn.primary{background:var(--hue-accent);color:var(--hue-on-accent);}
+.btn.primary:hover{filter:brightness(1.08);}
+.panel .psuccess{display:flex;flex-direction:column;align-items:center;gap:8px;padding:38px 20px;color:var(--hue-text-2);}
+.panel .psuccess .ok{width:34px;height:34px;border-radius:50%;background:rgba(78,201,160,.15);color:var(--hue-success);display:grid;place-items:center;font-size:18px;}
+.panel .psuccess .t{font-size:13px;color:var(--hue-text-1);}
+.panel .psuccess .s{font-size:12px;color:var(--hue-text-3);}
+
+/* 快照面板专属 */
+.snap-list{padding:8px 10px;display:flex;flex-direction:column;gap:6px;}
+.snap{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-md);background:var(--hue-code);}
+.snap .meta{flex:1;min-width:0;}
+.snap .meta .t{font-size:13px;color:var(--hue-text-1);}
+.snap .meta .s{font-size:11.5px;color:var(--hue-text-3);}
+.snap .mini{font-size:11.5px;padding:4px 9px;border-radius:var(--radius-sm);color:var(--hue-text-2);border:1px solid var(--hue-border-subtle);}
+.snap .mini:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.snap .mini.accent{color:var(--hue-on-accent);background:var(--hue-accent);border-color:transparent;}
+
+/* 写作辅助面板专属 */
+.aids-list{padding:8px 10px;display:flex;flex-direction:column;gap:8px;}
+.aid{display:flex;gap:10px;padding:10px;border-radius:var(--radius-md);background:var(--hue-code);}
+.aid .ai{width:18px;color:var(--hue-accent);flex-shrink:0;}
+.aid .at{font-size:13px;color:var(--hue-text-1);}
+.aid .ad{font-size:11.5px;color:var(--hue-text-3);margin-top:2px;line-height:1.5;}
+
+/* 冲突对照 */
+.conflict .diff{display:flex;gap:0;flex:1;min-height:0;overflow:hidden;}
+.conflict .col{flex:1;display:flex;flex-direction:column;border-right:1px solid var(--border-subtle);}
+.conflict .col:last-child{border-right:none;}
+.conflict .col .ch{padding:8px 12px;font-size:12px;color:var(--hue-text-2);background:var(--hue-code);}
+.conflict .col .ctxt{flex:1;overflow:auto;padding:10px 14px;font-size:12.5px;line-height:1.7;white-space:pre-wrap;font-family:var(--font-mono);color:var(--hue-text-1);}
+.conflict .col.mine .ch{color:var(--hue-accent);}
+
+/* 表格临时编辑界面 */
+.table-edit{width:420px;}
+.table-edit .tb-toolbar{display:flex;gap:4px;padding:10px 12px;border-bottom:1px solid var(--border-subtle);flex-wrap:wrap;}
+.tb-toolbar .tb{height:28px;padding:0 9px;display:flex;align-items:center;gap:5px;border-radius:var(--radius-sm);color:var(--hue-text-3);font-size:12px;border:1px solid var(--hue-border-subtle);}
+.tb-toolbar .tb:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.tb-toolbar .tb.danger:hover{color:var(--hue-danger);}
+.tb-toolbar .seg2{display:flex;border:1px solid var(--hue-border-subtle);border-radius:var(--radius-sm);overflow:hidden;}
+.tb-toolbar .seg2 button{padding:0 9px;height:28px;font-size:12px;color:var(--hue-text-3);}
+.tb-toolbar .seg2 button.on{background:var(--hue-active);color:var(--hue-accent);}
+.table-edit .tb-body{padding:14px;}
+.table-edit table{border-collapse:collapse;width:100%;font-size:12.5px;}
+.table-edit td,.table-edit th{border:1px solid var(--hue-border-subtle);padding:6px 8px;color:var(--hue-text-1);text-align:left;}
+.table-edit th{background:var(--hue-code);color:var(--hue-text-2);font-weight:500;}
+.table-edit .meta{margin-top:10px;font-size:11px;color:var(--hue-text-3);text-align:center;}
+
+/* ============================================================ 关系图谱（独立视图，纯净实色底） ============================================================ */
+.graph-view{position:fixed;inset:44px 0 0 0;z-index:30;display:flex;flex-direction:column;opacity:0;visibility:hidden;transition:opacity var(--dur-slow) var(--ease),visibility var(--dur-slow) var(--ease);background:var(--hue-editor);}
+.graph-view.show{opacity:1;visibility:visible;}
+.graph-view .gh{height:38px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--hue-border-subtle);}
+.graph-view .gh .gt{font-size:13px;font-weight:500;color:var(--hue-text-1);}
+.graph-view .gh .gx{margin-left:auto;width:26px;height:26px;display:grid;place-items:center;color:var(--hue-text-3);border-radius:var(--radius-sm);}
+.graph-view .gh .gx:hover{color:var(--hue-text-1);background:var(--hue-highlight);}
+.graph-view canvas{flex:1;width:100%;display:block;min-height:0;}
+.graph-ctrl{position:absolute;top:50px;right:16px;display:flex;gap:6px;z-index:2;}
+.graph-ctrl .seg{display:flex;border-radius:var(--radius-md);overflow:hidden;}
+.graph-ctrl .seg button{padding:6px 11px;font-size:12px;color:var(--hue-text-2);}
+.graph-ctrl .seg button.on{background:var(--hue-active);color:var(--hue-accent);}
+.graph-hint{position:absolute;bottom:16px;left:16px;font-size:11.5px;color:var(--hue-text-3);padding:6px 12px;border-radius:99px;}
+
+/* 凝神模式预览（融合打字机+禅；遮罩雾化非焦点区，仅示意） */
+.zen-veil{position:fixed;inset:44px 0 0 0;z-index:25;display:block;opacity:0;visibility:hidden;transition:opacity var(--dur-slow) var(--ease),visibility var(--dur-slow) var(--ease);background:var(--hue-editor);}
+.zen-veil.show{opacity:1;visibility:visible;}
+.zen-veil .zen-stage{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);width:var(--w-column);max-width:90vw;text-align:center;color:var(--hue-text-2);}
+.zen-veil .zen-stage .ztitle{font-size:22px;color:var(--hue-text-1);font-weight:600;margin-bottom:8px;}
+.zen-veil .zen-stage .zsub{font-size:13px;}
+.zen-veil .zen-retreat{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:6px 8px;border-radius:99px;}
+.zen-veil .zen-retreat button{height:26px;padding:0 12px;border-radius:99px;color:var(--hue-text-3);font-size:12px;}
+.zen-veil .zen-retreat button:hover{color:var(--hue-text-1);background:rgba(255,255,255,.06);}
+.zen-veil .zen-retreat .on{color:var(--hue-accent);}
+
+/* 演示提示气泡 */
+.hint-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:90;color:var(--hue-text-1);font-size:12.5px;padding:8px 16px;border-radius:99px;opacity:0;transition:opacity var(--dur-base) var(--ease);pointer-events:none;}
+.hint-toast.show{opacity:1;}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+</style>
+</head>
+<body>
+
+<!-- ===================== 演示控制条（非产品本体） ===================== -->
+<div class="demo-bar">
+  <span class="tag">前瞻演示 · 非产品</span>
+  <span class="tag">已含 v1.1.0 全部已发布功能</span>
+  <span>皮肤</span>
+  <div class="seg" id="skinSeg">
+    <button data-skin="celadon" class="on">青瓷</button>
+    <button data-skin="sky">天青</button>
+    <button data-skin="moon">月白</button>
+    <button data-skin="dai">黛</button>
+    <button data-skin="amber">琥珀</button>
+  </div>
+  <div class="seg" id="modeSeg">
+    <button data-mode="dark" class="on">暗</button>
+    <button data-mode="light">亮</button>
+  </div>
+  <div class="sep"></div>
+  <button class="tbtn" id="cjkBtn">中文排版 ¼em：开</button>
+  <div class="spacer"></div>
+  <button class="tbtn" data-open="cmd">命令面板 ⌘⇧P</button>
+  <button class="tbtn" data-open="graph">关系图谱</button>
+  <button class="tbtn" data-open="integrity">完整性自检</button>
+  <button class="tbtn" data-open="conflict">冲突对照</button>
+  <button class="tbtn" data-open="table">表格编辑</button>
+</div>
+
+<!-- ===================== 应用主框架 ===================== -->
+<div class="app" id="app">
+  <!-- 真实标题栏（对齐 TitleBar.vue：文件名+脏点 / 文件组 / 视图组(模式·侧栏·大纲·快照·凝神) / 导出·外观·更多·帮助） -->
+  <header class="titlebar jade">
+    <div class="tb-drag">
+      <span class="tb-name" id="tbName">玉笺性能模型.md</span>
+      <span class="tb-dot" title="未保存"></span>
+    </div>
+    <div class="tb-actions">
+      <div class="grp">
+        <button class="tbtn" title="新建文档">＋</button>
+        <button class="tbtn" title="切换 vault">📁</button>
+        <button class="tbtn" title="打开">📄</button>
+      </div>
+      <span class="sep"></span>
+      <div class="grp">
+        <div class="seg" id="modeSeg2">
+          <button class="on" data-mode="wysiwyg">所见即所得</button>
+          <button data-mode="source">源码</button>
+        </div>
+        <button class="tbtn on" id="btnSidebar" title="侧栏">▤</button>
+        <button class="tbtn on" id="btnOutline" title="大纲/反链">▥</button>
+        <button class="tbtn" id="btnSnapshot" title="版本快照">🕔</button>
+        <button class="tbtn" id="btnFocus" title="凝神模式">🌙</button>
+      </div>
+      <span class="sep"></span>
+      <div class="grp">
+        <button class="tbtn tbtn--menu" id="btnExport" title="导出">⤓<span class="chev">▾</span></button>
+        <button class="tbtn" id="btnAppearance" title="外观">🎨</button>
+        <button class="tbtn tbtn--menu" id="btnMore" title="更多">⋯</button>
+        <button class="tbtn" title="帮助">?</button>
+      </div>
+    </div>
+    <!-- 导出菜单（9 种格式 + 选项 + 合订，对齐 exportItems()） -->
+    <div class="tmenu glass" id="mExport">
+      <div class="seph">文本</div>
+      <div class="mi" data-x="md"><span class="ic">📝</span>Markdown (.md)</div>
+      <div class="mi" data-x="txt"><span class="ic">📃</span>纯文本 (.txt)</div>
+      <div class="sep"></div>
+      <div class="seph">排版</div>
+      <div class="mi" data-x="html"><span class="ic">🌐</span>自包含 HTML</div>
+      <div class="mi" data-x="pdf"><span class="ic">📕</span>PDF</div>
+      <div class="mi" data-x="latex"><span class="ic">∑</span>LaTeX (.tex)</div>
+      <div class="sep"></div>
+      <div class="seph">Office</div>
+      <div class="mi" data-x="docx"><span class="ic">📘</span>Word (.docx)</div>
+      <div class="mi" data-x="epub"><span class="ic">📚</span>EPUB 电子书</div>
+      <div class="mi" data-x="rtf"><span class="ic">📄</span>RTF 富文本</div>
+      <div class="mi" data-x="odt"><span class="ic">📓</span>OpenDocument (.odt)</div>
+      <div class="sep"></div>
+      <div class="mi on" data-opt="toc"><span class="ic">▦</span>目录 TOC<span class="chk">✓</span></div>
+      <div class="mi on" data-opt="cover"><span class="ic">🖼</span>封面<span class="chk">✓</span></div>
+      <div class="mi" data-opt="inline"><span class="ic">🔗</span>内联资源<span class="chk off">·</span></div>
+      <div class="mi on" data-opt="preview"><span class="ic">👁</span>导出前预览<span class="chk">✓</span></div>
+      <div class="sep"></div>
+      <div class="mi action" data-x="compile"><span class="ic">🗂</span>多文件合订…</div>
+    </div>
+    <!-- 更多菜单（对齐 moreItems()：凝神设置 / 断链检查 / 写作辅助 / 关系图谱 / 自检） -->
+    <div class="tmenu glass left" id="mMore">
+      <div class="mi" data-more="zen"><span class="ic">🌙</span>凝神设置</div>
+      <div class="mi" data-more="link"><span class="ic">🔗</span>断链检查</div>
+      <div class="mi" data-more="aids"><span class="ic">✍</span>写作辅助</div>
+      <div class="sep"></div>
+      <div class="mi" data-more="graph"><span class="ic">🕸</span>关系图谱</div>
+      <div class="mi" data-more="integrity"><span class="ic">🩺</span>vault 完整性自检</div>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- 左栏：文件树 / 搜索 / 标签 / 图谱（视图切换） -->
+    <aside class="left jade">
+      <div class="viewtabs" role="tablist">
+        <button class="vt on" data-left="tree" role="tab" aria-selected="true">🌲<span>文件树</span></button>
+        <button class="vt" data-left="search" role="tab" aria-selected="false">🔍<span>搜索</span></button>
+        <button class="vt" data-left="tags" role="tab" aria-selected="false">#<span>标签</span></button>
+        <button class="vt" data-left="graph" role="tab" aria-selected="false" title="关系图谱">🕸<span>图谱</span></button>
+      </div>
+      <div class="view-body">
+        <!-- 文件树 -->
+        <div class="tree" data-pane="tree">
+          <div class="node folder"><span class="tw">▾</span>技术写作</div>
+          <div class="node nested cur"><span class="tw">●</span>玉笺性能模型.md</div>
+          <div class="node nested"><span class="tw">●</span>vite 版本锁定.md</div>
+          <div class="node nested"><span class="tw">●</span>electron 架构.md</div>
+          <div class="node nested"><span class="tw">●</span>Markdown 往返保真.md</div>
+          <div class="node folder"><span class="tw">▾</span>随笔</div>
+          <div class="node nested"><span class="tw">●</span>关于工具链的思考.md</div>
+          <div class="node nested"><span class="tw">●</span>阅读笔记 · Zettelkasten.md</div>
+        </div>
+        <!-- 搜索（已实现：范围切换 + 正则/大小写/全词 + 第 N/共 M 计数 + 结果列表） -->
+        <div class="search-pane" data-pane="search" hidden>
+          <div class="s-input">🔍<input id="sideSearch" placeholder="查找 vault 内容…（支持正则）" value="索引" /></div>
+          <div class="s-scope">
+            <button data-scope="all" class="on">全部文件</button>
+            <button data-scope="doc">仅本文档</button>
+          </div>
+          <div class="s-toggles">
+            <button class="f-tg" data-tg="case">Aa</button>
+            <button class="f-tg on" data-tg="regex">.*</button>
+            <button class="f-tg" data-tg="word">⌾</button>
+          </div>
+          <div class="s-count">第 <b>1</b> / 共 <b>12</b> 处命中</div>
+          <div class="s-result">
+            <div class="sr-item cur"><div class="f">玉笺性能模型.md</div><div class="c">…<span class="hit">索引</span>内存应控制在 100MB 以内…</div></div>
+            <div class="sr-item"><div class="f">vite 版本锁定.md</div><div class="c">…主进程负责 <span class="hit">索引</span> 与原子写…</div></div>
+            <div class="sr-item"><div class="f">electron 架构.md</div><div class="c">…统一 <span class="hit">索引</span> 收口并解除上限…</div></div>
+            <div class="sr-item"><div class="f">Markdown 往返保真.md</div><div class="c">…真节点方案保证 <span class="hit">索引</span> 不丢…</div></div>
+          </div>
+        </div>
+        <!-- 标签 -->
+        <div class="tags" data-pane="tags" hidden>
+          <div class="tag-filter">🔍 过滤标签</div>
+          <div class="tag-item"><span class="hash">#</span><span class="name">知识管理</span><span class="cnt">34</span></div>
+          <div class="tag-item"><span class="hash">#</span><span class="name">性能</span><span class="cnt">21</span></div>
+          <div class="tag-item"><span class="hash">#</span><span class="name">索引</span><span class="cnt">12</span></div>
+          <div class="tag-item lvl2"><span class="hash">#</span><span class="name">索引/增量</span><span class="cnt">7</span></div>
+          <div class="tag-item lvl2"><span class="hash">#</span><span class="name">索引/全文</span><span class="cnt">5</span></div>
+          <div class="tag-item"><span class="hash">#</span><span class="name">写作体验</span><span class="cnt">18</span></div>
+          <div class="tag-item"><span class="hash">#</span><span class="name">导出</span><span class="cnt">9</span></div>
+          <div class="tag-empty">点击标签查看其下笔记 →</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 编辑区：多标签栏 + 阅读进度 + 查找替换栏 + 文档 -->
+    <div class="editor-wrap">
+      <div class="tabbar" id="tabbar">
+        <div class="tab"><span class="fname">vite 版本锁定.md</span><span class="x" title="关闭">✕</span></div>
+        <div class="tab active"><span class="fname">玉笺性能模型.md</span><span class="dot" title="已保存"></span><span class="x" title="关闭">✕</span></div>
+        <div class="tab"><span class="fname">electron 架构.md</span><span class="x" title="关闭">✕</span></div>
+        <div class="tab"><span class="fname">阅读笔记 · Zettelkasten.md</span><span class="x" title="关闭">✕</span></div>
+        <div class="newtab" title="新建标签页">＋</div>
+      </div>
+      <div class="read-progress"><div class="fill"></div></div>
+      <!-- 查找替换栏（Ctrl+F 唤起；已实现正则/大小写/全词 + 第 N/共 M + F3 循环 + 替换） -->
+      <div class="findbar" id="findbar" hidden>
+        <input class="f-input" id="findInput" placeholder="查找…" value="索引" />
+        <button class="f-tg" id="tgCase" title="区分大小写">Aa</button>
+        <button class="f-tg" id="tgWord" title="全词匹配">⌾</button>
+        <button class="f-tg on" id="tgRegex" title="正则表达式">.*</button>
+        <span class="f-count" id="findCount">第 1 / 共 12</span>
+        <button class="f-nav" id="findPrev" title="上一个 (Shift+F3)">↑</button>
+        <button class="f-nav" id="findNext" title="下一个 (F3)">↓</button>
+        <span class="f-sep"></span>
+        <input class="f-input f-rep" id="repInput" placeholder="替换为…" />
+        <button class="f-btn" id="repOne">替换</button>
+        <button class="f-btn" id="repAll">全部替换</button>
+        <span class="f-spacer"></span>
+        <button class="f-x" id="findClose" title="关闭 (Esc)">✕</button>
+      </div>
+      <div class="editor-scroll">
+      <article class="editor" id="editor">
+        <div class="crumb">技术写作 / <b>玉笺性能模型.md</b></div>
+        <h1>玉笺性能模型与索引策略</h1>
+        <p>本文档讨论 <code>vault</code> 在大规模笔记下的性能边界。与 Obsidian 不同，玉笺选择<em class="zh-em">严格增量</em>的索引维护策略，<em class="zh-em">禁止</em>任何遍历全库的周期任务。</p>
+        <p>当我们把 5000 个 Markdown 文件交给 <code>vaultIndex.ts</code> 时，索引内存应控制在 100MB 以内，输入延迟不应随文档增长而退化。这要求索引<em class="zh-em">只存轻量元数据</em>，不缓存正文、不索引全文。</p>
+        <div class="callout">设计原则：本地唯一真源。图床只是镜像，vault 永远是普通文件夹 + 相对路径资源。</div>
+        <h2>双链与反向链接</h2>
+        <p>在正文里写 <span class="wikilink">[[玉笺性能模型]]</span> 即可建立双向链接；若指向 <span class="wikilink broken">[[配图规范]]</span> 这类尚未创建的笔记，则会以红色提示（与右栏断链面板一致）。编辑器会把它渲染成<em class="zh-em">真节点</em>，保存时仍原样输出定界符，确保 Markdown 往返保真。</p>
+        <ul>
+          <li>反链面板聚合「谁引用了我」+ 上下文片段</li>
+          <li>未链接提及可一键包裹成双链</li>
+          <li>关系图谱由索引派生，不存原始图</li>
+        </ul>
+        <h2>中文排版渲染层</h2>
+        <p>中英混排时，汉字与 Latin 字母、数字之间自动补 ¼em 视觉间距，例如：在 2026 年发布的 v1.1.0 中，TypeScript 与 Markdown 的边界会被排版引擎自动处理，而源文件一字不改。</p>
+        <p>中文强调不再使用斜体，而是改用强调色与着重号，因为<em class="zh-em">中文斜体公认难看</em>。</p>
+      </article>
+      </div>
+    </div>
+
+    <!-- 右栏：大纲 / 反链 / 统计 / 断链（视图切换） -->
+    <aside class="right jade">
+      <div class="viewtabs" role="tablist">
+        <button class="vt on" data-right="outline" role="tab" aria-selected="true">▤<span>大纲</span></button>
+        <button class="vt" data-right="backlinks" role="tab" aria-selected="false">⤴<span>反链</span><span class="badge">12</span></button>
+        <button class="vt" data-right="stats" role="tab" aria-selected="false">📊<span>统计</span></button>
+        <button class="vt" data-right="linkcheck" role="tab" aria-selected="false">🔗<span>断链</span><span class="badge">3</span></button>
+      </div>
+      <div class="view-body">
+        <!-- 大纲 -->
+        <div class="outline" data-pane="outline">
+          <div class="oi"><span class="dot"></span>玉笺性能模型与索引策略</div>
+          <div class="oi lv2"><span class="dot"></span>双链与反向链接</div>
+          <div class="oi lv2"><span class="dot"></span>中文排版渲染层</div>
+        </div>
+        <!-- 反链面板 -->
+        <div class="backlinks" data-pane="backlinks" hidden>
+          <div class="bl-group">
+            <div class="gh"><span class="chev">▾</span>已链接（9）</div>
+            <div class="items">
+              <div class="bl-item">
+                <div class="fname"><span class="ic">📄</span>vite 版本锁定.md</div>
+                <div class="ctx">…参见 <span class="hit">[[玉笺性能模型]]</span> 一节关于 索引 的讨论…</div>
+                <div class="wrap" title="跳转到引用处">↗</div>
+              </div>
+              <div class="bl-item">
+                <div class="fname"><span class="ic">📄</span>electron 架构.md</div>
+                <div class="ctx">…三进程模型中，主进程负责 <span class="hit">[[玉笺性能模型]]</span> 的索引与原子写…</div>
+                <div class="wrap" title="跳转到引用处">↗</div>
+              </div>
+              <div class="bl-item">
+                <div class="fname"><span class="ic">📄</span>Markdown 往返保真.md</div>
+                <div class="ctx">…因此 <span class="hit">[[玉笺性能模型]]</span> 的真节点方案能保证保存一字不改…</div>
+                <div class="wrap" title="跳转到引用处">↗</div>
+              </div>
+            </div>
+          </div>
+          <div class="bl-group">
+            <div class="gh"><span class="chev">▾</span>未链接提及（3）</div>
+            <div class="items">
+              <div class="bl-item">
+                <div class="fname"><span class="ic">📄</span>关于工具链的思考.md</div>
+                <div class="ctx">…提到了「玉笺性能模型」但没有加链接…</div>
+                <div class="wrap" title="一键包裹成双链">⤴</div>
+              </div>
+              <div class="bl-item">
+                <div class="fname"><span class="ic">📄</span>阅读笔记 · Zettelkasten.md</div>
+                <div class="ctx">…与玉笺性能模型的增量索引思路一致…</div>
+                <div class="wrap" title="一键包裹成双链">⤴</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 统计（StatsPopover，已实现） -->
+        <div class="stats" data-pane="stats" hidden>
+          <div class="grid">
+            <div class="cell"><div class="v">1,284</div><div class="k">字数（含汉字）</div></div>
+            <div class="cell"><div class="v">18</div><div class="k">阅读分钟</div></div>
+            <div class="cell"><div class="v">9,402</div><div class="k">字符数</div></div>
+            <div class="cell"><div class="v">36</div><div class="k">段落 / 句</div></div>
+          </div>
+          <div class="goal"><span>写作目标</span><span>720 / 3,000 字</span></div>
+          <div class="bar"><div class="fill"></div></div>
+        </div>
+        <!-- 断链检查（LinkCheckPanel，已实现 + Phase3 一键创建） -->
+        <div class="linkcheck" data-pane="linkcheck" hidden>
+          <div class="lc-item">
+            <span class="sev"></span>
+            <div style="flex:1"><div class="lc-main">[[配图规范]]</div><div class="lc-sub">2 处引用 · 目标文件不存在</div>
+              <div class="lc-act"><button class="btn2 accent">＋ 一键创建</button><button class="btn2">定位</button></div></div>
+          </div>
+          <div class="lc-item">
+            <span class="sev"></span>
+            <div style="flex:1"><div class="lc-main">[[评审清单]]</div><div class="lc-sub">1 处引用 · 目标文件不存在</div>
+              <div class="lc-act"><button class="btn2 accent">＋ 一键创建</button><button class="btn2">定位</button></div></div>
+          </div>
+          <div class="lc-item">
+            <span class="sev warn"></span>
+            <div style="flex:1"><div class="lc-main">图片 ./assets/old-diag.png</div><div class="lc-sub">引用但磁盘已缺失</div>
+              <div class="lc-act"><button class="btn2">定位</button><button class="btn2">移除引用</button></div></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 状态栏 -->
+  <footer class="statusbar">
+    <span class="clickable" id="statWords">字数 1,284</span>
+    <span class="clickable" id="statTime">时长 18 分</span>
+    <span class="saved"><span class="d"></span>已保存</span>
+    <span class="alert" id="alertDot"><span class="d"></span>自检 3</span>
+    <span class="spacer"></span>
+    <span>行 42 · 列 8</span>
+    <span>UTF-8</span>
+  </footer>
+</div>
+
+<!-- ===================== 浮层：命令面板 ===================== -->
+<div class="overlay" id="cmdOverlay">
+  <div class="cmd-palette glass" role="combobox" aria-expanded="true">
+    <div class="in"><span class="ic">🔍</span><input id="cmdInput" placeholder="输入命令、笔记名、标签…" autocomplete="off" /></div>
+    <div class="list" id="cmdList">
+      <div class="cmd-grp">文件</div>
+      <div class="cmd-row"><span class="ic">📄</span><span class="lbl">打开笔记</span><span class="sub">快速跳转</span><span class="kbd"><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
+      <div class="cmd-grp">视图</div>
+      <div class="cmd-row"><span class="ic">⤴</span><span class="lbl">切换反链面板</span><span class="kbd"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>2</kbd></span></div>
+      <div class="cmd-row"><span class="ic">#</span><span class="lbl">切换标签面板</span></div>
+      <div class="cmd-grp">知识</div>
+      <div class="cmd-row"><span class="ic">🕸</span><span class="lbl">打开关系图谱</span></div>
+      <div class="cmd-row"><span class="ic">⤴</span><span class="lbl">插入双链 [[]]</span></div>
+      <div class="cmd-grp">工具</div>
+      <div class="cmd-row"><span class="ic">🩺</span><span class="lbl">vault 完整性自检</span></div>
+      <div class="cmd-row"><span class="ic">💾</span><span class="lbl">整库备份与恢复</span></div>
+      <div class="cmd-row"><span class="ic">✓</span><span class="lbl">文档 lint</span></div>
+      <div class="cmd-row"><span class="ic">📚</span><span class="lbl">引文管理 / 插入引用</span></div>
+      <div class="cmd-grp">导出</div>
+      <div class="cmd-row"><span class="ic">🌐</span><span class="lbl">导出静态站点</span></div>
+      <div class="cmd-grp">设置</div>
+      <div class="cmd-row"><span class="ic">⚙</span><span class="lbl">快捷键设置</span><span class="kbd"><kbd>Ctrl</kbd><kbd>,</kbd></span></div>
+      <div class="cmd-row"><span class="ic">🎨</span><span class="lbl">外观 / CSS 片段</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 浮层：版本快照（SnapshotPanel，已实现） ===================== -->
+<div class="overlay" id="snapshotOverlay">
+  <div class="panel glass" style="width:460px;">
+    <div class="ph"><span class="pic">🕔</span><span class="pt">版本快照 · 玉笺性能模型.md</span><span class="pc">5</span><span class="px">✕</span></div>
+    <div class="snap-list">
+      <div class="snap"><div class="meta"><div class="t">21:48 · 手动快照</div><div class="s">新增「关系图谱」一节 · 1,284 字</div></div><button class="mini">摘取</button><button class="mini accent">恢复</button></div>
+      <div class="snap"><div class="meta"><div class="t">20:12 · 自动</div><div class="s">编辑 3 分钟后自动留存 · 1,190 字</div></div><button class="mini">摘取</button><button class="mini accent">恢复</button></div>
+      <div class="snap"><div class="meta"><div class="t">18:40 · 手动快照</div><div class="s">「中文排版渲染层」成稿 · 980 字</div></div><button class="mini">摘取</button><button class="mini accent">恢复</button></div>
+      <div class="snap"><div class="meta"><div class="t">17:05 · 自动</div><div class="s">编辑 5 分钟后自动留存 · 760 字</div></div><button class="mini">摘取</button><button class="mini accent">恢复</button></div>
+      <div class="snap"><div class="meta"><div class="t">15:30 · 初始</div><div class="s">文档创建 · 120 字</div></div><button class="mini">摘取</button><button class="mini accent">恢复</button></div>
+    </div>
+    <div class="pfoot"><button class="btn minor">关闭</button></div>
+  </div>
+</div>
+
+<!-- ===================== 浮层：写作辅助（WritingAidsPanel，已实现） ===================== -->
+<div class="overlay" id="aidsOverlay">
+  <div class="panel glass" style="width:480px;">
+    <div class="ph"><span class="pic">✍</span><span class="pt">写作辅助</span><span class="pc">3 项建议</span><span class="px">✕</span></div>
+    <div class="aids-list">
+      <div class="aid"><span class="ai">⚠</span><div><div class="at">重复词：连续出现「索引」3 次 / 段</div><div class="ad">建议替换为「它 / 该结构」以提升可读性。</div></div></div>
+      <div class="aid"><span class="ai">🔗</span><div><div class="at">未链接提及：正文中「增量」可转双链</div><div class="ad">当前 vault 存在 [[增量索引策略]]，可一键包裹成 [[ ]]。</div></div></div>
+      <div class="aid"><span class="ai">✓</span><div><div class="at">被动语态偏多（4 处）</div><div class="ad">技术写作可接受；如需更利落可改主动语态。</div></div></div>
+    </div>
+    <div class="pfoot"><button class="btn minor">全部忽略</button><button class="btn primary">应用建议</button></div>
+  </div>
+</div>
+
+<!-- ===================== 浮层：完整性自检 ===================== -->
+<div class="overlay" id="integrityOverlay">
+  <div class="panel glass">
+    <div class="ph"><span class="pic">🩺</span><span class="pt">vault 完整性自检</span><span class="pc">12</span><span class="px">✕</span></div>
+    <div class="chips">
+      <div class="chip on">全部 12</div>
+      <div class="chip">索引不一致 3</div>
+      <div class="chip">孤儿快照 4</div>
+      <div class="chip">缺失附件 5</div>
+    </div>
+    <div class="plist">
+      <div class="pitem"><span class="sev err"></span><div><div class="pmain">索引与磁盘不一致：玉笺性能模型.md</div><div class="psub">mtime 变化未触发增量重解析</div></div></div>
+      <div class="pitem"><span class="sev warn"></span><div><div class="pmain">孤儿快照：关于工具链的思考.md</div><div class="psub">.yujian-history 中存在未关联当前文件的快照</div></div></div>
+      <div class="pitem"><span class="sev warn"></span><div><div class="pmain">缺失附件：阅读笔记.md 引用 2 张图片</div><div class="psub">图片已从磁盘删除，但文档仍引用</div></div></div>
+      <div class="pitem"><span class="sev info"></span><div><div class="pmain">空索引缓存：vault-index.json 缺失</div><div class="psub">可静默重建，无需人工介入</div></div></div>
+    </div>
+    <div class="pfoot">
+      <button class="btn minor">仅报告</button>
+      <button class="btn primary">一键修复</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 浮层：外部修改冲突（阻塞型） ===================== -->
+<div class="overlay" id="conflictOverlay">
+  <div class="panel glass conflict" style="width:620px;">
+    <div class="ph"><span class="pic">⚠</span><span class="pt">外部修改冲突</span><span class="pc">未保存改动</span><span class="px">✕</span></div>
+    <div class="diff">
+      <div class="col mine"><div class="ch">我的版本 · 21:03 · 1284 字</div><div class="ctxt">本文档讨论 vault 在大规模笔记下的性能边界。
+玉笺选择严格增量的索引维护策略。
+当我们把 5000 个 Markdown 文件交给 vaultIndex 时…</div></div>
+      <div class="col"><div class="ch">磁盘版本 · 21:05 · 1301 字</div><div class="ctxt">本文档讨论 vault 在大规模笔记下的性能边界。
+玉笺选择了严格增量的索引维护策略（外部已编辑）。
+当我们把 5000 个 Markdown 文件交给 vaultIndex 时…</div></div>
+    </div>
+    <div class="pfoot">
+      <button class="btn minor">两边都留</button>
+      <button class="btn minor">采用磁盘</button>
+      <button class="btn primary">保留我的</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 浮层：表格临时编辑界面 ===================== -->
+<div class="overlay" id="tableOverlay">
+  <div class="panel glass table-edit">
+    <div class="ph"><span class="pic">▦</span><span class="pt">表格 · 临时编辑</span><span class="px">✕</span></div>
+    <div class="tb-toolbar">
+      <button class="tb">＋行</button><button class="tb">＋列</button><button class="tb danger">－行</button><button class="tb danger">－列</button>
+      <div class="seg2"><button class="on">左</button><button>中</button><button>右</button></div>
+      <button class="tb danger" style="margin-left:auto;">删除表格</button>
+    </div>
+    <div class="tb-body">
+      <table>
+        <thead><tr><th>维度</th><th>玉笺</th><th>Obsidian</th></tr></thead>
+        <tbody>
+          <tr><td>索引维护</td><td>严格增量</td><td>全量重算</td></tr>
+          <tr><td>5000 笔记</td><td>无感知</td><td>软卡顿</td></tr>
+          <tr><td>完整性校验</td><td>内置自检</td><td>无</td></tr>
+        </tbody>
+      </table>
+      <div class="meta">拖拽列间调整宽度 · 列 3 / 行 4</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 关系图谱（独立视图） ===================== -->
+<div class="graph-view" id="graphView">
+  <div class="gh"><span class="gt">关系图谱</span><span class="gx">✕</span></div>
+  <canvas id="graphCanvas"></canvas>
+  <div class="graph-ctrl">
+    <div class="seg float" id="graphScope">
+      <button class="on" data-scope="local">本地子图</button>
+      <button data-scope="global">全局</button>
+    </div>
+    <div class="seg float" id="graphHops">
+      <button data-hops="1">1 跳</button><button class="on" data-hops="2">2 跳</button><button data-hops="3">3 跳</button>
+    </div>
+  </div>
+  <div class="graph-hint float">单击选中高亮邻居 · 双击打开笔记 · 拖拽平移 · 滚轮缩放</div>
+</div>
+
+<!-- ===================== 凝神模式预览 ===================== -->
+<div class="zen-veil" id="zenVeil">
+  <div class="zen-stage">
+    <div class="ztitle">玉笺性能模型与索引策略</div>
+    <div class="zsub">凝神模式 · 非焦点区已雾化（示意）。按 Esc 退出。</div>
+  </div>
+  <div class="zen-retreat float">
+    <button class="on">锚点居中</button>
+    <button>雾化背景</button>
+    <button>退出</button>
+  </div>
+</div>
+
+<div class="hint-toast float" id="toast"></div>
+
+<script>
+/* ---------------- 演示控制：皮肤 / 明暗 ---------------- */
+const root=document.documentElement;
+function setSkin(s){root.setAttribute('data-skin',s);document.querySelectorAll('#skinSeg button').forEach(b=>b.classList.toggle('on',b.dataset.skin===s));}
+function setMode(m){root.setAttribute('data-mode',m);document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));document.querySelectorAll('[data-mode] .glass,[data-mode] .tmenu').forEach(()=>{});}
+document.getElementById('skinSeg').addEventListener('click',e=>{if(e.target.dataset.skin)setSkin(e.target.dataset.skin);});
+document.getElementById('modeSeg').addEventListener('click',e=>{if(e.target.dataset.mode)setMode(e.target.dataset.mode);});
+
+/* ---------------- 左右栏视图切换 ---------------- */
+function bindTabs(sel,attr,panes){
+  document.querySelectorAll(sel).forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      const v=tab.dataset[attr];
+      if(v==='graph'){openGraph();return;}   // 图谱是独立全屏视图，不打断当前面板
+      document.querySelectorAll(sel).forEach(t=>{t.classList.remove('on');t.setAttribute('aria-selected','false');});
+      tab.classList.add('on');tab.setAttribute('aria-selected','true');
+      panes.forEach(p=>{p.hidden=p.dataset.pane!==v;});
+    });
+  });
+}
+bindTabs('.left .vt','left',[...document.querySelectorAll('.left [data-pane]')]);
+bindTabs('.right .vt','right',[...document.querySelectorAll('.right [data-pane]')]);
+
+/* ---------------- 多标签页交互（v1.1.0 已发布功能） ---------------- */
+const tabbar=document.getElementById('tabbar');
+tabbar.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',e=>{
+    if(e.target.classList.contains('x')){toast('关闭标签页（演示）');return;}
+    tabbar.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const name=t.querySelector('.fname').textContent;
+    document.getElementById('tbName').textContent=name;
+    document.querySelector('#editor .crumb b').textContent=name;
+    toast('切换到：'+name);
+  });
+});
+tabbar.querySelector('.newtab').addEventListener('click',()=>toast('新建标签页（演示）'));
+
+/* ---------------- 反链分组折叠 ---------------- */
+document.querySelectorAll('.bl-group .gh').forEach(gh=>gh.addEventListener('click',()=>gh.parentElement.classList.toggle('collapsed')));
+
+/* ---------------- 中文排版：汉字↔拉丁/数字 之间自动 ¼em 间距（渲染层，不改源） ---------------- */
+let cjkOn=true;
+function applyCJK(){
+  const ed=document.getElementById('editor');
+  ed.querySelectorAll('span.cjs-gap').forEach(s=>{s.replaceWith(document.createTextNode(' '));});
+  ed.normalize();
+  if(!cjkOn)return;
+  const WALK=document.createTreeWalker(ed,NodeFilter.SHOW_TEXT,{
+    acceptNode(n){const p=n.parentElement;if(!p)return NodeFilter.FILTER_REJECT;if(p.closest('script,style,code,.callout'))return NodeFilter.FILTER_REJECT;return NodeFilter.FILTER_ACCEPT;}
+  });
+  const texts=[];while(WALK.nextNode())texts.push(WALK.currentNode);
+  const re=/([\u3400-\u9fff])(?=[A-Za-z0-9])|(?<=[A-Za-z0-9])(?=[\u3400-\u9fff])/g;
+  texts.forEach(tn=>{
+    const s=tn.textContent;if(!re.test(s))return;re.lastIndex=0;
+    const parts=s.split(re);if(parts.length<=1)return;
+    const frag=document.createDocumentFragment();
+    parts.forEach((p,i)=>{if(p==='')return;frag.appendChild(document.createTextNode(p));if(i<parts.length-1){const g=document.createElement('span');g.className='cjs-gap';g.textContent=' ';frag.appendChild(g);}});
+    tn.replaceWith(frag);
+  });
+  ed.normalize();
+}
+document.getElementById('cjkBtn').addEventListener('click',function(){
+  cjkOn=!cjkOn;this.textContent='中文排版 ¼em：'+(cjkOn?'开':'关');applyCJK();
+  toast(cjkOn?'已启用中文排版渲染层（源文件不改）':'已关闭中文排版间距');
+});
+applyCJK();
+
+/* ---------------- 标题栏：模式切换 / 侧栏 / 大纲 / 快照 / 凝神 / 导出 / 更多 ---------------- */
+document.getElementById('modeSeg2').addEventListener('click',e=>{
+  if(!e.target.dataset.mode)return;
+  document.querySelectorAll('#modeSeg2 button').forEach(b=>b.classList.toggle('on',b.dataset.mode===e.target.dataset.mode));
+  toast('编辑模式：'+(e.target.dataset.mode==='wysiwyg'?'所见即所得':'源码'));
+});
+function tog(btn,on){btn.classList.toggle('on',on);}
+document.getElementById('btnSidebar').addEventListener('click',function(){tog(this,!this.classList.contains('on'));toast('侧栏 '+(this.classList.contains('on')?'显示':'隐藏'));});
+document.getElementById('btnOutline').addEventListener('click',function(){tog(this,!this.classList.contains('on'));toast('大纲/反链/统计/断链 侧栏 '+(this.classList.contains('on')?'显示':'隐藏'));});
+document.getElementById('btnSnapshot').addEventListener('click',()=>openOverlay('snapshotOverlay'));
+document.getElementById('btnFocus').addEventListener('click',()=>{const v=document.getElementById('zenVeil');v.classList.toggle('show');tog(document.getElementById('btnFocus'),v.classList.contains('show'));toast(v.classList.contains('show')?'进入凝神模式（预览）':'退出凝神模式');});
+document.getElementById('btnAppearance').addEventListener('click',()=>toast('外观设置（CSS 片段）'));
+
+/* 下拉菜单：导出 / 更多 */
+function setupMenu(btnId,menuId,onSelect){
+  const btn=document.getElementById(btnId),menu=document.getElementById(menuId);
+  btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const open=menu.classList.contains('show');
+    document.querySelectorAll('.tmenu').forEach(m=>m.classList.remove('show'));
+    if(!open)menu.classList.add('show');
+  });
+  menu.addEventListener('click',e=>{
+    const mi=e.target.closest('.mi');if(!mi)return;
+    if(mi.dataset.opt){const on=mi.classList.toggle('on');mi.querySelector('.chk').textContent=on?'✓':'·';mi.querySelector('.chk').classList.toggle('off',!on);toast('导出选项：'+(on?'开':'关'));return;}
+    const key=mi.dataset.x||mi.dataset.more;if(key&&onSelect)onSelect(key,mi);
+    menu.classList.remove('show');
+  });
+}
+setupMenu('btnExport','mExport',(key)=>{
+  if(key==='compile'){toast('多文件合订向导（演示）');return;}
+  const label=document.querySelector('#mExport .mi[data-x="'+key+'"]').textContent.trim();
+  toast('导出：'+label);
+});
+setupMenu('btnMore','mMore',(key)=>{
+  if(key==='zen')toast('凝神设置');
+  else if(key==='link')switchPane('right','linkcheck');
+  else if(key==='aids')openOverlay('aidsOverlay');
+  else if(key==='graph')openGraph();
+  else if(key==='integrity')openOverlay('integrityOverlay');
+});
+document.addEventListener('click',()=>document.querySelectorAll('.tmenu').forEach(m=>m.classList.remove('show')));
+
+/* 左栏搜索：范围 / 开关 / 计数（演示化的已实现查找逻辑） */
+document.querySelector('.search-pane .s-scope').addEventListener('click',e=>{
+  if(!e.target.dataset.scope)return;
+  document.querySelectorAll('.search-pane .s-scope button').forEach(b=>b.classList.toggle('on',b.dataset.scope===e.target.dataset.scope));
+  toast('搜索范围：'+(e.target.dataset.scope==='all'?'全部文件':'仅本文档'));
+});
+document.querySelector('.search-pane .s-toggles').addEventListener('click',e=>{
+  if(!e.target.dataset.tg)return;e.target.classList.toggle('on');toast('查找选项：'+e.target.dataset.tg+(e.target.classList.contains('on')?' 开':' 关'));
+});
+document.querySelectorAll('.sr-item').forEach(it=>it.addEventListener('click',()=>{
+  document.querySelectorAll('.sr-item').forEach(x=>x.classList.remove('cur'));it.classList.add('cur');
+  toast('打开：'+it.querySelector('.f').textContent);
+}));
+
+/* ---------------- 查找替换栏（Ctrl+F 唤起；正则/计数/F3/替换） ---------------- */
+const findbar=document.getElementById('findbar');
+let findIdx=1,findTotal=12,findOpts={case:false,word:false,regex:true};
+function refreshFindCount(){const el=document.getElementById('findCount');el.textContent='第 '+findIdx+' / 共 '+findTotal;el.classList.toggle('zero',findTotal===0);}
+document.getElementById('tgCase').addEventListener('click',function(){findOpts.case=!findOpts.case;tog(this,findOpts.case);});
+document.getElementById('tgWord').addEventListener('click',function(){findOpts.word=!findOpts.word;tog(this,findOpts.word);});
+document.getElementById('tgRegex').addEventListener('click',function(){findOpts.regex=!findOpts.regex;tog(this,findOpts.regex);});
+document.getElementById('findNext').addEventListener('click',()=>{findIdx=findTotal?((findIdx%findTotal)+1):0;refreshFindCount();toast('下一处命中（F3）');});
+document.getElementById('findPrev').addEventListener('click',()=>{findIdx=findTotal?(((findIdx-2+findTotal)%findTotal)+1):0;refreshFindCount();toast('上一处命中（Shift+F3）');});
+document.getElementById('findClose').addEventListener('click',()=>{findbar.hidden=true;});
+document.getElementById('repOne').addEventListener('click',()=>toast('替换当前处（演示）'));
+document.getElementById('repAll').addEventListener('click',()=>toast('全部替换 '+findTotal+' 处（演示）'));
+
+/* ---------------- 右栏：统计 / 断链 入口 ---------------- */
+function switchPane(side,pane){
+  const vt=document.querySelector('.'+side+' .vt[data-'+side+'="'+pane+'"]');
+  if(vt)vt.click();
+}
+document.getElementById('statWords').addEventListener('click',()=>switchPane('right','stats'));
+document.getElementById('statTime').addEventListener('click',()=>switchPane('right','stats'));
+document.querySelectorAll('.linkcheck .lc-act .accent').forEach(b=>b.addEventListener('click',()=>toast('一键创建目标笔记（演示）')));
+document.querySelectorAll('.linkcheck .lc-act .btn2:not(.accent)').forEach(b=>b.addEventListener('click',()=>toast('定位到引用处（演示）')));
+document.querySelectorAll('#snapshotOverlay .snap .mini').forEach(b=>b.addEventListener('click',()=>toast(b.classList.contains('accent')?'恢复快照（演示）':'摘取快照片段（演示）')));
+document.querySelectorAll('#aidsOverlay .aids-list .aid').forEach(a=>a.addEventListener('click',()=>a.style.opacity=.5));
+
+/* ---------------- 浮层开关 ---------------- */
+const overlays={cmd:'cmdOverlay',integrity:'integrityOverlay',conflict:'conflictOverlay',table:'tableOverlay',snapshot:'snapshotOverlay',aids:'aidsOverlay'};
+function openOverlay(id){const el=document.getElementById(id);if(el){el.classList.add('show');const inp=el.querySelector('input');if(inp)setTimeout(()=>inp.focus(),30);}}
+function closeOverlay(el){el.classList.remove('show');}
+document.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.open;if(k==='graph'){openGraph();}else openOverlay(overlays[k]);}));
+document.querySelectorAll('.overlay').forEach(ov=>{
+  ov.addEventListener('click',e=>{if(e.target===ov && !ov.querySelector('.conflict'))closeOverlay(ov);});
+  ov.querySelectorAll('.px').forEach(x=>x.addEventListener('click',()=>closeOverlay(ov)));
+  ov.querySelectorAll('.pfoot .btn.minor').forEach(x=>x.addEventListener('click',()=>closeOverlay(ov)));
+});
+// 命令面板键盘
+document.getElementById('cmdInput').addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeOverlay(document.getElementById('cmdOverlay'));
+  if(e.key==='Enter'){toast('执行：'+document.querySelector('.cmd-row.active')?.querySelector('.lbl').textContent);closeOverlay(document.getElementById('cmdOverlay'));}
+});
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='p'){e.preventDefault();openOverlay('cmdOverlay');}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();toast('Ctrl+K → 快速打开笔记');}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){e.preventDefault();findbar.hidden=!findbar.hidden;if(!findbar.hidden)setTimeout(()=>document.getElementById('findInput').focus(),30);}
+  else if(e.key==='Escape'){findbar.hidden=true;closeOverlay(document.getElementById('zenVeil'));}
+  else if(e.key==='F3'){e.preventDefault();if(!findbar.hidden){findIdx=findTotal?((findIdx%findTotal)+1):0;refreshFindCount();toast('下一处命中（F3）');}}
+});
+// 状态栏告警点
+document.getElementById('alertDot').addEventListener('click',()=>openOverlay('integrityOverlay'));
+
+/* ---------------- 提示 ---------------- */
+let toastT;function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),1800);}
+
+/* ---------------- 关系图谱：Canvas 力导（修正：显示后再测量 + 边界钳制 + ResizeObserver） ---------------- */
+const graphView=document.getElementById('graphView');
+const canvas=document.getElementById('graphCanvas');
+const ctx=canvas.getContext('2d');
+let gScope='local',gHops=2,RAF=null,graphStarted=false;
+const FONT_UI='-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
+// 演示数据：笔记节点 + 双链边
+const NAMES=['玉笺性能模型','vite版本锁定','electron架构','Markdown往返保真','知识管理实践','索引策略','中文排版','写作体验','导出管线','工具链思考','Zettelkasten','图谱布局','命令面板','CSS片段','引文管理','静态站导出','Obsidian对比','大文档性能','表格稳定性','主题皮肤','MathJax渲染','快照机制','图床协议','lint检查'];
+const G={nodes:[],edges:[]};
+function rnd(a,b){return a+Math.random()*(b-a);}
+NAMES.forEach((n,i)=>G.nodes.push({id:i,name:n,x:0,y:0,vx:0,vy:0,deg:0}));
+function link(a,b){G.edges.push([a,b]);G.nodes[a].deg++;G.nodes[b].deg++;}
+link(0,1);link(0,2);link(0,3);link(0,5);link(0,21);link(0,20);
+link(1,13);link(2,19);link(3,15);link(5,6);link(5,18);link(5,23);
+link(6,7);link(7,8);link(8,14);link(8,16);link(14,15);link(9,10);
+link(10,4);link(4,11);link(11,12);link(12,17);link(17,18);link(19,22);link(22,20);
+const CURRENT=0;
+function neighbors(start,hops){
+  const set=new Set([start]);let frontier=[start];
+  for(let h=0;h<hops;h++){const next=[];frontier.forEach(id=>{G.edges.forEach(([a,b])=>{if(a===id&&!set.has(b)){set.add(b);next.push(b);}if(b===id&&!set.has(a)){set.add(a);next.push(a);}});});frontier=next;}
+  return set;
+}
+function visibleNodes(){return gScope==='local'?neighbors(CURRENT,gHops):new Set(G.nodes.map(n=>n.id));}
+function getCss(v){return getComputedStyle(root).getPropertyValue(v).trim();}
+function hexA(h,a){h=h.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+function resizeCanvas(){
+  const r=canvas.getBoundingClientRect();
+  const w=Math.max(1,r.width||(window.innerWidth)),h=Math.max(1,r.height||(window.innerHeight-90));
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function seed(){
+  const w=canvas.clientWidth||800,h=canvas.clientHeight||500;
+  G.nodes.forEach(n=>{n.x=w/2+rnd(-w*0.32,w*0.32);n.y=h/2+rnd(-h*0.32,h*0.32);n.vx=0;n.vy=0;});
+}
+function tick(){
+  const vis=visibleNodes();const visArr=G.nodes.filter(n=>vis.has(n.id));
+  const w=canvas.clientWidth||800,h=canvas.clientHeight||500;
+  for(let i=0;i<visArr.length;i++)for(let j=i+1;j<visArr.length;j++){
+    const a=visArr[i],b=visArr[j];let dx=a.x-b.x,dy=a.y-b.y;let d2=dx*dx+dy*dy+0.01;
+    if(d2<120000){let f=220/d2;dx*=f;dy*=f;a.vx+=dx;a.vy+=dy;b.vx-=dx;b.vy-=dy;}
+  }
+  G.edges.forEach(([ai,bi])=>{
+    if(!vis.has(ai)||!vis.has(bi))return;const a=G.nodes[ai],b=G.nodes[bi];
+    let dx=b.x-a.x,dy=b.y-a.y;let d=Math.sqrt(dx*dx+dy*dy)+0.01;let f=(d-95)*0.018;
+    dx*=f;dy*=f;a.vx+=dx;a.vy+=dy;b.vx-=dx;b.vy-=dy;
+  });
+  visArr.forEach(n=>{
+    n.vx+=(w/2-n.x)*0.0009;n.vy+=(h/2-n.y)*0.0009;
+    n.vx*=0.85;n.vy*=0.85;n.x+=n.vx;n.y+=n.vy;
+    n.x=Math.max(24,Math.min(w-24,n.x));n.y=Math.max(24,Math.min(h-24,n.y));
+  });
+}
+let selected=null;
+function isNeighbor(id){if(selected===null)return false;return G.edges.some(([a,b])=>(a===selected&&b===id)||(b===selected&&a===id));}
+function draw(){
+  const w=canvas.clientWidth||800,h=canvas.clientHeight||500;
+  ctx.clearRect(0,0,w,h);
+  const vis=visibleNodes();
+  const accent=getCss('--hue-accent'),text2=getCss('--hue-text-2'),text3=getCss('--hue-text-3'),editor=getCss('--hue-editor');
+  const accentRGBA=hexA(accent,.62);
+  G.edges.forEach(([ai,bi])=>{
+    if(!vis.has(ai)||!vis.has(bi))return;const a=G.nodes[ai],b=G.nodes[bi];
+    let active=(selected===ai||selected===bi);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle=active?accentRGBA:'rgba(139,144,142,.30)';
+    ctx.lineWidth=active?1.6:1;ctx.stroke();
+  });
+  G.nodes.forEach(n=>{
+    if(!vis.has(n.id))return;
+    const active=isNeighbor(n.id);
+    const dim=(selected!==null&&!active&&n.id!==selected);
+    let r=3.4,color=text3,label=null;
+    if(n.id===CURRENT){r=8;color=accent;}
+    else if(active||n.deg>=3){r=5;color=text2;label=n.name;}
+    else if(selected===null&&n.deg>=2){label=n.name;}
+    ctx.globalAlpha=dim?0.35:1;
+    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+    if(n.id===CURRENT){
+      ctx.lineWidth=1.5;ctx.strokeStyle=editor;ctx.stroke();
+      const t=((performance.now()%1700)/1700);const pr=r+5+t*11;
+      ctx.globalAlpha=(1-t)*.5;ctx.beginPath();ctx.arc(n.x,n.y,pr,0,Math.PI*2);ctx.strokeStyle=accent;ctx.lineWidth=1.5;ctx.stroke();ctx.globalAlpha=dim?0.35:1;
+    }
+    if(label){ctx.font='11px '+FONT_UI;ctx.lineWidth=3;ctx.strokeStyle=editor;ctx.strokeText(label,n.x+r+4,n.y+4);ctx.fillStyle=text2;ctx.fillText(label,n.x+r+4,n.y+4);}
+    ctx.globalAlpha=1;
+  });
+}
+function loop(){tick();draw();RAF=requestAnimationFrame(loop);}
+function startGraph(){
+  resizeCanvas();if(!graphStarted){seed();graphStarted=true;}
+  if(RAF)cancelAnimationFrame(RAF);loop();
+}
+function openGraph(){graphView.classList.add('show');requestAnimationFrame(()=>{startGraph();toast('关系图谱 · '+gScope+' · '+gHops+' 跳');});}
+function closeGraph(){graphView.classList.remove('show');if(RAF)cancelAnimationFrame(RAF);}
+graphView.querySelector('.gx').addEventListener('click',closeGraph);
+document.getElementById('graphScope').addEventListener('click',e=>{if(!e.target.dataset.scope)return;gScope=e.target.dataset.scope;syncSeg('graphScope',gScope,'scope');startGraph();toast('范围：'+(gScope==='local'?'本地子图':'全局'));});
+document.getElementById('graphHops').addEventListener('click',e=>{if(!e.target.dataset.hops)return;gHops=+e.target.dataset.hops;syncSeg('graphHops',gHops,'hops');startGraph();toast('跳数：'+gHops);});
+function syncSeg(id,val,attr){document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset[attr]==String(val)));}
+canvas.addEventListener('click',e=>{
+  const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;let hit=null;
+  G.nodes.forEach(n=>{if(!visibleNodes().has(n.id))return;const dx=n.x-mx,dy=n.y-my;if(dx*dx+dy*dy<120)hit=n.id;});
+  selected=hit;draw();
+});
+canvas.addEventListener('dblclick',e=>{const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;G.nodes.forEach(n=>{if(!visibleNodes().has(n.id))return;const dx=n.x-mx,dy=n.y-my;if(dx*dx+dy*dy<120)toast('打开笔记：'+n.name);});});
+let drag=null;
+canvas.addEventListener('mousedown',e=>{const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;G.nodes.forEach(n=>{if(!visibleNodes().has(n.id))return;const dx=n.x-mx,dy=n.y-my;if(dx*dx+dy*dy<120)drag=n;});});
+canvas.addEventListener('mousemove',e=>{const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;if(drag){drag.x=mx;drag.y=my;return;}let hov=false;G.nodes.forEach(n=>{if(!visibleNodes().has(n.id))return;const dx=n.x-mx,dy=n.y-my;if(dx*dx+dy*dy<120)hov=true;});canvas.style.cursor=hov?'pointer':'default';});
+canvas.addEventListener('mouseup',()=>drag=null);
+canvas.addEventListener('wheel',e=>{e.preventDefault();},({passive:false}));
+if(window.ResizeObserver){new ResizeObserver(()=>{if(graphView.classList.contains('show'))resizeCanvas();}).observe(graphView);}
+window.addEventListener('resize',()=>{if(graphView.classList.contains('show'))resizeCanvas();});
+
+/* 阅读进度：加载后从 0 缓动到 38%，让界面有"活着"的微动效 */
+(function(){const rf=document.querySelector('.read-progress .fill');if(rf)requestAnimationFrame(()=>{rf.style.width='38%';});})();
+</script>
+</body>
+</html>
