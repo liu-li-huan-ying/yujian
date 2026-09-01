@@ -440,6 +440,8 @@ const zhCN = {
     sidebarClear: '清除',
     sidebarClearSearch: '清除搜索',
     sidebarSearchScope: '搜索范围',
+    sidebarTitle: '目录',
+    sidebarNoVault: '未打开笔记库',
     sidebarDeleteConfirm: '删除确认',
     snapDialog: '版本快照'
   },

@@ -441,6 +441,8 @@ const enUS = {
     sidebarClear: 'Clear',
     sidebarClearSearch: 'Clear search',
     sidebarSearchScope: 'Search scope',
+    sidebarTitle: 'Files',
+    sidebarNoVault: 'No vault opened',
     sidebarDeleteConfirm: 'Confirm deletion',
     snapDialog: 'Version snapshots'
   },

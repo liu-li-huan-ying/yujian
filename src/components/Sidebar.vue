@@ -274,11 +274,6 @@ const searchInput = ref<HTMLInputElement | null>(null)
 
 defineExpose({ focusSearch, nextHit, prevHit })
 
-const vaultName = computed(() => {
-  if (!props.vaultPath) return null
-  return props.vaultPath.split(/[\\/]/).filter(Boolean).pop() ?? props.vaultPath
-})
-
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
@@ -505,7 +500,7 @@ function startDrag(e: PointerEvent): void {
   <aside class="sidebar jade" :class="{ 'is-collapsed': !visible }" :style="{ width: `${(visible ?? true) ? width : 0}px` }">
     <header class="sidebar__head">
       <span class="sidebar__title" :title="vaultPath ?? ''">
-        {{ vaultName ?? '未打开笔记库' }}
+        {{ vaultPath ? L.sidebarTitle : L.sidebarNoVault }}
       </span>
 
       <div class="sidebar__acts">
