@@ -22,6 +22,22 @@ const emit = defineEmits<{
 const isActive = (path: string): boolean => path === tabs.activePath
 const showDot = (path: string): boolean => isActive(path) && props.dirty
 
+/**
+ * 中间省略：长文件名居中时若用 CSS 末尾省略会吞掉开头、很难看，
+ * 这里保留「前缀 + 扩展名」、中间以 … 收束（如「季度财报2026Q3最….md」）。
+ * 上限按字符数（CJK 较宽时仍可能溢出窄标签，由 CSS overflow:clip 兜底居中裁切）。
+ */
+function middleTruncate(name: string, max = 16): string {
+  if (name.length <= max) return name
+  const dot = name.lastIndexOf('.')
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot) : ''
+  const base = ext ? name.slice(0, name.length - ext.length) : name
+  const keep = Math.max(2, max - ext.length - 1)
+  const head = Math.ceil(keep * 0.6)
+  const tail = keep - head
+  return base.slice(0, head) + '…' + (tail > 0 ? base.slice(base.length - tail) : '') + ext
+}
+
 /* ── 占满式标签布局（采纳主人的修正：不固定可见数）──
  * 算法：
  *  1. 用「默认卡片宽度」估算可见区能放下几个标签 → cap；
@@ -245,7 +261,7 @@ function onMoreSelect(action: string): void {
         @click="onTabClick(tab.path)"
         @contextmenu="onContextMenu($event, tab.path)"
       >
-        <span class="tab__name">{{ baseName(tab.path) }}</span>
+        <span class="tab__name">{{ middleTruncate(baseName(tab.path)) }}</span>
         <span v-if="showDot(tab.path)" class="tab__dot" />
         <button
           class="tab__close"
@@ -410,7 +426,18 @@ function onMoreSelect(action: string): void {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 居中：配合 JS 中间省略，长名也保持均衡；clip 仅作兜底，避免与 … 叠加成双重省略 */
+  text-align: center;
+  text-overflow: clip;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+}
+
+.tab--active .tab__name {
+  font-weight: 600;
 }
 
 .tab__dot {
