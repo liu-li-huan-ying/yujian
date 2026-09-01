@@ -3,6 +3,7 @@ import {
   IPC,
   type ExportPayload,
   type ExportResult,
+  type FileStat,
   type FileNode,
   type ImgHostConfig,
   type ImgHostUploadItem,
@@ -18,7 +19,11 @@ import {
   type SnapshotInfo,
   type BrokenLinkReport,
   type VaultChange,
-  type WindowState
+  type WindowState,
+  type IntegrityReport,
+  type RepairResult,
+  type BackupResult,
+  type RestoreResult
 } from '../shared/ipc-channels'
 
 /**
@@ -47,6 +52,10 @@ const api = {
 
   writeFile: (filePath: string, content: string): Promise<void> =>
     ipcRenderer.invoke(IPC.FILE_WRITE, filePath, content),
+
+  /** 文件元信息（mtime / 字节数），冲突检测展示磁盘修改时间用 */
+  statFile: (filePath: string): Promise<FileStat> =>
+    ipcRenderer.invoke(IPC.FILE_STAT, filePath),
 
   /** 在指定目录新建文档，返回最终路径（重名自动加序号，不覆盖已有内容） */
   createDoc: (dir: string, name?: string): Promise<string> =>
@@ -103,6 +112,22 @@ const api = {
   /** 链接健康检查：扫描 vault 内失效的 [[wikilink]] / 相对路径链接 / 图片，返回断链报告 */
   checkLinks: (root: string): Promise<BrokenLinkReport> =>
     ipcRenderer.invoke(IPC.VAULT_CHECK_LINKS, root),
+
+  /** 完整性自检：扫描索引/磁盘不一致、孤儿快照、缺失附件、断链，返回分组报告 */
+  checkIntegrity: (root: string): Promise<IntegrityReport> =>
+    ipcRenderer.invoke(IPC.VAULT_INTEGRITY_CHECK, root),
+
+  /** 一键修复：重建索引 / 删除孤儿快照（破坏性动作须前端二次确认后传入） */
+  repairIntegrity: (root: string, actions: string[]): Promise<RepairResult> =>
+    ipcRenderer.invoke(IPC.VAULT_INTEGRITY_REPAIR, root, actions),
+
+  /** 整库备份：打包为 zip 到 destZip（用户经保存对话框选定） */
+  backupVault: (root: string, destZip: string): Promise<BackupResult> =>
+    ipcRenderer.invoke(IPC.VAULT_BACKUP, root, destZip),
+
+  /** 整库恢复：从 zip 解包到 targetRoot（默认当前 vault 根） */
+  restoreVault: (zipPath: string, targetRoot: string): Promise<RestoreResult> =>
+    ipcRenderer.invoke(IPC.VAULT_RESTORE, zipPath, targetRoot),
 
   watchVault: (root: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_WATCH, root),

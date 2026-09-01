@@ -8,6 +8,8 @@ export const IPC = {
   FILE_WRITE: 'file:write',
   // 读二进制并按扩展名推断 mime，返回 data URL（导出时内联图片用）
   FILE_READ_BASE64: 'file:readBase64',
+  /** 取文件元信息（mtime / 字节数），冲突检测用于展示「磁盘修改时间」 */
+  FILE_STAT: 'file:stat',
   FILE_LIST_DIR: 'file:listDir',
   FILE_CREATE: 'file:create',
   DIALOG_OPEN_FILE: 'dialog:openFile',
@@ -33,6 +35,14 @@ export const IPC = {
   VAULT_CHECK_LINKS: 'vault:checkLinks',
   // 笔记库：统一索引层重建（批次零地基；丢失可静默自动重建，此通道供自检/手动重建）
   VAULT_INDEX_REBUILD: 'vault:indexRebuild',
+  // 笔记库：完整性自检（批次一：索引/磁盘不一致、孤儿快照、缺失附件、断链）
+  VAULT_INTEGRITY_CHECK: 'vault:integrityCheck',
+  // 笔记库：一键修复（重建索引 / 删除孤儿快照，破坏性动作需前端二次确认）
+  VAULT_INTEGRITY_REPAIR: 'vault:integrityRepair',
+  // 笔记库：整库备份（打包为 zip）
+  VAULT_BACKUP: 'vault:backup',
+  // 笔记库：整库恢复（从 zip 解包）
+  VAULT_RESTORE: 'vault:restore',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -250,6 +260,16 @@ export interface ReadBase64Result {
   error?: string
 }
 
+/** 文件元信息（冲突检测展示磁盘修改时间 / 大小用） */
+export interface FileStat {
+  /** 文件是否存在 */
+  exists: boolean
+  /** 修改时间（epoch ms），不存在时为 0 */
+  mtimeMs: number
+  /** 字节大小，不存在时为 0 */
+  size: number
+}
+
 export interface ExportResult {
   ok: boolean
   /** 用户取消保存对话框 */
@@ -378,3 +398,51 @@ export interface BrokenLinkReport {
 /** 侧边栏可调宽度范围，与 --w-sidebar 默认值呼应 */
 export const SIDEBAR_MIN = 180
 export const SIDEBAR_MAX = 360
+
+/* ── 完整性自检 / 修复（Phase 3 批次一）────────────────── */
+
+export type IntegritySeverity = 'error' | 'warning' | 'info'
+export type IntegrityCategory =
+  | 'index' // 索引与磁盘不一致 / 空索引（可重建修复）
+  | 'orphan-snapshot' // 源文档已删但快照残留（可删修复）
+  | 'missing-attachment' // 图片等附件引用缺失（报告，不自动改）
+  | 'broken-link' // [[wikilink]] / 相对链接断链（报告，不自动改）
+
+export interface IntegrityIssue {
+  severity: IntegritySeverity
+  category: IntegrityCategory
+  /** 关联文件路径（可空；孤儿快照指向快照目录，断链/缺失附件指向源文档） */
+  file?: string
+  /** 次级说明：断链目标 / 所在行文本等，供面板直接展示 */
+  detail?: string
+}
+
+export interface IntegrityReport {
+  issues: IntegrityIssue[]
+  counts: Record<IntegrityCategory, number>
+  total: number
+  /** 至少含一项可修复条目（索引 / 孤儿快照）时为 true，决定「一键修复」按钮可用性 */
+  repairable: boolean
+}
+
+/** 可执行的修复动作标识（前端「一键修复」二次确认后传入） */
+export type IntegrityAction = 'rebuildIndex' | 'removeOrphanSnapshots'
+
+export interface RepairResult {
+  actions: { action: string; fixed: number }[]
+  errors: string[]
+}
+
+/* ── 整库备份 / 恢复（Phase 3 批次一）────────────────── */
+
+export interface BackupResult {
+  files: number
+  bytes: number
+}
+
+export interface RestoreResult {
+  files: number
+  bytes: number
+  /** 因路径逃逸 / 写入失败被跳过的条目 */
+  skipped: string[]
+}

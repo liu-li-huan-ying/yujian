@@ -1,6 +1,6 @@
 # 玉笺 Phase 3 开发计划（个人知识库方向）
 
-> 状态：**待启动**。基线 v1.1.0（2026-09-01 发布，三平台 CI 打通），Phase 2 三批次全落地。
+> 状态：**批次零已落地，批次一已完成（2026-09-01）**。基线 v1.1.0（2026-09-01 发布，三平台 CI 打通），Phase 2 三批次全落地。批次二~五待启动。
 > 定位升级：从「技术写作型 Markdown 编辑器」向「**个人知识库（PKM）**」拓展——双链 / 标签 / 关系图谱（对应 `docs/ARCHITECTURE.md` §1.2 P3 与 `docs/PHASE2-PLAN.md` §8）。
 > **本文件是 Phase 3 的权威计划，新会话开发前必读。**
 
@@ -94,7 +94,10 @@ Phase 3 新增两条：
 
 > 六个批次按「地基 → 信任 → 知识 → 体验 → 专业」递进。批次零是其余一切的地基，务必最先做。
 
-### 批次零：P0 缺陷修复 + 统一索引地基（最先做）
+### 批次零：P0 缺陷修复 + 统一索引地基（最先做） ✅ 2026-09-01 已完成
+
+> 已落地：`vaultIndex.ts` 统一索引层（增量维护 + `.mdeditor/vault-index.json` + 静默重建）；`watchVault` 增量接线；`searchVault` 改消费索引（解除 80 文件上限，软上限 1000/500 + `truncated`）；`VAULT_INDEX_REBUILD` IPC；`minisearch` 死依赖移除（pkg + lock + 文档表述修正）。`typecheck` + `lint` 通过。
+> ⚠️ 未解遗留：块级 `\eqref` 重载显示 `???`（见 `docs/EQREF-KNOWN-ISSUE.md`，需浏览器 DOM 验证后实施文档级两遍渲染）。
 
 * **块级 `\eqref` 重载后显示 `???`**：当前「逐节点 pending/flush 异步竞态」在重载路径不可靠。修复方向见 `.workbuddy/memory/EQREF-KNOWN-ISSUE.md` §5——**文档级确定性两遍渲染**：重载后等 MathJax 就绪且节点挂载完，先遍历全部 `math_inline` / `latex` 块**只登记 label**，再统一触发渲染，彻底消除「引用先于定义渲染」的竞态。
   * ⚠️ **实施前必须先在浏览器实跑抓 DOM 验证**：确认重载后行内 `\eqref` 到底走没走 `MathInlineView`、block 的 label 是否在 inline 解析前已登记。**前两次修复均因凭推测改错层而被推翻**，勿重蹈。
@@ -108,7 +111,9 @@ Phase 3 新增两条：
   * 建成后把 `searchVault` 从暴力递归扫描切到索引检索，**解除 80 文件 / 20 命中上限**（改分层加载）。
   * ⚠️ 防坑准则详见 `docs/PRODUCT-POLISH-IDEAS.md` §2（Obsidian 规模化翻车的实证）。
 
-### 批次一：数据安全与完整性（信任基础）
+### 批次一：数据安全与完整性（信任基础） ✅ 2026-09-01 已完成
+
+> 已落地：vault 级完整性自检（`vaultIntegrity.ts` + `IntegrityPanel.vue`，报告索引/磁盘不一致、孤儿快照、缺失附件并可一键修复/重建索引）；整库备份与恢复（`vaultBackup.ts` + `BackupPanel.vue`，zip 打包/恢复，与 `.yujian-history/` 单文件快照互补）；外部修改冲突策略（`ConflictDialog.vue` 三选一：保留我的/采用磁盘/双方对照，绝不静默覆盖，冲突前自动取消待定自动保存、抑制自身保存回声）；表格稳定性压测（`scripts/stress-table.mjs`，19 项全过，含 200 次随机突变往返稳定）。`typecheck` + `lint` 通过。
 
 * **vault 级完整性自检**：扫描「索引与磁盘不一致 / 孤儿快照 / 断链 / 缺失附件 / 空索引」，分组列出并提供「一键修复 / 重建索引」。Obsidian 恰恰缺这个能力。
 * **整库备份与恢复**：一键把整个 vault 打包（zip）到用户指定位置；可从备份恢复。与单文件快照（`.yujian-history/`）互补。

@@ -946,6 +946,44 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 两个标签页：**属性** —— frontmatter 表单（标题 / 作者 / 描述 / 标签[逗号或空格分隔] / 日期），挂载时从 `App` 传入的当前文档全文解析填充；「应用」经 `App.onApplyFrontmatter` → `host.loadMarkdownExternal(newText)` 改写并自动保存，正文逐字保留。**片段** —— 内置 8 类常用模板（文档模板 / 代码块 / 表格 / 提示框 / 任务列表 / 脚注 / 流程图 / 公式块），点击经 `App.onInsertSnippet` → `host.insertText` 在光标处插入。
 * 面板打开时快照一次当前文档全文（`host.getMarkdown()`），`canEdit` 由是否打开文档决定；无文档时仅提示。i18n 文案集中在 `ui.writingAids`，中英文 key 一一对应。
 
+### 5.14 Phase 3 批次一：数据安全与完整性（2026-09-01，已落地）
+
+> 对应 `docs/PHASE3-PLAN.md` 批次一。Obsidian 恰恰缺 vault 级完整性保障，本批次补上「自检 / 备份 / 冲突 / 表格压测」四块信任基础。
+
+**A. vault 级完整性自检（`electron/main/vaultIntegrity.ts`）**
+
+* `scanIntegrity(root, opts?)`：并行扫描五类问题，按严重度分组——
+  * `indexDrift`：索引层记录 vs 磁盘实际（`vaultIndex.ts` 的 `meta` 与 `existsSync` / `mtime` 比对），外部改动未刷入或索引条目悬空；
+  * `orphanSnapshots`：`.yujian-history/` 下无对应源文件、或源已移动/删除的快照；
+  * `missingAssets`：文档里 `![]()` / `[[wikilink]]` 指向但磁盘不存在的资源（与 `checkLinks` 同源但聚焦「资源文件缺失」）；
+  * `brokenLinks`：复用 `vault.ts:checkLinks` 的断链结果，并入报告；
+  * `emptyIndex`：索引缺失 / 损坏 / 版本不符（此时应静默重建，绝不弹错）。
+* 报告结构 `IntegrityReport { groups: { kind, label, items[], fixable }[], total }`，`IntegrityItem { file, detail, fix? }`。
+* 一键修复 `repairIntegrity(root, report)`：仅对 `fixable` 项动作——重建索引（`VAULT_INDEX_REBUILD`）、清理孤儿快照（回收站 `shell.trashItem`，绝不 `rm`）、空索引走静默重建；**绝不**自动改写用户文档原文（守 §5.2 红线）。
+* IPC：`vault:integrityScan` / `vault:integrityRepair`，preload 暴露 `window.api.scanIntegrity / repairIntegrity`；面板 `src/components/IntegrityPanel.vue`（玻璃浮层，入口：标题栏「更多 ⌄ · 完整性检查」、状态栏告警 chip 点击）。
+
+**B. 整库备份与恢复（`electron/main/vaultBackup.ts`）**
+
+* `backupVault(root, zipPath)`：用 `jszip`（已依赖，导出管线同款）把整个 vault 打包——含 `.md`、`.assets/`、`.mdeditor/` 索引、`.yujian-history/` 快照；跳过 `node_modules` 等大目录。原子写（`tmp + rename`）。
+* `restoreVault(zipPath, root)`：解包前校验 zip 结构（必须含至少一个 `.md` 或已知 vault 目录）；解包到 `root`，**先整库快照**以防恢复覆盖后无法回退（恢复是危险操作，UI 弹确认）。
+* 与单文件快照（`.yujian-history/`）互补：快照是「文件内版本时间轴」，备份是「整库某一刻的归档」。
+* IPC：`vault:backup` / `vault:restore`，preload `window.api.backupVault / restoreVault`；面板 `src/components/BackupPanel.vue`（玻璃浮层，入口：标题栏「更多 ⌄ · 整库备份」）。
+
+**C. 外部修改冲突策略（`App.vue` 的 `onVaultChange`，`src/components/ConflictDialog.vue`）**
+
+* 触发：`watchVault` 的 `change` 命中**当前正在编辑**的文档，且磁盘内容 ≠ 内存内容（归一化 CRLF/LF 后比较）。
+* **绝不静默覆盖**：弹出三选一对照对话框——
+  * 保留我的（`host.save()`，把内存内容写回）；
+  * 采用磁盘（`host.load()`，重新从磁盘载入）；
+  * 双方对照（另存一份 `.mine` 副本到文件旁，再 `host.load()` 加载磁盘版，原稿不丢）。
+* 防误伤：① 检测时先 `EditorHost.cancelPendingSave()` 取消 800ms 待定自动保存，避免咱的自动保存把外部改动冲掉；② 自身保存回显（磁盘 === 内存）忽略；③ 写入后 5 秒 `conflictSuppressUntil` 窗口内抑制重复弹窗。
+* 对话框用 LCS 差异把「我的 / 磁盘」切成行级增删片段并排展示，显示双方字数 + 磁盘修改时间（`FILE_STAT` 通道）。
+
+**D. 表格稳定性压测（`scripts/stress-table.mjs`，`node scripts/stress-table.mjs`）**
+
+* 压测 remark-gfm 序列化层（编辑器 to-markdown 同一底层），19 项用例：往返幂等、增/删行、增/删列、合并列、200 次随机突变序列往返稳定、对齐信息保留。
+* 动机：Obsidian 有「表格反复操作损坏」的实证先例（见 `docs/PRODUCT-POLISH-IDEAS.md`）。本压测已全绿（19/19），确认玉笺表格经序列化层不丢列 / 不丢行 / 不乱码 / 不自激振荡。
+
 ***
 
 ## 6. 技术写作场景专项设计
@@ -1031,6 +1069,7 @@ export interface SessionState {
 | **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                                | 安装包体积优化，可用                                                                           |
 | **8. 分发**      | electron-builder 打包                             | 产出 Windows 安装包，可安装运行                                                                 |
 | **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+凝神(打字机/禅)模式+导出增强+写作辅助+断链检查 | ✅ 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二已落地（版本快照·写作统计·凝神模式）；批次三已落地（导出增强·写作辅助·断链检查，见 `docs/PHASE2-PLAN.md`） |
+| **10. Phase 3** | PKM：批次零(缺陷+统一索引地基)→一(数据安全)→二(双链+反链)→三(标签+MOC+关系图谱)→四(中文排版+体验)→五(技术写作+发布) | ✅ 批次零已落地（统一索引层`vaultIndex.ts`+`minisearch`死依赖移除）；✅ 批次一已落地（完整性自检·整库备份恢复·外部修改冲突三选一·表格压测19/19，见 `docs/PHASE3-PLAN.md`）；批次二~五待启动 |
 
 > 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
 

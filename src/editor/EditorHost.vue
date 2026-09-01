@@ -333,6 +333,14 @@ function scheduleSave(): void {
   timer = setTimeout(() => void save(), AUTOSAVE_DELAY)
 }
 
+/** 取消待执行的自动保存（冲突检测发现外部改动时调用，避免自动保存覆盖外部编辑） */
+function cancelPendingSave(): void {
+  if (timer) {
+    clearTimeout(timer)
+    timer = null
+  }
+}
+
 async function save(): Promise<void> {
   if (!props.filePath || saving.value) return
   if (timer) {
@@ -552,6 +560,7 @@ onBeforeUnmount(() => {
 defineExpose({
   save,
   load,
+  cancelPendingSave,
   clear,
   switchTo,
   captureScroll,
