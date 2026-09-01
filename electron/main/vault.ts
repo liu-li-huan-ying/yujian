@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
 import type {
@@ -10,30 +10,14 @@ import type {
   ReplaceResult,
   BrokenLinkItem,
   BrokenLinkReport,
-  SearchOptions
+  SearchOptions,
+  SearchResult
 } from '../shared/ipc-channels'
+import * as Idx from './vaultIndex'
 
-const MD_EXT = new Set(['.md', '.markdown'])
-
-/**
- * 不该出现在笔记库树里的目录：
- * - 点开头的（.git / .mdeditor / .vscode / .obsidian 等）
- * - node_modules
- * - 与文档同名的 `xx.assets` 图片目录（那是资源，不是笔记）
- */
-function shouldSkipDir(name: string): boolean {
-  return name.startsWith('.') || name === 'node_modules' || name.endsWith('.assets')
-}
-
-function isMarkdown(name: string): boolean {
-  // 点开头的一律不算笔记（编辑器配置、临时文件、.DS_Store 之类）。
-  // 注意不能只靠 lastIndexOf('.') > 0 判断 —— 「.hidden.md」最后一个点在第 7 位，会被误收。
-  if (name.startsWith('.')) return false
-
-  const lower = name.toLowerCase()
-  const dot = lower.lastIndexOf('.')
-  return dot > 0 && MD_EXT.has(lower.slice(dot))
-}
+// 与 vault 索引层收拢同源判定（避免重复实现）
+const shouldSkipDir = Idx.shouldSkipDir
+const isMarkdown = Idx.isMarkdown
 
 async function exists(p: string): Promise<boolean> {
   try {
@@ -162,16 +146,102 @@ export async function deleteItem(targetPath: string): Promise<void> {
   }
 }
 
+/* ── 统一 vault 索引层（批次零地基，供搜索 / 双链 / 标签 / 图谱消费） ── */
+
+let idx: Idx.VaultIndex | null = null
+let idxRoot: string | null = null
+/** 路径解析映射缓存：增删 / 目录变动时失效，内容变更事件复用，避免每次编辑 O(n) 重建 */
+let pathMaps: { byBase: Map<string, string>; byRel: Map<string, string> } | null = null
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+let reconcileTimer: ReturnType<typeof setTimeout> | null = null
+
+function invalidateMaps(): void {
+  pathMaps = null
+}
+
+function getMaps(root: string): { byBase: Map<string, string>; byRel: Map<string, string> } {
+  if (!pathMaps) {
+    pathMaps = Idx.buildPathMaps(idx ? Object.keys(idx.files) : [], root)
+  }
+  return pathMaps
+}
+
+/** 索引变更后防抖落盘（沿用项目 temp+rename 原子写，缓存丢失静默重建） */
+function scheduleSave(root: string): void {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    if (idx && idxRoot === root) void Idx.saveIndex(root, idx).catch(() => {})
+  }, 800)
+}
+
+/** 目录级变动（新建/删除文件夹）后防抖全量对齐：仅重解析 mtime 变化者，禁周期重算 */
+function scheduleReconcile(root: string): void {
+  if (reconcileTimer) clearTimeout(reconcileTimer)
+  reconcileTimer = setTimeout(() => {
+    reconcileTimer = null
+    if (!idx || idxRoot !== root) return
+    void (async () => {
+      idx = await Idx.reconcileIndex(root, idx)
+      invalidateMaps()
+      scheduleSave(root)
+    })()
+  }, 1000)
+}
+
+/**
+ * 取得（或惰性构建）当前库索引。磁盘已有且版本匹配直接载入，否则一次性全量构建后落盘。
+ * 绝不抛错中断主流程。
+ */
+async function ensureIndex(root: string): Promise<Idx.VaultIndex> {
+  if (idx && idxRoot === root && idx.version === Idx.INDEX_VERSION) return idx
+  const loaded = await Idx.loadIndex(root)
+  if (loaded) {
+    idx = loaded
+  } else {
+    idx = await Idx.buildIndex(root)
+    void Idx.saveIndex(root, idx).catch(() => {})
+  }
+  idxRoot = root
+  invalidateMaps()
+  return idx
+}
+
+/** 单文件内容变动（add / change）：读正文 + mtime，增量重解析并修正反向链接 */
+async function reindexFile(root: string, absPath: string): Promise<void> {
+  if (!idx || idxRoot !== root || !isMarkdown(basename(absPath))) return
+  let content: string
+  let mtime: number
+  try {
+    content = await readFile(absPath, 'utf-8')
+    mtime = (await stat(absPath)).mtimeMs
+  } catch {
+    return
+  }
+  Idx.indexFile(idx, root, absPath, content, mtime, getMaps(root))
+  scheduleSave(root)
+}
+
+/** 单文件删除（unlink）：增量移除并清理反向链接 */
+function deindexFile(root: string, absPath: string): void {
+  if (!idx || idxRoot !== root || !isMarkdown(basename(absPath))) return
+  Idx.removeFileFromIndex(idx, absPath)
+  scheduleSave(root)
+}
+
 /* ── 目录监听 ───────────────────────────────── */
 
 let watcher: FSWatcher | null = null
 
 /**
  * 监听笔记库变化。外部改动（别的编辑器保存、Git 切分支、资源管理器里改名）
- * 都会推送给渲染层，让文件树始终与磁盘一致。
+ * 都会推送给渲染层，让文件树始终与磁盘一致；同时增量维护统一索引层。
  */
 export function watchVault(root: string, onChange: (change: VaultChange) => void): void {
   stopWatching()
+
+  // 惰性建立 / 载入索引（不阻塞监听启动；搜索与后续维护会用到）
+  void ensureIndex(root).catch(() => {})
 
   watcher = chokidarWatch(root, {
     // 根目录自身不能被自己的忽略规则排除掉
@@ -183,8 +253,18 @@ export function watchVault(root: string, onChange: (change: VaultChange) => void
 
   const emit =
     (kind: VaultChangeKind) =>
-    (path: string): void =>
+    (path: string): void => {
       onChange({ kind, path })
+      // 增量维护索引：增改重解析、删除移除、目录变动防抖全量对齐（禁任何全库周期重算）
+      if (kind === 'add' || kind === 'change') {
+        void reindexFile(root, path)
+      } else if (kind === 'unlink') {
+        deindexFile(root, path)
+      } else if (kind === 'addDir' || kind === 'unlinkDir') {
+        invalidateMaps()
+        scheduleReconcile(root)
+      }
+    }
 
   watcher
     .on('add', emit('add'))
@@ -203,12 +283,14 @@ export function stopWatching(): void {
   watcher = null
 }
 
-/* ── 全文搜索 ───────────────────────────────── */
+/* ── 全文搜索（消费统一索引层，解除 80 文件硬上限） ──────────────── */
 
-const MAX_HITS_PER_FILE = 20
-const MAX_RESULT_FILES = 80
+/** 单文件内命中行上限：防止单个超大文件（如字典）撑爆结果列表；达到即标记 truncated */
+const PER_FILE_HIT_CAP = 500
+/** 命中文件软上限：超过则截断并标记 truncated，提示用户收窄查询（取代原 80 文件硬上限） */
+const SOFT_FILE_CAP = 1000
 
-/** 单文件内按行匹配（默认不区分大小写；支持区分大小写 / 全词匹配），返回命中行（已截断） */
+/** 单文件内按行匹配（默认不区分大小写；支持区分大小写 / 全词匹配），返回命中行（已截断至 PER_FILE_HIT_CAP） */
 async function searchInFile(
   file: string,
   query: string,
@@ -226,7 +308,7 @@ async function searchInFile(
   for (let i = 0; i < lines.length; i++) {
     if (re.test(lines[i])) {
       hits.push({ line: i + 1, text: lines[i].trim().slice(0, 240) })
-      if (hits.length >= MAX_HITS_PER_FILE) break
+      if (hits.length >= PER_FILE_HIT_CAP) break
     }
   }
   return hits
@@ -266,45 +348,48 @@ function buildSearchRegex(query: string, opts?: SearchOptions, global = false): 
  * - 单文档：传入 file 时只搜该文件（即左侧「本文档」范围），不递归。
  * 选项（区分大小写 / 全词匹配）与命中行结构两种范围完全一致。
  */
+/**
+ * 全文搜索。两种范围共用同一套逻辑，仅范围不同：
+ * - 全库：经统一索引枚举全部 Markdown 文档（免递归扫描），逐文件做正文匹配；
+ * - 单文档：传入 file 时只搜该文件（左侧「本文档」范围）。
+ * 已解除原 80 文件 / 20 命中硬上限，改用 PER_FILE_HIT_CAP 与 SOFT_FILE_CAP 软上限，
+ * 超过即截断并以 `truncated` 提示前端。
+ */
 export async function searchVault(
   root: string,
   query: string,
   opts?: SearchOptions,
   file?: string
-): Promise<SearchFileResult[]> {
+): Promise<SearchResult> {
   const q = query.trim()
-  if (!q) return []
+  if (!q) return { results: [], truncated: false }
 
   // 单文档范围：只检索引导文件，避免无谓的整库递归
   if (file) {
     const hits = await searchInFile(file, q, opts)
-    return hits.length ? [{ path: file, name: basename(file), hits }] : []
+    const truncated = hits.length >= PER_FILE_HIT_CAP
+    return {
+      results: hits.length ? [{ path: file, name: basename(file), hits }] : [],
+      truncated
+    }
   }
 
+  // 全库范围：经索引枚举文件（免递归扫描），逐文件做正文匹配
+  const index = await ensureIndex(root)
   const results: SearchFileResult[] = []
-
-  async function walk(dir: string): Promise<void> {
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      return
+  let truncated = false
+  for (const path of Object.keys(index.files)) {
+    const hits = await searchInFile(path, q, opts)
+    if (hits.length) {
+      results.push({ path, name: basename(path), hits })
+      if (hits.length >= PER_FILE_HIT_CAP) truncated = true
     }
-    for (const entry of entries) {
-      const full = join(dir, entry.name)
-      if (entry.isDirectory()) {
-        if (shouldSkipDir(entry.name)) continue
-        await walk(full)
-      } else if (entry.isFile() && isMarkdown(entry.name)) {
-        const hits = await searchInFile(full, q, opts)
-        if (hits.length) results.push({ path: full, name: entry.name, hits })
-      }
-      if (results.length >= MAX_RESULT_FILES) return
+    if (results.length >= SOFT_FILE_CAP) {
+      truncated = true
+      break
     }
   }
-
-  await walk(root)
-  return results
+  return { results, truncated }
 }
 
 /**
@@ -330,7 +415,7 @@ export async function replaceInVault(
     targets = hits.length ? [file] : []
   } else {
     const results = await searchVault(root, q, opts)
-    targets = results.map((r) => r.path)
+    targets = results.results.map((r) => r.path)
   }
 
   // 复用主搜索正则构造（含 regex 模式支持），全局标志供整文替换

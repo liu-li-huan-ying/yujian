@@ -15,7 +15,7 @@
 | 编辑器内核 | **@milkdown/crepe 7.22.1**           | ProseMirror + remark 双引擎，Markdown 往返一致性最好 |
 | 编辑模式  | WYSIWYG 为默认，可切源码模式                   | 你选的                                       |
 | 存储    | 文件夹即笔记库，纯 `.md` + 相对路径资源             | 数据永远可读、可 Git、可迁移                          |
-| 搜索    | MiniSearch（纯 JS 倒排索引）                | 零原生编译，与"无 MSVC"约束一致                       |
+| 搜索    | 统一 vault 索引层（轻量元数据，纯 Node fs，无全文索引） | 零原生编译，与"无 MSVC"约束一致；索引为可重建缓存，丢失静默重建 |
 | v1 主攻 | 技术写作场景                               | 你选的                                       |
 
 ### 0.1 本机环境实测结果
@@ -74,7 +74,7 @@
 | **P1** | 增强表格编辑                       | Crepe 内置     |
 | **P1** | 图片粘贴落盘                       | <br />       |
 | **P1** | 导出 HTML / PDF / 单文件 Markdown | <br />       |
-| **P2** | 全文搜索                         | MiniSearch   |
+| **P2** | 全文搜索                         | 统一 vault 索引层（vaultIndex.ts）   |
 | **P2** | 大纲面板                         | 长文与书稿场景      |
 | **P2** | 图床上传                         | 需配置化         |
 | **P2** | 导出 Word                      | <br />       |
@@ -133,8 +133,7 @@
     "mathjax-full": "^3.2.2",          // 数学显示引擎（AllPackages + mhchem，支持 \ce/\require/\eqref）
     "markdown-it-emoji": "^3.1.0",     // 仅复用其全量 emoji 短代码词典（name → emoji）
 
-    // —— 搜索 ——
-    "minisearch": "^7.2.0",
+    // —— 搜索（统一 vault 索引层，纯 Node fs，无第三方搜索库） ——
 
     // —— UI ——
     "vue": "^3.5.42",
@@ -222,7 +221,7 @@ ProseMirror 事务 (WYSIWYG 模式)
    │                                        main 进程原子写入（tmp + rename）
    │                                                    │
    │                                                    ▼
-   │                                              更新 MiniSearch 索引
+   │                                              更新统一 vault 索引层
    │
    └─► 用户按 Ctrl+/ 切换源码模式
             │
@@ -259,7 +258,7 @@ markdown-editor/
 │  │  │  └─ config.handlers.ts       # 配置与密钥（safeStorage）
 │  │  └─ services/
 │  │     ├─ vault.service.ts         # 笔记库扫描、chokidar 监听
-│  │     ├─ search.service.ts        # MiniSearch 索引构建/增量更新
+│  │     ├─ search.service.ts        # 统一 vault 索引层（vaultIndex.ts）构建/增量维护
 │  │     ├─ exporter/
 │  │     │  ├─ html.exporter.ts
 │  │     │  ├─ pdf.exporter.ts
@@ -317,7 +316,7 @@ markdown-editor/
 我的笔记库/
 ├─ .mdeditor/                 # 应用私有目录（可安全删除，会自动重建）
 │  ├─ config.json             # 该库的配置
-│  ├─ search-index.json       # MiniSearch 索引快照
+│  ├─ vault-index.json        # 统一 vault 索引层快照（轻量元数据，可重建缓存）
 │  └─ .history/               # 文件历史快照（可选）
 ├─ .assets/                   # 图片等资源（统一存放）
 │  └─ 2026/08/                # 按月份归档，避免单目录文件过多
@@ -739,15 +738,18 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * **导出衔接**：`src/export/imageInline.ts` 的 `inlineImages` 识别 `jade-asset://` 并解码回绝对路径（`decodeJadeAsset` 提取 `local/` 后段 → `decodeURIComponent`）再内联为 data URL，避免 WYSIWYG 导出（`getHTML()` 读实时 DOM，含 `jade-asset://`）丢图。
 * **两个易错点（已踩坑）**：① `new URL(...).pathname` 已对中文做一层百分号编码，渲染层须先 `decodeURIComponent` 再 `encodeURIComponent` 一次，否则主进程只解一层致中文路径仍是 `%XX` 读不到；② 协议层会在绝对路径前多塞一个前导斜杠（`//C:/...` 或 `//Users/...`），主进程 handler 须 `replace(/^\//,'')` 再 `replace(/^\/([A-Za-z]:)/,'$1')` 归一。
 
-### 5.5 搜索（MiniSearch）
+### 5.5 搜索（统一 vault 索引层）
 
-* 索引字段：`title`（权重 3）、`content`（权重 1）、`path`、`tags`
-* 持久化：`vault/.mdeditor/search-index.json`，用 `MiniSearch.toJSON()` 序列化
-* 增量更新：chokidar 捕获文件变更 → 只重建该条
-* 冷启动全量构建：1000 个文件约 1-2 秒，放 main 进程避免卡 UI
-* 支持中文分词（MiniSearch 对 CJK 需配置 `tokenize` 为按字切分）
+> ⚠️ 历史说明：早期架构稿曾设想用 MiniSearch 做全文倒排索引，但 `minisearch` 自引入后**代码中零引用（死依赖）**，实际搜索一直是 `vault.ts` 的暴力递归扫描（单文件 20 命中、全库 80 文件上限）。批次零已移除该死依赖，并建成真正的统一索引层 `electron/main/vaultIndex.ts`。
 
-> **为什么不用 SQLite**：`better-sqlite3` 需要 node-gyp 编译 → 需要 MSVC → 与你本机的约束直接冲突。MiniSearch 是纯 JS，零编译依赖。
+* 索引层：`electron/main/vaultIndex.ts`，**纯 Node `fs`，无第三方搜索库**，便于在 Node 环境跑往返单测。
+* 索引字段（轻量元数据，不缓存正文、不索引全文）：`mtime` / `title`（frontmatter title > 首个 H1）/ `headings`（≤50）/ `outLinks`（已解析的 wikilink 目标绝对路径）/ `tags`（frontmatter）。反向链接由 `outLinks` 派生。
+* 持久化：`vault/.mdeditor/vault-index.json`，沿用项目「写临时文件 + rename」原子写；是**可重建缓存**，丢失/损坏/版本不符时静默全量重建，绝不弹错。
+* 增量维护（严格增量，禁任何全库周期重算）：chokidar 捕获 `add`/`change` → 只重解析该文件（复用缓存的路径映射，O(1)）；`unlink` → 移除该条并清理反向条目；`addDir`/`unlinkDir` → 防抖全量对齐（仅重解析 mtime 变化者）。
+* 全文搜索：仍按正文逐行匹配（按设计不建全文索引，避免 Obsidian 式内存膨胀），但经索引枚举文件（免目录递归），并解除原 80 文件 / 20 命中硬上限，改为软上限（每文件 500 命中、1000 文件）配合 `truncated` 标志提示用户收窄查询。
+* 冷启动全量构建放 main 进程，仅初次/重建/损坏时发生一次。
+
+> **为什么不用 SQLite / MiniSearch**：`better-sqlite3` 需要 node-gyp 编译 → 需要 MSVC → 与本机约束直接冲突；MiniSearch 虽纯 JS 但引入后从未接入且会引入全文索引内存开销。统一索引层只存必要元数据、派生反链，契合「无原生编译 + 大数据量不退化」目标。
 
 ### 5.6 导出
 
@@ -1024,7 +1026,7 @@ export interface SessionState {
 | **2. 笔记库**     | 文件树 + 自动保存 + 崩溃恢复                               | 能打开整个文件夹，断电重启后内容不丢                                                                   |
 | **3. 写作套件**    | Mermaid + 公式核验 + 表格 + 代码块                       | 一篇含图表的文章能正常编辑渲染                                                                      |
 | **4. 图片**      | 粘贴落盘 + 图床配置                                     | 截图粘贴即可插入，图床可配                                                                        |
-| **5. 搜索**      | MiniSearch 索引 + 搜索面板                            | 千篇笔记下搜索响应 < 100ms                                                                    |
+| **5. 搜索**      | 统一 vault 索引层 + 搜索面板                            | 千篇笔记下搜索响应 < 100ms（索引驱动枚举，免目录递归）                                                                    |
 | **6. 导出**      | HTML / PDF / 单 md                               | 导出结果与编辑器内观感一致                                                                        |
 | **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                                | 安装包体积优化，可用                                                                           |
 | **8. 分发**      | electron-builder 打包                             | 产出 Windows 安装包，可安装运行                                                                 |

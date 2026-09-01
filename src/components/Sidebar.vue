@@ -4,7 +4,8 @@ import {
   SIDEBAR_MAX,
   SIDEBAR_MIN,
   type FileNode,
-  type SearchFileResult
+  type SearchFileResult,
+  type SearchResult
 } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
 import FileTree from './FileTree.vue'
@@ -75,7 +76,10 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 const searchScope = ref<'vault' | 'doc'>('vault')
 const searchQuery = ref('')
 const isSearching = ref(false)
-const searchResults = ref<SearchFileResult[]>([])
+/** 搜索整体响应（命中列表 + 是否因过多被截断）；searchResults 取其中的命中列表供 UI 渲染 */
+const searchResponse = ref<SearchResult>({ results: [], truncated: false })
+const searchResults = computed<SearchFileResult[]>(() => searchResponse.value.results)
+const searchTruncated = computed<boolean>(() => searchResponse.value.truncated)
 const caseSensitive = ref(false)
 const wholeWord = ref(false)
 const useRegex = ref(false)
@@ -141,13 +145,13 @@ function syncFindHighlight(): void {
 async function executeSearch(): Promise<void> {
   const query = searchQuery.value.trim()
   if (!query || (searchScope.value === 'doc' && !props.activePath) || !props.vaultPath) {
-    searchResults.value = []
+    searchResponse.value = { results: [], truncated: false }
     isSearching.value = false
     return
   }
   isSearching.value = true
   try {
-    searchResults.value = await window.api.searchVault(
+    searchResponse.value = await window.api.searchVault(
       props.vaultPath,
       query,
       { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
@@ -155,7 +159,7 @@ async function executeSearch(): Promise<void> {
     )
   } catch (e) {
     showToast(errMsg(e))
-    searchResults.value = []
+    searchResponse.value = { results: [], truncated: false }
   } finally {
     isSearching.value = false
   }
@@ -224,7 +228,7 @@ async function doReplace(): Promise<void> {
 
 function clearSearch(): void {
   searchQuery.value = ''
-  searchResults.value = []
+  searchResponse.value = { results: [], truncated: false }
   isSearching.value = false
   showReplace.value = false
   replaceQuery.value = ''
@@ -333,7 +337,7 @@ watch(
   () => {
     expanded.value = new Set()
     searchQuery.value = ''
-    searchResults.value = []
+    searchResponse.value = { results: [], truncated: false }
   }
 )
 
@@ -707,6 +711,7 @@ function startDrag(e: PointerEvent): void {
             :regex="useRegex"
             :active-path="activePath"
             :single-file="searchScope === 'doc'"
+            :truncated="searchTruncated"
             @open="onOpenResult"
           />
           <p v-else class="empty">{{ L.noResult.replace('{q}', searchQuery.trim()) }}</p>

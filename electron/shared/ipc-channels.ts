@@ -31,6 +31,8 @@ export const IPC = {
   VAULT_REPLACE: 'vault:replace',
   // 笔记库：断链健康检查（扫描 vault 内失效的 [[wikilink]] / 相对路径链接 / 图片）
   VAULT_CHECK_LINKS: 'vault:checkLinks',
+  // 笔记库：统一索引层重建（批次零地基；丢失可静默自动重建，此通道供自检/手动重建）
+  VAULT_INDEX_REBUILD: 'vault:indexRebuild',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -132,6 +134,17 @@ export interface SearchFileResult {
   /** 文件名（含扩展名） */
   name: string
   hits: SearchLineHit[]
+}
+
+/**
+ * 搜索整体结果。解除原 80 文件硬上限后改用软上限保护渲染进程：
+ * 结果过多时 `truncated=true`，前端据此提示「结果过多，请收窄查询」。
+ */
+export interface SearchResult {
+  /** 命中文件列表（按命中行组织） */
+  results: SearchFileResult[]
+  /** true 表示结果超过内部软上限被截断 */
+  truncated: boolean
 }
 
 /** 全局替换结果：在搜索命中的文件范围内替换 */

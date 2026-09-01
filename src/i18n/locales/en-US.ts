@@ -371,6 +371,7 @@ const enUS = {
     dialogCancel: 'Cancel',
     searchHits: '{n} hit(s)',
     searchHitsFiles: '{n} hit(s) · {f} file(s)',
+    searchTruncated: 'Too many results — truncated. Narrow your query to see all.',
     mathError: '⚠ Formula failed to render',
     mermaidError: 'Invalid diagram syntax',
     tocTitle: 'Contents',
