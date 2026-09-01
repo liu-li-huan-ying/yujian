@@ -276,7 +276,7 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 | 6. Export        | HTML / PDF / single md                                                                                                                    | ✅ done                                                                                                                                                                                                         |
 | 7. Polish        | themes/skins, shortcut hints, settings, title-bar redesign                                                                                | ✅ done (skins + preferences/appearance + icon toolbar + help/shortcuts + unified glass)                                                                                                                        |
 | 8. Distribution  | electron-builder + **3-platform CI**                                                                                                      | ✅ done (v1.0.0; GitHub Actions builds Win/macOS/Linux installers)                                                                                                                                              |
-| 9. Phase 2       | multi-doc tabs + find/replace + version snapshots + writing stats + Focus (typewriter/zen) mode + export enh. + writing aids + link check | 🔧 batch 1 done (multi-doc tabs · in-file find/replace · selection count); batch 2 done (version snapshots · writing stats · Focus mode); batch 3 pending (see [`docs/PHASE2-PLAN.md`](./docs/PHASE2-PLAN.md)) |
+| 9. Phase 2       | multi-doc tabs + find/replace + version snapshots + writing stats + Focus (typewriter/zen) mode + export enh. + writing aids + link check | ✅ all batches done — see [`docs/PHASE2-PLAN.md`](./docs/PHASE2-PLAN.md) |
 
 **Beyond the roadmap**: bilingual i18n, switch working folder, startup preferences, five skins + dark/light/system, app icon (YuJian), independent panel toggle, jade scrollbars, adaptive code height, right-side reading progress, title-bar icon toolbar redesign, help & shortcut panel (F1), consistent left-rail block handles, unified glass (all overlays follow mode), long-token table wrapping, size trimming (asar + max compression + zh/en locales only).
 
@@ -284,10 +284,10 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 
 ## 📦 Installers
 
-### Local build (v1.0.0)
+### Local build (v1.1.0)
 
 * **Build**: `npm run dist` (then `electron-vite build` + `electron-builder --win`); publish to GitHub Release with `npm run release` (tag `v*` first).
-* **Windows**: `release/yujian-1.0.0-setup.exe` (NSIS, \~140MB) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
+* **Windows**: `release/yujian-1.1.0-setup.exe` (NSIS, \~140MB) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
 * **Cross-platform**: macOS `dmg`, Linux `AppImage` targets configured; **must build on the target OS** (see below).
 * **Size strategy**: `asar` + max compression + zh/en locales only; removed unused `@codemirror/theme-one-dark`.
 * **Size note**: the package is dominated by the Electron runtime and the Mermaid engine; Mermaid is lazy-loaded (only on render) and works offline. Switch to CDN loading for further trimming.
@@ -307,8 +307,8 @@ Pushing a `v*` tag triggers [`.github/workflows/release.yml`](./.github/workflow
 Release flow:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 # → GitHub Actions builds the three-platform installers into a draft release
 # → review on the GitHub Releases page, then click Publish
 ```

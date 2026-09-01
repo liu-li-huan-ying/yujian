@@ -1,7 +1,7 @@
 # 玉笺 Phase 2 开发计划
 
-> 状态：**批次一（多文档标签 + 文件内查找替换 + 选区字数）+ 批次二（版本快照 + 写作统计 + 凝神模式）已落地**；批次三（导出增强·写作辅助·断链检查）待排期。
-> 基线：v1.0.0 已发布，阶段 0–8 全部完成，三平台 CI 已打通。
+> 状态：**批次一（多文档标签 + 文件内查找替换 + 选区字数）+ 批次二（版本快照 + 写作统计 + 凝神模式）+ 批次三（导出增强·写作辅助·断链检查）均已落地**。
+> 基线：v1.0.0 已发布，阶段 0–8 全部完成，三平台 CI 已打通。**阶段 9（Phase 2）三个批次均已在 v1.1.0 落地。**
 > 定位：技术写作型 Markdown 编辑器。Phase 2 聚焦「写作生产力 + 出版分发」，并补精细化打磨。
 
 ***
@@ -70,11 +70,11 @@
 
 ### 3.2 查找替换（做精）
 
-* **文件内**：基于 ProseMirror decoration 实现轻量搜索高亮 + 上下跳转（经 `@milkdown/kit` 接入 search plugin，非破坏性 decoration，守红线 1）；支持「区分大小写 / 全词 / 正则」三开关；替换走受控事务。
-* **精细项**：匹配计数（如 3/12）、到末尾循环回顶、选区范围内查找、替换全部 / 替换并查找下一个。
-* **全局跨库**：复用阶段 5 MiniSearch 索引，结果面板展示「标题 + 上下文片段 + 行号」；**键盘上下导航**；可按「当前文件夹 / 全部 vault」筛选；点击定位并高亮该笔记；搜索命中后可在左侧 `Sidebar.vue` 搜索框展开玉质「全局替换」区块（新增 `vault:replace` 通道），仅在命中文件范围内做字面量替换并写回磁盘（详见 §3.8）。
+* **统一检索引擎（双范围）**：主进程 `searchVault/replaceInVault` 以可选 `file` 参数区分「本文档」（传 `activePath`）/「全部」（递归 vault），后端按行切分命中、替换回写、原子写两范围完全共用；前端 `Sidebar` 单一搜索框 + `SearchResults` 渲染器 + 替换面板，经 `scopeFile()` 透传范围。命中高亮在源码（CodeMirror Decoration）与所见即所得（ProseMirror Decoration）两端对称常驻，两种范围都高亮当前打开文档内全部命中。
+* **查找选项与导航**：选项含「区分大小写 / 全词匹配 / 正则」三开关（`regex` 模式 query 直接作正则，非法时降级字面量）；结果区显示「第 N / 共 M」计数；`F3` / `Shift+F3` 跨命中循环上下导航（模运算循环回顶 / 回底），点列表项或导航按钮经 `onOpenResult → EditorHost.revealLine` 在两种编辑模式都精确定位（源码行文本匹配消除行号偏移）。
+* **全局跨库**：复用阶段 5 MiniSearch 索引，结果面板展示「标题 + 上下文片段 + 行号」；可按「当前文件夹 / 全部 vault」筛选；搜索命中后可在左侧 `Sidebar.vue` 搜索框展开玉质「全局替换」区块（新增 `vault:replace` 通道），仅在命中文件范围内做字面量替换并写回磁盘（详见 §3.8）。
 * **选中统计**：选区变化时实时显示选区字数（喂给批次二统计）。
-* 入口：标题栏「更多 ⌄」下挂「查找」（Ctrl/Cmd+F 文件内；加 Shift 开全局），玻璃浮层。
+* 入口：`Ctrl/Cmd+F` 聚焦左侧搜索框（默认「本文档」范围，契合通用语义；无打开文档时落「全部」）；`F3` / `Shift+F3` 循环导航。
 
 ### 3.3 版本快照 + 写作统计
 
@@ -89,7 +89,7 @@
 
 > **进度（2026-08-30）**：**导出格式全集已落地（9 种）** —— Markdown / 纯文本 / HTML / PDF / LaTeX / Word(docx) / EPUB / RTF / ODT，全部纯 JS / WASM 实现，**不依赖 pandoc 等外部二进制**。其中 docx / epub / rtf / odt 为二进制格式：在渲染进程序列化为字节，经 IPC 以 base64 传给主进程精确写盘（`ExportPayload.binaryBase64`）。HTML / PDF / LaTeX 增强、导出范围（整篇 / 选中）、图片内联策略、Mermaid 转内嵌 SVG、通用写盘 IPC 均已就绪。
 
-* **docx**：✅ **已实现（2026-08-30，2026-08-30 晚修正）**。初版用 `html-to-docx@1.8.0`，但其在**模块顶层** `import crypto/fs/path/zlib/stream/http/url/https/events/util` 一整条 Node 内置模块，Vite 打包时 externalize 成浏览器空壳，渲染进程启动即崩 → **整窗漆黑、什么都不渲染**（Node 里烟雾测试能过是因为 Node 自带这些模块，浏览器没有）。**已弃用该包**，改用 `jszip` **手写 OOXML**（`src/export/docx.ts`）：手工拼装 `word/document.xml` / `styles.xml`（Normal + Heading1–6 + Quote + Code）/ `numbering.xml`（多级有序·无序列表）/ `_rels` / `[Content_Types].xml` / `docProps`，标题/段落/粗斜体/下划线/链接/有序无序列表（含嵌套）/引用/代码块/表格/图片（PNG 经 canvas 光栅化嵌入）/超链接齐全。取规范化 HTML 的 `<article>` 内层 → Mermaid `<svg>` 光栅化为 PNG → 拼装 DOCX 包。*已知边界*：LaTeX 公式转 OMML 或静态图、脚注转尾注尚未做，公式以图片/占位呈现。
+* **docx**：✅ **已实现（2026-08-30，2026-08-30 晚修正）**。初版用 `html-to-docx@1.8.0`，但其在**模块顶层** `import crypto/fs/path/zlib/stream/http/url/https/events/util` 一整条 Node 内置模块，Vite 打包时 externalize 成浏览器空壳，渲染进程启动即崩 → **整窗漆黑、什么都不渲染**（Node 里烟雾测试能过是因为 Node 自带这些模块，浏览器没有）。**已弃用该包**，改用 `jszip` **手写 OOXML**（`src/export/docx.ts`）：手工拼装 `word/document.xml` / `styles.xml`（Normal + Heading1–6 + Quote + Code）/ `numbering.xml`（多级有序·无序列表）/ `_rels` / `[Content_Types].xml` / `docProps`，标题/段落/粗斜体/下划线/链接/有序无序列表（含嵌套）/引用/代码块/表格/图片（PNG 经 canvas 光栅化嵌入）/超链接齐全。取规范化 HTML 的 `<article>` 内层 → Mermaid `<svg>` 光栅化为 PNG → 拼装 DOCX 包。*已知边界*：LaTeX 公式转静态图已由 MathJax SVG → PNG 光栅化覆盖（所见即所得主路径，导出 HTML 中公式为自包含 `<svg>`，`rasterizeSvgToImg` 统一转 PNG 嵌入 DOCX/RTF/ODT）；脚注转 Word 脚注已于 2026-09-01 实现（markdown 脚注 → `word/footnotes.xml`，正文引用 → `<w:footnoteReference>`，节末列注）。
 * **ePub**：✅ **已实现（2026-08-30）**。`src/export/epub.ts` 用 **`jszip@3.10.1`** 手写 EPUB3：`mimetype` 须 STORE 且为首个条目；含 `META-INF/container.xml`、`OEBPS/content.opf`（含 nav properties）、`nav.xhtml`（按标题层级缩进的目录）、`style.css`、`section-001.xhtml`（内联 SVG 保留 Mermaid 图表）、内联图片（`data:` → `OEBPS/images/`）。
 * **RTF**：✅ **已实现（2026-08-30）**。`src/export/rtf.ts` **零依赖**手工生成 RTF 1.9：`\ansicpg936` + `\lang2052` 支持中文；覆盖标题 / 段落 / 粗斜体 / 下划线 / 链接（HYPERLINK field）/ 列表 / 引用 / 代码 / 图片（`\pngblip` 十六进制）/ 表格（降级为制表符分隔）。Mermaid `<svg>` 先光栅化为 PNG 再嵌入。非 ASCII 走 `\u` 带符号 16 位转义（≥ U+8000 的码点转负值、辅助平面拆代理对），保证严格 RTF 解析器可读。
 * **ODT**：✅ **已实现（2026-08-30）**。`src/export/odt.ts` 用 **`jszip@3.10.1`** 手写 OpenDocument 1.2：含 `content.xml` / `styles.xml`（内嵌 `STYLES_XML`，Heading1–6 / Quote / code / bold / italic / underline / mono）/ `meta.xml` / `manifest.xml` / `Pictures/`；标题引用 `Heading1–6` 段落样式，Mermaid `<svg>` 先光栅化为 PNG 嵌入。
@@ -110,7 +110,7 @@
 * **依赖约束**：二进制格式仅新增纯 JS 依赖 **`jszip@3.10.1`**（EPUB / ODT / DOCX 打包），无 node-gyp / fs / path 引用，可在 sandbox 渲染进程直接打包，不触碰「禁编译型依赖」红线；RTF 为零依赖手写。曾经引入的 `html-to-docx` 因其模块顶层 import 一整条 Node 内置模块、在浏览器打包后被 externalize 成空壳并导致渲染进程启动即崩（整窗漆黑），**已移除**。全部格式仍 **不依赖 pandoc 等外部二进制**。
 * **UI**：✅ 导出菜单由 `TitleMenu` 的 `MenuEntry.separatorTitle` 分组为「文本（Markdown / 纯文本）/ 排版·网页（HTML / PDF / LaTeX）/ 办公·电子书（Word / EPUB / RTF / ODT）」三段，下接四个开关（自动目录 / 封面页 / 图片内联 / 仅选中范围）+ 多文件合订入口；合订面板 `CompilePanel.vue` 的格式下拉同步 9 选项；未新增组件。元信息由批次二属性面板的 frontmatter 供给。
 * **IPC 收敛**：`export:html` 升级为通用 `export:file`（content + defaultName + filters），HTML 与 LaTeX 共用一条写盘通道，避免逐格式加通道的冗余；新增 `file:readBase64` 供图片内联。
-* **本机验证状态（2026-08-30）**：9 种格式代码均已实现并通过 `typecheck` / `build`，但用户本机缺对应验证软件（Word / EPUB 阅读器 / LibreOffice 等），**产物正确性尚未在本机运行期验证**。导出管道已全链路加异常兜底、预览浮层 / 系统保存框 / 原生主题同步均已打磨，待用户本机具备对应软件后逐项验收。
+* **本机验证状态（2026-09-01 更新）**：9 种格式代码均已实现并通过 `typecheck` / `build`。2026-09-01 新增一次性产物结构自检（esbuild 打包真实序列化代码 + jsdom DOM 全局 + JSZip 解包校验），对 docx / epub / odt / rtf 四种二进制格式跑通代表性文档（含标题 / 列表 / 表格 / 引用 / 代码 / 链接 / 图片 / 脚注），断言 zip 必备部件齐全、`[Content_Types].xml` 正确、各 XML 良构、docx 脚注 `word/footnotes.xml` 与 `document.xml` 引用一致——**全部 PASS**，产物结构正确性已验证；文本类（md / txt / latex / html / pdf）为非脆弱纯文本 / HTML，由 typecheck 与导出全链路异常兜底保障。脚本为临时验证用，验证后已删除。
 
 ### 3.5 凝神模式 = 打字机 + 专注/禅 融合
 

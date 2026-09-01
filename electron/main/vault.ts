@@ -232,11 +232,23 @@ async function searchInFile(
   return hits
 }
 
-/** 构造行级匹配正则：转义 + 全词边界 + 大小写开关（仅判定命中，用非全局标志） */
-function buildSearchRegex(query: string, opts?: SearchOptions): RegExp {
+/**
+ * 构造匹配正则。默认仅判定命中（非全局标志）；global=true 时带 'g' 供 replaceInVault 整文替换。
+ * - 默认模式：转义 query + 全词边界 + 大小写开关；
+ * - regex 模式：query 直接作为正则表达式（非法时降级为转义字面量，避免整次搜索失败）。
+ */
+function buildSearchRegex(query: string, opts?: SearchOptions, global = false): RegExp {
+  const flags = (opts?.caseSensitive ? '' : 'i') + (global ? 'g' : '')
+  if (opts?.regex) {
+    try {
+      return new RegExp(query, flags)
+    } catch {
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return new RegExp(escaped, flags)
+    }
+  }
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = opts?.wholeWord ? `\\b${escaped}\\b` : escaped
-  const flags = opts?.caseSensitive ? '' : 'i'
   try {
     return new RegExp(pattern, flags)
   } catch {
@@ -321,10 +333,8 @@ export async function replaceInVault(
     targets = results.map((r) => r.path)
   }
 
-  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pattern = opts?.wholeWord ? `\\b${escaped}\\b` : escaped
-  const flags = opts?.caseSensitive ? 'g' : 'gi'
-  const re = new RegExp(pattern, flags)
+  // 复用主搜索正则构造（含 regex 模式支持），全局标志供整文替换
+  const re = buildSearchRegex(q, opts, true)
 
   let replaced = 0
   let files = 0

@@ -7,6 +7,7 @@ export interface SourceFindState {
   query: string
   caseSensitive: boolean
   wholeWord: boolean
+  regex?: boolean
   currentLine?: number
 }
 
@@ -16,7 +17,7 @@ export const setSourceFind = StateEffect.define<SourceFindState | null>()
 /** 扫描整篇文档，给每个命中区间打上 .cm-find；当前结果所在行的命中额外加 .cm-find--current */
 function buildDecos(state: EditorState, st: SourceFindState): DecorationSet {
   if (!st.query) return Decoration.none
-  const re = buildRegex(st.query, st.caseSensitive, st.wholeWord)
+  const re = buildRegex(st.query, st.caseSensitive, st.wholeWord, st.regex)
   const doc = state.doc
   const marks: Range<Decoration>[] = []
   for (let i = 1; i <= doc.lines; i++) {

@@ -169,7 +169,7 @@ async function onOpenResult(payload: { path: string; line: number }): Promise<vo
 /** 源码模式命中高亮：把侧栏搜索状态（query/选项/当前行）转交给编辑器，复用统一搜索逻辑 */
 function onFindHighlight(payload: {
   query: string
-  opts: { caseSensitive: boolean; wholeWord: boolean }
+  opts: { caseSensitive: boolean; wholeWord: boolean; regex?: boolean }
   currentLine?: number
 } | null): void {
   if (payload) host.value?.setFindHighlight(payload.query, payload.opts, payload.currentLine)
@@ -268,6 +268,13 @@ function onKeydown(e: KeyboardEvent): void {
   if (e.key.toLowerCase() === 'f' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault()
     sidebarRef.value?.focusSearch()
+    return
+  }
+  // F3 / Shift+F3：上一处 / 下一处搜索命中（侧栏搜索循环导航）
+  if (e.key === 'F3') {
+    e.preventDefault()
+    if (e.shiftKey) sidebarRef.value?.prevHit()
+    else sidebarRef.value?.nextHit()
     return
   }
   // Esc 状态机（凝神 2.0）：设置面板开着先关面板；否则凝神中 Esc = 掀帘/收帘（轻退栏可在设置中关闭）。

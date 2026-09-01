@@ -45,7 +45,7 @@ const emit = defineEmits<{
   /** 双范围命中高亮状态：有查询且已打开文档时把 query/选项/当前行交给编辑器（源码 + 所见即所得两端高亮） */
   (e: 'find-highlight', payload: {
     query: string
-    opts: { caseSensitive: boolean; wholeWord: boolean }
+    opts: { caseSensitive: boolean; wholeWord: boolean; regex?: boolean }
     currentLine?: number
   } | null): void
 }>()
@@ -78,11 +78,41 @@ const isSearching = ref(false)
 const searchResults = ref<SearchFileResult[]>([])
 const caseSensitive = ref(false)
 const wholeWord = ref(false)
+const useRegex = ref(false)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 /** 当前结果高亮所在行（点结果时更新，用于源码模式强化当前命中）；undefined 表示无 */
 const currentFindLine = ref<number | undefined>(undefined)
+
+/** 跨文件扁平化全部命中，供「第 N / 共 M」计数与循环导航 */
+const flatHits = computed<{ path: string; line: number }[]>(() =>
+  searchResults.value.flatMap((f) => f.hits.map((h) => ({ path: f.path, line: h.line })))
+)
+/** 当前选中的命中序号（-1 表示未选）；导航与计数据此推进 */
+const currentIndex = ref(-1)
+
+/** 跳到指定命中并定位（打开文档 + 滚动到行 + 高亮当前命中），序号按列表长度取模实现循环 */
+function gotoHit(i: number): void {
+  const list = flatHits.value
+  if (!list.length) return
+  const idx = ((i % list.length) + list.length) % list.length
+  currentIndex.value = idx
+  const hit = list[idx]
+  currentFindLine.value = hit.line
+  syncFindHighlight()
+  onOpenResult(hit.path, hit.line)
+}
+
+/** 下一处 / 上一处（循环） */
+function nextHit(): void {
+  if (!flatHits.value.length) return
+  gotoHit(currentIndex.value < 0 ? 0 : currentIndex.value + 1)
+}
+function prevHit(): void {
+  if (!flatHits.value.length) return
+  gotoHit(currentIndex.value < 0 ? flatHits.value.length - 1 : currentIndex.value - 1)
+}
 
 /** 当前范围对应的检索文件：本文档范围传 activePath，全库范围不传（递归全库） */
 function scopeFile(): string | undefined {
@@ -99,7 +129,7 @@ function syncFindHighlight(): void {
   if (searchQuery.value.trim() && props.activePath) {
     emit('find-highlight', {
       query: searchQuery.value.trim(),
-      opts: { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
+      opts: { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
       currentLine: currentFindLine.value
     })
   } else {
@@ -120,7 +150,7 @@ async function executeSearch(): Promise<void> {
     searchResults.value = await window.api.searchVault(
       props.vaultPath,
       query,
-      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
+      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
       scopeFile()
     )
   } catch (e) {
@@ -140,8 +170,9 @@ function runSearch(): void {
 
 /** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑搜索并同步源码高亮 */
 watch(
-  [searchQuery, caseSensitive, wholeWord, searchScope, () => props.activePath, () => props.vaultPath],
+  [searchQuery, caseSensitive, wholeWord, useRegex, searchScope, () => props.activePath, () => props.vaultPath],
   () => {
+    currentIndex.value = -1
     runSearch()
     syncFindHighlight()
   }
@@ -173,7 +204,7 @@ async function doReplace(): Promise<void> {
       props.vaultPath,
       searchQuery.value,
       replaceQuery.value,
-      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value },
+      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
       scopeFile()
     )
     showToast(L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)))
@@ -237,7 +268,7 @@ function onSearchEnter(): void {
 
 const searchInput = ref<HTMLInputElement | null>(null)
 
-defineExpose({ focusSearch })
+defineExpose({ focusSearch, nextHit, prevHit })
 
 const vaultName = computed(() => {
   if (!props.vaultPath) return null
@@ -562,7 +593,7 @@ function startDrag(e: PointerEvent): void {
         </button>
       </div>
 
-      <!-- 选项行：区分大小写 / 全词匹配（双范围共用） -->
+      <!-- 选项行：区分大小写 / 全词匹配 / 正则（双范围共用） -->
       <div v-if="vaultPath && searchQuery.trim()" class="opts">
         <button
           class="chip"
@@ -583,6 +614,16 @@ function startDrag(e: PointerEvent): void {
           @click="wholeWord = !wholeWord"
         >
           <span class="chip__ww">⌗</span>
+        </button>
+        <button
+          class="chip"
+          type="button"
+          :class="{ on: useRegex }"
+          :title="L.regex"
+          :aria-pressed="useRegex"
+          @click="useRegex = !useRegex"
+        >
+          <span class="chip__rx">.*</span>
         </button>
       </div>
 
@@ -626,6 +667,33 @@ function startDrag(e: PointerEvent): void {
         </div>
       </template>
 
+      <!-- 命中计数 + 循环导航（双范围共用）：第 N / M，上一处 / 下一处 -->
+      <div v-if="searchQuery.trim() && totalHits > 0" class="nav">
+        <button
+          class="nav__btn"
+          type="button"
+          :title="L.findPrev"
+          :aria-label="L.findPrev"
+          @click="prevHit"
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M9 3L5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="nav__count">{{ L.findCount.replace('{n}', String(currentIndex >= 0 ? currentIndex + 1 : 0)).replace('{m}', String(totalHits)) }}</span>
+        <button
+          class="nav__btn"
+          type="button"
+          :title="L.findNext"
+          :aria-label="L.findNext"
+          @click="nextHit"
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
       <!-- 结果区：双范围统一渲染（本文档范围隐藏文件名分组头） -->
       <template v-if="searchQuery.trim()">
         <div v-if="searchScope === 'doc' && !activePath" class="hint">{{ L.scopeDocHint }}</div>
@@ -636,6 +704,7 @@ function startDrag(e: PointerEvent): void {
             :results="searchResults"
             :query="searchQuery"
             :case-sensitive="caseSensitive"
+            :regex="useRegex"
             :active-path="activePath"
             :single-file="searchScope === 'doc'"
             @open="onOpenResult"
@@ -1210,6 +1279,60 @@ function startDrag(e: PointerEvent): void {
 .chip__ww {
   font-size: 13px;
   line-height: 1;
+}
+
+.chip__rx {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 命中计数 + 循环导航条 */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle, rgba(127, 127, 127, 0.06));
+}
+
+.nav__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-2);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.nav__btn:hover {
+  color: var(--hue-text-1);
+  background: var(--bg-hover);
+}
+
+.nav__btn:active {
+  color: var(--hue-accent);
+  border-color: var(--hue-accent);
+}
+
+.nav__count {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hue-text-2);
+  user-select: none;
 }
 
 /* 操作失败提示：固定在侧栏底部，自动消失 */

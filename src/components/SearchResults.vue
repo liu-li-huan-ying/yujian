@@ -14,6 +14,8 @@ const props = defineProps<{
   activePath: string | null
   /** 是否区分大小写（高亮规则与搜索保持一致） */
   caseSensitive?: boolean
+  /** 是否正则模式（高亮按正则匹配，与搜索一致；默认 false 按字面量） */
+  regex?: boolean
   /** 单文件范围（左侧「本文档」）：隐藏文件名分组头，只列出命中行 */
   singleFile?: boolean
 }>()
@@ -33,7 +35,18 @@ function highlight(text: string): string {
   const q = escapeXml(props.query).trim()
   if (!q) return safe
   const flags = props.caseSensitive ? 'g' : 'gi'
-  const re = new RegExp(escapeRegExp(q), flags)
+  let re: RegExp
+  if (props.regex) {
+    // 正则模式：用原始 query 构造正则（匹配片段 m 来自已转义文本 safe，XSS 仍被阻止）；
+    // 若用户正则非法则降级为字面量匹配，避免整次高亮失败
+    try {
+      re = new RegExp(props.query, flags)
+    } catch {
+      re = new RegExp(escapeRegExp(q), flags)
+    }
+  } else {
+    re = new RegExp(escapeRegExp(q), flags)
+  }
   return safe.replace(re, (m) => `<mark>${m}</mark>`)
 }
 

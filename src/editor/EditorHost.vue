@@ -431,7 +431,7 @@ function currentLineTextOf(line?: number): string | undefined {
 
 function setFindHighlight(
   query?: string,
-  opts?: { caseSensitive?: boolean; wholeWord?: boolean },
+  opts?: { caseSensitive?: boolean; wholeWord?: boolean; regex?: boolean },
   currentLine?: number
 ): void {
   lastFind = query && query.trim() ? { query: query.trim(), opts, currentLine } : null
@@ -441,6 +441,7 @@ function setFindHighlight(
       query: query.trim(),
       caseSensitive: opts?.caseSensitive ?? false,
       wholeWord: opts?.wholeWord ?? false,
+      regex: opts?.regex ?? false,
       currentLine,
       currentLineText: currentLineTextOf(currentLine)
     })
