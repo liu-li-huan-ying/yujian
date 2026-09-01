@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
+import Icon from './components/Icon.vue'
 import Sidebar from './components/Sidebar.vue'
 import EditorHost from './editor/EditorHost.vue'
 import ImgHostSettings from './components/ImgHostSettings.vue'
@@ -11,6 +12,9 @@ import HelpPanel from './components/HelpPanel.vue'
 import TabBar from './components/TabBar.vue'
 import SnapshotPanel from './components/SnapshotPanel.vue'
 import LinkCheckPanel from './components/LinkCheckPanel.vue'
+import IntegrityPanel from './components/IntegrityPanel.vue'
+import BackupPanel from './components/BackupPanel.vue'
+import ConflictDialog from './components/ConflictDialog.vue'
 import WritingAidsPanel from './components/WritingAidsPanel.vue'
 import StatsPopover from './components/StatsPopover.vue'
 import ZenRetreatBar from './components/ZenRetreatBar.vue'
@@ -20,7 +24,7 @@ import CompilePanel from './components/CompilePanel.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
-import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult, ExportPayload } from '../electron/shared/ipc-channels'
+import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult, ExportPayload, IntegrityReport } from '../electron/shared/ipc-channels'
 import { inlineImages } from './export/imageInline'
 import { parseFrontmatter } from './editor/frontmatter'
 import { type ExportKind } from './export/types'
@@ -220,9 +224,98 @@ function closeToRight(path: string): void {
 
 let treeTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * 外部修改冲突检测：当笔记库里「当前正在编辑」的文档被玉笺之外（别的编辑器 / Git 切分支 /
+ * 资源管理器改名）改写时，若磁盘内容与编辑器内存内容不同，弹出三选一对话框，绝不静默覆盖。
+ * - 自己的保存回声：磁盘 == 内存（我们刚写过的内容）→ 直接忽略，不误报。
+ * - 任意有意重写磁盘的操作（保存 / 恢复备份）后，用 conflictSuppressUntil 抑制一段窗口，
+ *   避免自身的 change 事件再次触发冲突误报。
+ */
+let conflictSuppressUntil = 0
+function isConflictSuppressed(): boolean {
+  return Date.now() < conflictSuppressUntil
+}
+
+async function detectConflict(path: string): Promise<void> {
+  if (isConflictSuppressed() || conflictOpen.value) return
+  try {
+    const disk = await window.api.readFile(path)
+    const mine = host.value?.getMarkdown() ?? ''
+    // 归一化换行，避免 CRLF / LF 差异造成误报
+    const norm = (s: string): string => s.replace(/\r\n/g, '\n')
+    if (norm(disk) === norm(mine)) return // 这是自己的保存回声，忽略
+    // 确有外部改动且与内存不同 → 取消待执行的自动保存，避免 800ms 后把外部改动覆盖掉
+    host.value?.cancelPendingSave()
+    const st = await window.api.statFile(path).catch(() => null)
+    conflict.value = {
+      path,
+      mine,
+      disk,
+      diskMtime: st?.exists ? st.mtimeMs : null
+    }
+    conflictOpen.value = true
+  } catch {
+    // 读不到磁盘内容：不处理
+  }
+}
+
+function siblingMinePath(p: string): string {
+  const dot = p.lastIndexOf('.')
+  const slash = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+  if (dot > slash && dot >= 0) return p.slice(0, dot) + '.mine' + p.slice(dot)
+  return p + '.mine'
+}
+
+function finishConflict(): void {
+  conflictOpen.value = false
+  conflict.value = null
+}
+
+function onConflictKeepMine(): void {
+  if (!conflict.value) return
+  conflictSuppressUntil = Date.now() + 5000
+  // 覆盖外部改动：把内存中的「我的版本」写回磁盘（朗读保真、不丢字）
+  void host.value?.save()
+  finishConflict()
+}
+
+async function onConflictUseDisk(): Promise<void> {
+  if (!conflict.value) return
+  conflictSuppressUntil = Date.now() + 5000
+  await host.value?.load(conflict.value.path).catch(() => {})
+  finishConflict()
+}
+
+async function onConflictKeepBoth(): Promise<void> {
+  if (!conflict.value) return
+  const c = conflict.value
+  conflictSuppressUntil = Date.now() + 5000
+  const minePath = siblingMinePath(c.path)
+  try {
+    await window.api.writeFile(minePath, c.mine)
+  } catch {
+    /* 另存失败不阻断：仍载入磁盘版本 */
+  }
+  await host.value?.load(c.path).catch(() => {})
+  const base = minePath.split(/[\\/]/).pop() ?? minePath
+  showToast(U.backupConflictBothSaved.replace('{p}', base), 'ok')
+  finishConflict()
+}
+
+/** 恢复备份：重载当前文档以反映磁盘最新内容，并抑制「外部修改」误报 */
+function onBackupRestored(): void {
+  conflictSuppressUntil = Date.now() + 5000
+  if (filePath.value) void host.value?.load(filePath.value).catch(() => {})
+}
+
 function onVaultChange(change: VaultChange): void {
-  // 内容变化不改变树结构，忽略 —— 否则每次自动保存都会触发一次全量重扫
-  if (change.kind === 'change') return
+  // 内容变化：仅对「当前正在编辑」的文档做冲突检测；其他文件改动不影响当前编辑，忽略
+  if (change.kind === 'change') {
+    if (change.path === filePath.value && filePath.value) {
+      void detectConflict(change.path)
+    }
+    return
+  }
 
   // 当前文档被外部删除：关掉该标签并载入相邻文档
   if (change.kind === 'unlink' && change.path === filePath.value) {
@@ -379,7 +472,12 @@ const outlineVisible = ref(true)
 const snapshots = useSnapshotsStore()
 const snapshotOpen = ref(false)
 const linkCheckOpen = ref(false)
+const integrityOpen = ref(false)
+const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
+const lastIntegrityReport = ref<IntegrityReport | null>(null)
+const conflict = ref<{ path: string; mine: string; disk: string; diskMtime: number | null } | null>(null)
+const conflictOpen = ref(false)
 const statsOpen = ref(false)
 const focusMode = ref(false)
 /** 写作目标字数（会话级持久化；0 = 未设） */
@@ -452,6 +550,21 @@ function onEditorClick(): void {
 /** 打开/关闭统计弹层 */
 function onToggleStats(): void {
   statsOpen.value = !statsOpen.value
+}
+
+/** 打开完整性自检浮层（标题栏「更多」入口） */
+function onIntegrity(): void {
+  integrityOpen.value = true
+}
+
+/** 打开整库备份 / 恢复浮层（标题栏「更多」入口） */
+function onBackup(): void {
+  backupOpen.value = true
+}
+
+/** 自检浮层回报结果：状态栏据此展示告警标记（点击重开浮层） */
+function onIntegrityReport(report: IntegrityReport | null): void {
+  lastIntegrityReport.value = report
 }
 
 /** 恢复快照：读取内容灌入编辑器并标脏（主进程只读返回，不写盘，守保真红线） */
@@ -865,6 +978,8 @@ onBeforeUnmount(() => {
       @preferences="onPreferences"
       @zen-settings="onZenSettings"
       @link-check="linkCheckOpen = true"
+      @integrity="onIntegrity"
+      @backup="onBackup"
       @writing-aids="writingAidsOpen = true"
       @save="saveFile"
       @save-as="saveFileAs"
@@ -938,6 +1053,32 @@ onBeforeUnmount(() => {
           @open="onOpenBrokenLink"
         />
 
+        <IntegrityPanel
+          v-if="integrityOpen"
+          :vault-path="vaultPath"
+          @close="integrityOpen = false"
+          @report="onIntegrityReport"
+        />
+
+        <BackupPanel
+          v-if="backupOpen"
+          :vault-path="vaultPath"
+          @close="backupOpen = false"
+          @after-restore="onBackupRestored"
+        />
+
+        <ConflictDialog
+          v-if="conflictOpen"
+          :open="conflictOpen"
+          :path="conflict?.path ?? null"
+          :mine="conflict?.mine ?? ''"
+          :disk="conflict?.disk ?? ''"
+          :disk-mtime="conflict?.diskMtime ?? null"
+          @keep-mine="onConflictKeepMine"
+          @use-disk="onConflictUseDisk"
+          @keep-both="onConflictKeepBoth"
+        />
+
         <WritingAidsPanel
           v-if="writingAidsOpen"
           :current-text="host?.getMarkdown() ?? ''"
@@ -981,6 +1122,16 @@ onBeforeUnmount(() => {
           <button class="stat-chip" type="button" @click="onToggleStats" :title="U.stats">
             {{ stats.han }}<i class="u">{{ U.unitHan }}</i> · {{ stats.words }}<i class="u">{{ U.unitWord }}</i> ·
             {{ stats.readingMinutes }}<i class="u">{{ U.unitMin }}</i>
+          </button>
+          <button
+            v-if="lastIntegrityReport && lastIntegrityReport.total > 0"
+            class="warn-chip"
+            type="button"
+            :title="U.integrity"
+            @click="integrityOpen = true"
+          >
+            <Icon name="alert" :size="12" />
+            {{ lastIntegrityReport.total }}
           </button>
           <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
             {{ localeLabel }}
@@ -1146,6 +1297,29 @@ onBeforeUnmount(() => {
   font-size: 10px;
   opacity: 0.7;
   margin-left: 1px;
+}
+
+.warn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(var(--hue-mark), 0.6);
+  background: rgba(var(--hue-mark), 0.14);
+  color: rgb(var(--hue-mark));
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.3;
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.warn-chip:hover {
+  background: rgba(var(--hue-mark), 0.26);
 }
 
 .dot {

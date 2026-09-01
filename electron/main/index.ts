@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from 'electron'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -18,10 +18,14 @@ import {
   type SnapshotInfo,
   type VaultChange,
   type WindowState,
-  type SearchOptions
+  type SearchOptions,
+  type IntegrityAction,
+  type FileStat
 } from '../shared/ipc-channels'
 import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
 import * as VaultIndex from './vaultIndex'
+import * as VaultIntegrity from './vaultIntegrity'
+import * as VaultBackup from './vaultBackup'
 import { patchSession, readSession } from './session'
 import { saveAsset } from './assets'
 import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
@@ -228,6 +232,16 @@ function registerIpc(): void {
     readFile(filePath, 'utf-8')
   )
 
+  /** 文件元信息：mtime / 字节数（冲突检测展示磁盘修改时间）。不存在时 exists:false */
+  ipcMain.handle(IPC.FILE_STAT, async (_event, filePath: string): Promise<FileStat> => {
+    try {
+      const s = await stat(filePath)
+      return { exists: true, mtimeMs: s.mtimeMs, size: s.size }
+    } catch {
+      return { exists: false, mtimeMs: 0, size: 0 }
+    }
+  })
+
   // 读二进制为 data URL（导出内联图片）；未知扩展名兜底为通用二进制类型
   ipcMain.handle(
     IPC.FILE_READ_BASE64,
@@ -326,6 +340,31 @@ function registerIpc(): void {
     await VaultIndex.saveIndex(root, built)
     return { ok: true, files: Object.keys(built.files).length }
   })
+
+  // 完整性自检：扫描索引/磁盘不一致、孤儿快照、缺失附件、断链（详见 vaultIntegrity.ts）。
+  ipcMain.handle(IPC.VAULT_INTEGRITY_CHECK, async (_event, root: string) =>
+    VaultIntegrity.runIntegrityCheck(root)
+  )
+
+  // 一键修复：重建索引 / 删除孤儿快照（破坏性动作由前端二次确认后传入）。
+  ipcMain.handle(
+    IPC.VAULT_INTEGRITY_REPAIR,
+    async (_event, root: string, actions: string[]) =>
+      VaultIntegrity.repairIntegrity(root, actions as IntegrityAction[])
+  )
+
+  // 整库备份：打包为 zip 到用户选定的目标路径（排除 .mdeditor 缓存）。
+  ipcMain.handle(
+    IPC.VAULT_BACKUP,
+    async (_event, root: string, destZip: string) => VaultBackup.backupVault(root, destZip)
+  )
+
+  // 整库恢复：从 zip 解包到目标根（默认当前 vault 根，覆盖同名文件；含 zip-slip 防护）。
+  ipcMain.handle(
+    IPC.VAULT_RESTORE,
+    async (_event, zipPath: string, targetRoot: string) =>
+      VaultBackup.restoreVault(zipPath, targetRoot)
+  )
 
   // ── 会话持久化（崩溃恢复）──
 
