@@ -27,6 +27,8 @@ const emit = defineEmits<{
   (e: 'mode-change', mode: EditorMode): void
   /** 图片落盘失败（源码/所见即所得任一端）：透传给 App 弹 toast */
   (e: 'error'): void
+  /** 点击编辑器内 [[wikilink]] 芯片：透传目标与锚点，由 App 解析并跳转/创建 */
+  (e: 'wikilink', payload: { target: string; anchor?: string | null }): void
 }>()
 
 const fidelity = useFidelity()
@@ -611,6 +613,7 @@ defineExpose({
         :vault-path="props.vaultPath"
         @update:model-value="onWysiwygUpdate"
         @ready="onReady"
+        @wikilink="(p) => emit('wikilink', p)"
       />
     </div>
 

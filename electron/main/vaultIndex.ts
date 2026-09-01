@@ -1,6 +1,6 @@
 import { access, mkdir, readFile, readdir, rename, stat, writeFile, rm } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
-import type { SearchOptions } from '../shared/ipc-channels'
+import type { SearchOptions, BacklinkItem } from '../shared/ipc-channels'
 
 /**
  * 统一 vault 索引层 —— 整个 Phase 3 的地基。
@@ -357,6 +357,93 @@ export function removeFileFromIndex(index: VaultIndex, absPath: string): void {
       if (index.backLinks[prev].length === 0) delete index.backLinks[prev]
     }
   }
+}
+
+/* ── 双链查询（批次二） ── */
+
+/** 由索引的 files 键（绝对路径）构建「基名/相对路径 → 绝对路径」映射，用于解析 wikilink 目标 */
+function buildIndexPathMaps(
+  index: VaultIndex,
+  root: string
+): { byBase: Map<string, string>; byRel: Map<string, string> } {
+  const byBase = new Map<string, string>()
+  const byRel = new Map<string, string>()
+  for (const full of Object.keys(index.files)) {
+    const base = basename(full, extname(full)).toLowerCase()
+    if (!byBase.has(base)) byBase.set(base, full)
+    const rel = relative(root, full)
+      .replace(/\.(md|markdown)$/i, '')
+      .split(/[\\/]/)
+      .join('/')
+      .toLowerCase()
+    if (!byRel.has(rel)) byRel.set(rel, full)
+  }
+  return { byBase, byRel }
+}
+
+/** 把 wikilink 原始目标解析为 vault 内绝对路径；找不到返回 null */
+export function resolveTarget(index: VaultIndex, root: string, target: string): string | null {
+  const key = target.replace(/^\.\//, '').replace(/\.(md|markdown)$/i, '')
+  if (!key) return null
+  const { byBase, byRel } = buildIndexPathMaps(index, root)
+  if (key.includes('/')) return byRel.get(key.toLowerCase()) ?? null
+  return byBase.get(basename(key).toLowerCase()) ?? null
+}
+
+/** 加载索引；缺失或损坏则静默全量重建（索引是缓存，绝不应因此弹错） */
+async function ensureIndex(root: string): Promise<VaultIndex> {
+  const idx = await loadIndex(root)
+  if (idx) return idx
+  const built = await buildIndex(root)
+  await saveIndex(root, built)
+  return built
+}
+
+/** 解析 wikilink 目标为绝对路径（供编辑器点击跳转 / 一键创建目标笔记） */
+export async function resolveWikiTarget(root: string, target: string): Promise<string | null> {
+  const index = await ensureIndex(root)
+  return resolveTarget(index, root, target)
+}
+
+/**
+ * 反链面板数据：哪些笔记链接到 `absPath`，并附引用所在行的上下文片段。
+ * 直接消费索引已派生的 `backLinks`（目标已是绝对路径），再回读来源文件抽取引用行。
+ */
+export async function getBacklinksWithContext(
+  root: string,
+  absPath: string
+): Promise<BacklinkItem[]> {
+  const index = await ensureIndex(root)
+  const sources = index.backLinks[absPath] ?? []
+  const out: BacklinkItem[] = []
+  const re = /\[\[([^\]\n]+?)\]\]/g
+  for (const src of sources) {
+    let content: string
+    try {
+      content = await readFile(src, 'utf-8')
+    } catch {
+      continue
+    }
+    const lines = content.split(/\r?\n/)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      re.lastIndex = 0
+      let m: RegExpExecArray | null
+      let hit = false
+      while ((m = re.exec(line)) !== null) {
+        const t = m[1].trim().split('|')[0].split('#')[0].trim()
+        if (resolveTarget(index, root, t) === absPath) {
+          hit = true
+          break
+        }
+      }
+      if (hit) {
+        out.push({ path: src, line: i + 1, snippet: line.trim().slice(0, 200) })
+        break
+      }
+    }
+  }
+  return out
 }
 
 /* ── 持久化（原子写，沿用项目 temp+rename 优势，避免多文件非原子写） ── */

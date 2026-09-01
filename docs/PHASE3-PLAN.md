@@ -1,6 +1,6 @@
 # 玉笺 Phase 3 开发计划（个人知识库方向）
 
-> 状态：**批次零已落地，批次一已完成（2026-09-01）**。基线 v1.1.0（2026-09-01 发布，三平台 CI 打通），Phase 2 三批次全落地。批次二~五待启动。
+> 状态：**批次零已落地，批次一已完成（2026-09-01），批次二已落地（2026-09-02）**。基线 v1.1.0（2026-09-01 发布，三平台 CI 打通），Phase 2 三批次全落地。批次三~五待启动。
 > 定位升级：从「技术写作型 Markdown 编辑器」向「**个人知识库（PKM）**」拓展——双链 / 标签 / 关系图谱（对应 `docs/ARCHITECTURE.md` §1.2 P3 与 `docs/PHASE2-PLAN.md` §8）。
 > **本文件是 Phase 3 的权威计划，新会话开发前必读。**
 
@@ -129,6 +129,14 @@ Phase 3 新增两条：
 * `src/components/BacklinksPanel.vue`：玻璃面板列「哪些笔记链接到当前笔记」+ **上下文片段** + 点击跳转；风格与断链面板一致（规格见 `docs/PHASE3-UI-DESIGN.md` §4.1）。
 * **未链接提及（unlinked mentions）**：扫 vault 内出现当前笔记标题/别名但**未加 `[[ ]]`** 的位置，在反链面板单列一组，支持一键包裹成双链。
 * 断链检查（`checkLinks`）接入索引：wikilink 目标不存在时提供「一键创建」入口。
+
+**本批次已落地（2026-09-02）**：
+
+* `src/editor/features/wikilink.ts`：真节点 `wiki_link`（$nodeSchema + $remark 改写正文 `[[...]]` → mdast 节点 + $inputRule 敲 `]]` 即转节点）+ to-markdown handler 原样输出 `[[target]]` / `[[target|alias]]`，**往返保真**（红线 4/6）。
+* 点击跳转：`MilkdownEditor` 派发 `wikilink` 事件 → `EditorHost` 透传 → `App` 经 `resolveWikiTarget` 解析；目标存在则打开，不存在则 `createDoc` 一键创建并打开。
+* 反链面板 `src/components/BacklinksPanel.vue`：玻璃面板，消费索引 `backLinks` 经 `getBacklinksWithContext` 抽取「来源笔记 + 引用行 + 上下文片段」，点击跳转（`onOpenResult` 复用）；切文档 / 重命名后随索引自动刷新；风格与断链面板一致。标题栏「更多」新增「反链」入口（`Icon` 新增 `backlink`）。
+* i18n（zh-CN / en-US）新增 `backlinks*` / `wikilinkCreated` / `wikilinkOpenFail`；编辑器内芯片 `.yj-wikilink__label` 玉质药丸样式见 `src/styles/editor.css`。
+* **未实现（沿用原决策，留待收尾）**：`[[` 自动补全浮层、未链接提及（unlinked mentions）一键包裹、断链面板「一键创建」入口。重命名不自动更新 `[[引用]]`（见下方待决策）。
 
 > ⚠️ **待决策（重要）**：**重命名 / 移动笔记时是否自动更新所有 `[[引用]]`？**
 > * 做：体验好，但会**批量改写其他文件原文**（触碰红线 1 精神）；若做须先展示将被改写的清单并经用户确认。

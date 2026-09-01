@@ -314,6 +314,18 @@ const enUS = {
     linkCheckBreakdown: 'Wiki {w} · Link {l} · Image {i}',
     linkCheckLocate: 'Go to line {n}',
     linkCheckContext: 'Source line:',
+    /* ── Bidirectional links / backlinks panel (batch two: PKM core) ── */
+    backlinks: 'Backlinks',
+    backlinksTitle: 'Notes linking here',
+    backlinksEmpty: 'No backlinks yet — nothing links to this note',
+    backlinksScanning: 'Loading backlinks…',
+    backlinksNoVault: 'Open a vault first',
+    backlinksClose: 'Close',
+    backlinksRerun: 'Refresh',
+    backlinksHint: 'Click any backlink to jump to the referencing doc and line',
+    backlinksOf: 'Backlinks · {n}',
+    wikilinkOpenFail: 'Cannot open target note',
+    wikilinkCreated: 'Created note "{n}"',
     /* ── Integrity check (batch one: data security) ── */
     integrity: 'Integrity check',
     integrityRerun: 'Rescan',

@@ -23,7 +23,8 @@ import {
   type IntegrityReport,
   type RepairResult,
   type BackupResult,
-  type RestoreResult
+  type RestoreResult,
+  type BacklinkItem
 } from '../shared/ipc-channels'
 
 /**
@@ -128,6 +129,14 @@ const api = {
   /** 整库恢复：从 zip 解包到 targetRoot（默认当前 vault 根） */
   restoreVault: (zipPath: string, targetRoot: string): Promise<RestoreResult> =>
     ipcRenderer.invoke(IPC.VAULT_RESTORE, zipPath, targetRoot),
+
+  /** 双链：把 [[wikilink]] 目标解析为 vault 内绝对路径；找不到返回 null */
+  resolveWikiTarget: (root: string, target: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC.VAULT_RESOLVE_WIKILINK, root, target),
+
+  /** 双链：反链查询——哪些笔记链接到指定文档，附引用行上下文片段 */
+  getBacklinks: (root: string, absPath: string): Promise<BacklinkItem[]> =>
+    ipcRenderer.invoke(IPC.VAULT_GET_BACKLINKS, root, absPath),
 
   watchVault: (root: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_WATCH, root),

@@ -728,6 +728,46 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
+/* ── 双向链接芯片 [[wikilink]]（真节点，features/wikilink.ts 渲染）──
+   玉质药丸：青瓷透光底 + 纤细描边 + 居中标签，hover 浮现强调色高光，
+   与链接 / 行内代码 / 高亮同族但不抢眼；点击即跳转（缺失目标则一键创建）。 */
+.milkdown .ProseMirror .yj-wikilink {
+  display: inline;
+  white-space: normal;
+}
+.milkdown .ProseMirror .yj-wikilink__label {
+  display: inline;
+  font-family: var(--font-ui);
+  font-size: 0.92em;
+  color: var(--hue-accent);
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-tint-1), 0.18) 0%,
+    rgba(var(--hue-tint-1), 0.08) 100%
+  );
+  border: 1px solid rgba(var(--hue-tint-1), 0.34);
+  border-radius: 5px;
+  padding: 0.12em 0.42em;
+  margin: 0 0.04em;
+  cursor: pointer;
+  /* 拆词换行时每片仍是完整一枚芯片 */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-image var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.milkdown .ProseMirror .yj-wikilink__label:hover {
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-accent), 0.22) 0%,
+    rgba(var(--hue-accent), 0.1) 100%
+  );
+  border-color: var(--hue-accent);
+  color: var(--hue-accent);
+}
+
 /* ── 隐藏原生滚动条：交给右侧玉质阅读进度条统一指示，避免双指示破坏美感 ──
    例外：代码块内部 CodeMirror 超长时需独立滚动（max-height:70vh 兜底），
    恢复玉质细滚动条 ── */

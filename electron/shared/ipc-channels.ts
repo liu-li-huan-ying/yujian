@@ -43,6 +43,10 @@ export const IPC = {
   VAULT_BACKUP: 'vault:backup',
   // 笔记库：整库恢复（从 zip 解包）
   VAULT_RESTORE: 'vault:restore',
+  // 笔记库：解析 [[wikilink]] 目标为绝对路径（编辑器点击跳转 / 一键创建目标笔记）
+  VAULT_RESOLVE_WIKILINK: 'vault:resolveWikilink',
+  // 笔记库：反链查询（哪些笔记链接到当前笔记，含引用行上下文）
+  VAULT_GET_BACKLINKS: 'vault:getBacklinks',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -92,6 +96,16 @@ export interface DocMeta {
   path: string
   title: string
   updatedAt: number
+}
+
+/** 反链面板单条：某篇笔记链接到当前笔记的引用信息 */
+export interface BacklinkItem {
+  /** 来源文件绝对路径 */
+  path: string
+  /** 引用所在行号（从 1 开始） */
+  line: number
+  /** 引用所在行的上下文片段（已截断） */
+  snippet: string
 }
 
 export type EditorMode = 'wysiwyg' | 'source'
