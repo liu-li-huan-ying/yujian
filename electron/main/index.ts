@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import {
   IPC,
   type ExportPayload,
@@ -203,7 +204,8 @@ function registerIpc(): void {
   // 渲染层请求用系统默认浏览器打开外部链接（Ctrl/⌘+点击编辑器内链接跳转）。
   // 仅放行 http(s)，避免 file:// 或 javascript: 等被误打开。
   ipcMain.handle(IPC.APP_OPEN_EXTERNAL, (_event, url: string) => {
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+    // 只放行 http(s) 与 file://（用户自己的本地文件）——拒绝 javascript:/data:/vbscript: 等危险协议
+    if (typeof url === 'string' && (/^https?:\/\//i.test(url) || /^file:\/\//i.test(url))) {
       void shell.openExternal(url)
     }
   })
@@ -242,7 +244,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.FILE_WRITE, async (_event, filePath: string, content: string) => {
     // 先写临时文件再改名：写入中途崩溃也不会损坏原文
     const dir = dirname(filePath)
-    const tmp = join(dir, `.${Date.now()}.tmp`)
+    const tmp = join(dir, `.yujian-${randomUUID()}.tmp`)
     await mkdir(dir, { recursive: true })
     await writeFile(tmp, content, 'utf-8')
     await rename(tmp, filePath)
@@ -428,7 +430,7 @@ function registerIpc(): void {
       webPreferences: { sandbox: true }
     })
     // 落临时文件再 loadFile：避免超大文档超出 data: URL 长度上限
-    const tmp = join(tmpdir(), `.yujian-export-${Date.now()}.html`)
+    const tmp = join(tmpdir(), `.yujian-export-${randomUUID()}.html`)
     try {
       await writeFile(tmp, payload.content, 'utf-8')
       await win.loadFile(tmp)

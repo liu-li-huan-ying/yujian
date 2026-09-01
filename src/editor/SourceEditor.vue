@@ -18,7 +18,11 @@ const props = withDefaults(
   }>(),
   { filePath: null, vaultPath: null }
 )
-const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: string): void
+  /** 图片粘贴/拖入落盘失败（如磁盘不可写）：上报给上层弹 toast，避免静默无感知 */
+  (e: 'error'): void
+}>()
 
 const host = ref<HTMLDivElement | null>(null)
 let view: EditorView | null = null
@@ -90,6 +94,7 @@ async function handleImageFiles(files: File[], editor: EditorView): Promise<void
     })
   } catch (e) {
     console.error('图片保存失败', e)
+    emit('error')
   }
 }
 

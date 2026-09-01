@@ -153,8 +153,7 @@ function onRenamed(oldPath: string, newPath: string): void {
 /** 文件树里删除了当前正在编辑的文档 → 关闭该标签并载入相邻文档 */
 function onDeleted(path: string): void {
   if (path !== tabs.activePath) return
-  const wasActive = true
-  if (wasActive && host.value?.dirty) void host.value.save()
+  if (host.value?.dirty) void host.value.save()
   tabs.close(path)
   void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
   void syncEditorToActive()
@@ -500,6 +499,11 @@ function onInsertSnippet(text: string): void {
 /** 窄窗软收起：仅影响显示，不改持久偏好，加宽后恢复用户选择 */
 const sidebarShown = computed(() => sidebarVisible.value && windowWidth.value >= 460)
 const outlineShown = computed(() => outlineVisible.value && windowWidth.value >= 720)
+
+/** 编辑器图片落盘失败（粘贴/拖入图片磁盘不可写等）：明确告知用户，而非静默吞掉 */
+function onEditorError(): void {
+  showToast(U.toastImageSaveFail, 'err')
+}
 
 function onResize(): void {
   windowWidth.value = window.innerWidth
@@ -904,9 +908,10 @@ onBeforeUnmount(() => {
           :file-path="filePath"
           :vault-path="vaultPath"
           :requested-mode="requestedMode"
-          :lang-key="langVer"
-          @saved="lastSavedAt = Date.now()"
-        />
+        :lang-key="langVer"
+        @saved="lastSavedAt = Date.now()"
+        @error="onEditorError"
+      />
 
         <SnapshotPanel
           v-if="snapshotOpen"

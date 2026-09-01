@@ -92,6 +92,7 @@ const enUS = {
     toastImgHostPartialFail: ', {n} failed',
     toastImgHostPublishFail: 'Upload failed: ',
     toastImgHostNoImages: 'No local images in document',
+    toastImageSaveFail: 'Failed to save image, please check disk space or try again',
     imgHostSettingsTitle: 'Image Hosting Settings',
     imgHostClose: '×',
     imgHostService: 'Hosting Service',
