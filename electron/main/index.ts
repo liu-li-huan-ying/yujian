@@ -21,6 +21,7 @@ import {
   type SearchOptions
 } from '../shared/ipc-channels'
 import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
+import * as VaultIndex from './vaultIndex'
 import { patchSession, readSession } from './session'
 import { saveAsset } from './assets'
 import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
@@ -318,6 +319,13 @@ function registerIpc(): void {
   )
 
   ipcMain.handle(IPC.VAULT_CHECK_LINKS, async (_event, root: string) => checkLinks(root))
+
+  // 统一索引层：手动重建（自检 / 用户触发）。索引是「可重建缓存」，丢失本会静默自动重建，此通道供显式重建。
+  ipcMain.handle(IPC.VAULT_INDEX_REBUILD, async (_event, root: string) => {
+    const built = await VaultIndex.buildIndex(root)
+    await VaultIndex.saveIndex(root, built)
+    return { ok: true, files: Object.keys(built.files).length }
+  })
 
   // ── 会话持久化（崩溃恢复）──
 

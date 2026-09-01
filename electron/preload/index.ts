@@ -11,9 +11,9 @@ import {
   type ReadBase64Result,
   type SaveAssetPayload,
   type SavedAsset,
-  type SearchFileResult,
   type ReplaceResult,
   type SearchOptions,
+  type SearchResult,
   type SessionState,
   type SnapshotInfo,
   type BrokenLinkReport,
@@ -80,13 +80,13 @@ const api = {
 
   /** 全文搜索：在笔记库内检索 Markdown 文档内容，返回命中行。
       file 传入时只搜该单文件（左侧「本文档」范围），不传则递归全库（「全部」范围）。
-      opts 支持区分大小写 / 全词匹配；两种范围返回结构完全一致。 */
+      opts 支持区分大小写 / 全词匹配；返回含 `truncated` 表示结果因过多被截断。 */
   searchVault: (
     root: string,
     query: string,
     opts?: SearchOptions,
     file?: string
-  ): Promise<SearchFileResult[]> =>
+  ): Promise<SearchResult> =>
     ipcRenderer.invoke(IPC.VAULT_SEARCH, root, query, opts, file),
 
   /** 替换：在搜索命中的文件范围内把 query 全部替换为 replacement（匹配规则与 searchVault 一致）。

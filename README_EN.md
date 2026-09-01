@@ -48,7 +48,7 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 * **Auto-save + crash recovery** — edit state persisted to `userData/session.json`; last vault/doc restored on restart.
 * **External change sync** — a single chokidar watcher reflects edits/deletes from other programs in real time.
 * **Switch working folder** — the title-bar folder icon switches to another directory **without restarting**; current doc auto-saved first.
-* **Full-text search** — MiniSearch inverted index; click a result to jump to the hit line (auto-switches to source for precise jumps).
+* **Full-text search** — unified vault index layer (vaultIndex.ts); click a result to jump to the hit line (auto-switches to source for precise jumps).
 
 ### Version snapshots & writing aids
 
@@ -161,7 +161,7 @@ Code blocks get **adaptive height** (no longer fill the parent) with an inset hi
 | Editor core | @milkdown/crepe 7.22.1         | ProseMirror + remark, best Markdown round-trip |
 | Source mode | CodeMirror 6                   | shares the same Markdown text with WYSIWYG     |
 | Diagrams    | Mermaid 11 / KaTeX 0.18        | diagrams & math                                |
-| Search      | MiniSearch 7                   | pure-JS inverted index, no native compile      |
+| Search      | Unified vault index (vaultIndex.ts) | lightweight metadata index, pure Node fs, no native compile |
 | Watch       | chokidar 4                     | vault file watching (single watcher)           |
 | State       | pinia 4                        | cross-component state (verified with Vue 3.5)  |
 
@@ -272,7 +272,7 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 | 2. Vault         | file tree + auto-save + crash recovery                                                                                                    | ✅ done                                                                                                                                                                                                         |
 | 3. Writing suite | Mermaid + math + tables + code                                                                                                            | ✅ done                                                                                                                                                                                                         |
 | 4. Images        | paste-to-disk + image host                                                                                                                | ✅ done                                                                                                                                                                                                         |
-| 5. Search        | MiniSearch index + search panel                                                                                                           | ✅ done                                                                                                                                                                                                         |
+| 5. Search        | Unified vault index + search panel                                                                                                           | ✅ done                                                                                                                                                                                                         |
 | 6. Export        | HTML / PDF / single md                                                                                                                    | ✅ done                                                                                                                                                                                                         |
 | 7. Polish        | themes/skins, shortcut hints, settings, title-bar redesign                                                                                | ✅ done (skins + preferences/appearance + icon toolbar + help/shortcuts + unified glass)                                                                                                                        |
 | 8. Distribution  | electron-builder + **3-platform CI**                                                                                                      | ✅ done (v1.0.0; GitHub Actions builds Win/macOS/Linux installers)                                                                                                                                              |

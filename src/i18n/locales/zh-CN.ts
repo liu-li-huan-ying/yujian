@@ -370,6 +370,7 @@ const zhCN = {
     dialogCancel: '取消',
     searchHits: '{n} 处命中',
     searchHitsFiles: '{n} 处命中 · {f} 个文件',
+    searchTruncated: '结果过多，已截断显示；请收窄查询以查看全部',
     mathError: '⚠ 公式无法渲染',
     mermaidError: '图表语法有误',
     tocTitle: '目录',

@@ -18,6 +18,8 @@ const props = defineProps<{
   regex?: boolean
   /** 单文件范围（左侧「本文档」）：隐藏文件名分组头，只列出命中行 */
   singleFile?: boolean
+  /** 结果是否因过多被截断（解除 80 文件硬上限后的软保护提示） */
+  truncated?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +66,8 @@ const metaText = computed(() =>
   <div class="results">
     <div class="results__meta">{{ metaText }}</div>
 
+    <div v-if="truncated" class="results__truncated">{{ L.searchTruncated }}</div>
+
     <template v-for="file in results" :key="file.path">
       <button
         v-if="!singleFile"
@@ -98,6 +102,16 @@ const metaText = computed(() =>
   padding: 2px 8px 8px;
   font-size: 11px;
   color: var(--hue-text-3);
+}
+
+.results__truncated {
+  padding: 4px 8px;
+  margin: 0 2px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgb(var(--hue-mark));
+  background: rgba(var(--hue-mark), 0.12);
+  border-radius: var(--radius-sm);
 }
 
 .file {

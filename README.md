@@ -173,7 +173,7 @@
 | 编辑内核 | @milkdown/crepe 7.22.1         | 基于 ProseMirror + remark，Markdown 往返一致性最好 |
 | 源码模式 | CodeMirror 6                   | 与 WYSIWYG 共享同一份 Markdown 文本              |
 | 图表   | Mermaid 11 / KaTeX 0.18        | 图表与公式渲染                                  |
-| 搜索   | MiniSearch 7                   | 纯 JS 倒排索引，零原生编译                          |
+| 搜索   | 统一 vault 索引层（vaultIndex.ts） | 轻量元数据索引，纯 Node fs，零原生编译；可重建缓存              |
 | 监听   | chokidar 4                     | 笔记库文件变化监听（单例 watcher）                    |
 | 状态   | pinia 4                        | 跨组件状态（已验证与 Vue 3.5 兼容）                   |
 
@@ -284,7 +284,7 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 | 2. 笔记库     | 文件树 + 自动保存 + 崩溃恢复                               | ✅ 已完成                                                                                                                                    |
 | 3. 写作套件    | Mermaid + 公式 + 表格 + 代码块                         | ✅ 已完成                                                                                                                                    |
 | 4. 图片      | 粘贴落盘 + 图床配置                                     | ✅ 已完成                                                                                                                                    |
-| 5. 搜索      | MiniSearch 索引 + 搜索面板                            | ✅ 已完成                                                                                                                                    |
+| 5. 搜索      | 统一 vault 索引层 + 搜索面板                            | ✅ 已完成                                                                                                                                    |
 | 6. 导出      | HTML / PDF / 单 md                               | ✅ 已完成                                                                                                                                    |
 | 7. 打磨      | 主题 / 皮肤、快捷键提示、设置面板、标题栏重设计                       | ✅ 已完成（皮肤 + 偏好 / 外观面板 + 图标工具栏 + 帮助 / 快捷键面板 + 统一玻璃材质）                                                                                      |
 | 8. 分发      | electron-builder 打包 + **三平台 CI**                | ✅ 已完成（v1.0.0；GitHub Actions 自动构建 Win/macOS/Linux 安装包）                                                                                    |
