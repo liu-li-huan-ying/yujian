@@ -25,6 +25,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'saved', path: string): void
   (e: 'mode-change', mode: EditorMode): void
+  /** 图片落盘失败（源码/所见即所得任一端）：透传给 App 弹 toast */
+  (e: 'error'): void
 }>()
 
 const fidelity = useFidelity()
@@ -609,6 +611,7 @@ defineExpose({
         :file-path="props.filePath"
         :vault-path="props.vaultPath"
         @update:model-value="onSourceUpdate"
+        @error="emit('error')"
       />
     </div>
 

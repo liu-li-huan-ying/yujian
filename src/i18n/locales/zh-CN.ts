@@ -92,6 +92,7 @@ const zhCN = {
     toastImgHostPartialFail: '，{n} 张失败',
     toastImgHostPublishFail: '上传失败：',
     toastImgHostNoImages: '文档中没有本地图片',
+    toastImageSaveFail: '图片保存失败，请检查磁盘空间或重试',
     imgHostSettingsTitle: '图床设置',
     imgHostClose: '×',
     imgHostService: '图床服务',
