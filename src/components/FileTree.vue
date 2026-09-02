@@ -73,9 +73,9 @@ function fwdRenameConfirm(path: string, value: string): void {
         @click="node.type === 'dir' ? emit('toggle', node.path) : emit('select', node)"
         @contextmenu.prevent="onContextMenu(node, $event)"
       >
-        <!-- 目录：可展开箭头；文件：占位对齐 -->
+        <!-- 目录：仅在有子节点时显示可展开箭头；文件：占位对齐 -->
         <svg
-          v-if="node.type === 'dir'"
+          v-if="node.type === 'dir' && node.children && node.children.length"
           class="chev"
           :class="{ 'chev--open': expanded.has(node.path) }"
           width="10"

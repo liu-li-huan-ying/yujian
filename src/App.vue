@@ -155,6 +155,17 @@ function onRenamed(oldPath: string, newPath: string): void {
   }
 }
 
+/** 双击标签标题重命名：复用 renameItem + 同步标签路径 + 刷新树 */
+async function onTabRename(payload: { path: string; name: string }): Promise<void> {
+  try {
+    const newPath = await window.api.renameItem(payload.path, payload.name)
+    onRenamed(payload.path, newPath)
+    await refreshTree()
+  } catch (e) {
+    showToast(U.renameFail.replace('{m}', e instanceof Error ? e.message : String(e)), 'err')
+  }
+}
+
 /** 文件树里删除了当前正在编辑的文档 → 关闭该标签并载入相邻文档 */
 function onDeleted(path: string): void {
   if (path !== tabs.activePath) return
@@ -1066,6 +1077,7 @@ onBeforeUnmount(() => {
       @close="closeTab"
       @close-others="closeOthers"
       @close-to-right="closeToRight"
+      @rename="onTabRename"
     />
 
     <div class="body">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from './Icon.vue'
+import RenameInput from './RenameInput.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import { useTabsStore } from '../store/tabs'
 import { useI18n } from '../i18n'
@@ -17,10 +18,28 @@ const emit = defineEmits<{
   (e: 'close', path: string): void
   (e: 'close-others', path: string): void
   (e: 'close-to-right', path: string): void
+  (e: 'rename', payload: { path: string; name: string }): void
 }>()
 
 const isActive = (path: string): boolean => path === tabs.activePath
 const showDot = (path: string): boolean => isActive(path) && props.dirty
+
+/* ── 双击标题进入重命名（复用 RenameInput，与侧栏保持一致）── */
+const editingPath = ref<string | null>(null)
+/** 完整文件名（含扩展名），交给 RenameInput 作初始值，避免把 .md 丢掉的隐患 */
+function fullName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path
+}
+function startRename(path: string): void {
+  editingPath.value = path
+}
+function onRenameConfirm(path: string, value: string): void {
+  editingPath.value = null
+  emit('rename', { path, name: value })
+}
+function onRenameCancel(): void {
+  editingPath.value = null
+}
 
 /**
  * 中间省略：长文件名居中时若用 CSS 末尾省略会吞掉开头、很难看，
@@ -261,7 +280,18 @@ function onMoreSelect(action: string): void {
         @click="onTabClick(tab.path)"
         @contextmenu="onContextMenu($event, tab.path)"
       >
-        <span class="tab__name">{{ middleTruncate(baseName(tab.path)) }}</span>
+        <RenameInput
+          v-if="editingPath === tab.path"
+          :initial="fullName(tab.path)"
+          class="tab__rename"
+          @confirm="(v: string) => onRenameConfirm(tab.path, v)"
+          @cancel="onRenameCancel"
+        />
+        <span
+          v-else
+          class="tab__name"
+          @dblclick.stop="startRename(tab.path)"
+        >{{ middleTruncate(baseName(tab.path)) }}</span>
         <span v-if="showDot(tab.path)" class="tab__dot" />
         <button
           class="tab__close"
@@ -438,6 +468,14 @@ function onMoreSelect(action: string): void {
 
 .tab--active .tab__name {
   font-weight: 600;
+}
+
+/* 双击标题进入的内联重命名：复用 RenameInput，覆盖其依赖 --h-row 的高度与字号以贴合标签栏 */
+.tab :deep(.rename-input) {
+  height: 20px;
+  padding: 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.015em;
 }
 
 .tab__dot {

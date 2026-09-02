@@ -28,7 +28,7 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-/** 递归扫描，产出「目录在前、名称升序」的树；不含 md 的目录会被剪掉 */
+/** 递归扫描，产出「目录在前、名称升序」的树；空目录也会保留（否则新建文件夹后侧栏看不到） */
 async function scan(dir: string): Promise<FileNode[]> {
   let entries
   try {
@@ -46,7 +46,7 @@ async function scan(dir: string): Promise<FileNode[]> {
     if (entry.isDirectory()) {
       if (shouldSkipDir(entry.name)) continue
       const children = await scan(full)
-      if (children.length === 0) continue
+      // 保留空目录：新建文件夹后侧栏需立即可见，且空目录在 PKM 场景下是常态
       out.push({ name: entry.name, path: full, type: 'dir', children })
     } else if (entry.isFile() && isMarkdown(entry.name)) {
       out.push({ name: entry.name, path: full, type: 'file' })

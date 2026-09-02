@@ -459,6 +459,7 @@ const enUS = {
     ctxNewFolder: 'New folder',
     ctxRename: 'Rename',
     ctxDelete: 'Delete',
+    renameFail: 'Rename failed: {m}',
     sidebarOpenVault: 'Open vault',
     sidebarSearch: 'Search',
     sidebarClear: 'Clear',
