@@ -467,6 +467,7 @@ const enUS = {
     ctxMove: 'Move to…',
     ctxDelete: 'Delete',
     renameFail: 'Rename failed: {m}',
+    deleteFail: 'Delete failed: {m}',
     moveTitle: 'Move to…',
     moveToRoot: 'Vault root',
     moveConfirm: 'Move',

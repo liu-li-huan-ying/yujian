@@ -39,8 +39,8 @@ const emit = defineEmits<{
   (e: 'update:width', width: number): void
   /** 重命名了当前正在编辑的文档：让 App 同步活动路径 */
   (e: 'renamed', oldPath: string, newPath: string): void
-  /** 删除了当前正在编辑的文档：让 App 清空活动路径 */
-  (e: 'deleted', path: string): void
+  /** 请求删除某节点（文件或文件夹）：交给 App 统一关标签 + 删磁盘 + 刷新，保证文件夹内的活动文档标签也被关闭、且不因自动保存复活 */
+  (e: 'delete-node', node: FileNode): void
   /** 移动了节点：让 App 同步标签路径 + 抑制 watcher 回声 + 刷新文件树 */
   (e: 'moved', oldPath: string, newPath: string): void
   /** 全文搜索结果点击：让 App 打开文档并定位到命中行 */
@@ -521,17 +521,10 @@ function onRenameCancel(): void {
 async function doDelete(): Promise<void> {
   const node = confirmState.value?.node
   if (!node) return
-  try {
-    // 抑制删除的 watcher 回声（unlink）：仅保留这次显式刷新
-    markProgrammatic([node.path, assetsPathOf(node.path)])
-    await window.api.deleteItem(node.path)
-    if (node.path === props.activePath) emit('deleted', node.path)
-  } catch (e) {
-    showToast(errMsg(e))
-  } finally {
-    confirmState.value = null
-    await props.refreshTree()
-  }
+  confirmState.value = null
+  // 删除的完整编排（关标签 → 删磁盘 → 刷新）交给 App 的 onDeleteNode 统一处理：
+  // 文件夹删除时其内部的活动文档标签也要关闭，且需取消其待保存以免自动保存把已删路径复活。
+  emit('delete-node', node)
 }
 
 function findNode(nodes: FileNode[], path: string): FileNode | null {
