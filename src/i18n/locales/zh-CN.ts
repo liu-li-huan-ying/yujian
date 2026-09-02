@@ -458,6 +458,7 @@ const zhCN = {
     ctxNewFolder: '新建文件夹',
     ctxRename: '重命名',
     ctxDelete: '删除',
+    renameFail: '重命名失败：{m}',
     sidebarOpenVault: '打开笔记库',
     sidebarSearch: '搜索',
     sidebarClear: '清除',
