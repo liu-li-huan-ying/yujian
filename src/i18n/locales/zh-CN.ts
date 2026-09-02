@@ -313,6 +313,8 @@ const zhCN = {
     linkCheckBreakdown: 'Wiki {w} · 链接 {l} · 图片 {i}',
     linkCheckLocate: '定位到 {n} 行',
     linkCheckContext: '所在行：',
+    linkCheckCreate: '创建缺失的笔记',
+    linkCheckCreateFail: '创建笔记失败',
     /* ── 双向链接 / 反链面板（批次二：PKM 核心）── */
     backlinks: '反链',
     backlinksTitle: '链接到当前笔记',
@@ -325,6 +327,15 @@ const zhCN = {
     backlinksOf: '反链 · {n}',
     wikilinkOpenFail: '无法打开目标笔记',
     wikilinkCreated: '已创建笔记「{n}」',
+    /* 未链接提及：正文里以纯文本提到本笔记名、却没加 [[ ]] 的地方 */
+    unlinked: '未链接提及',
+    unlinkedEmpty: '没有未链接提及',
+    unlinkedScanning: '正在查找未链接提及…',
+    unlinkedWrap: '包裹成链接',
+    unlinkedHint: '这些地方提到了本笔记名但没加链接，可一键包裹成 [[ ]]',
+    unlinkedDone: '已包裹 {n} 处为链接',
+    unlinkedStale: '原文已变化，未修改文件，请刷新后重试',
+    unlinkedFail: '包裹失败',
     /* ── 完整性自检（批次一：数据安全）── */
     integrity: '完整性自检',
     integrityRerun: '重新扫描',

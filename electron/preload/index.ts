@@ -24,7 +24,9 @@ import {
   type RepairResult,
   type BackupResult,
   type RestoreResult,
-  type BacklinkItem
+  type BacklinkItem,
+  type NoteTitleItem,
+  type UnlinkedMention
 } from '../shared/ipc-channels'
 
 /**
@@ -137,6 +139,18 @@ const api = {
   /** 双链：反链查询——哪些笔记链接到指定文档，附引用行上下文片段 */
   getBacklinks: (root: string, absPath: string): Promise<BacklinkItem[]> =>
     ipcRenderer.invoke(IPC.VAULT_GET_BACKLINKS, root, absPath),
+
+  /** 双链：[[ 自动补全候选——全部笔记标题（纯索引元数据，不读正文） */
+  listNotes: (root: string): Promise<NoteTitleItem[]> =>
+    ipcRenderer.invoke(IPC.VAULT_LIST_NOTES, root),
+
+  /** 双链：未链接提及查询——纯文本提到当前笔记名但未加 [[ ]] 的片段 */
+  getUnlinkedMentions: (root: string, absPath: string): Promise<UnlinkedMention[]> =>
+    ipcRenderer.invoke(IPC.VAULT_UNLINKED_MENTIONS, root, absPath),
+
+  /** 双链：把未链接提及包裹成 [[链接]] 写回磁盘；原文已变时返回 false */
+  wrapMention: (root: string, item: UnlinkedMention): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.VAULT_WRAP_MENTION, root, item),
 
   watchVault: (root: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_WATCH, root),

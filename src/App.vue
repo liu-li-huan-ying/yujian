@@ -190,6 +190,34 @@ async function onOpenBrokenLink(item: BrokenLinkItem): Promise<void> {
   host.value?.revealLine(item.line)
 }
 
+/**
+ * 断链一键创建：按目标写法的意图落位并打开新笔记。
+ *  - 目标带路径（`folder/Note`）→ 视作库内相对路径，在库内对应目录建；
+ *  - 目标为裸名（`Note`）→ 就地建在**来源笔记所在目录**，
+ *    因为断链多半是同主题笔记互引，就地补齐能让目录保持内聚，而不是把库根堆成孤儿收容所。
+ */
+async function onCreateBrokenLink(item: BrokenLinkItem): Promise<void> {
+  const root = vaultPath.value
+  if (!root) return
+  const parts = item.target.replace(/\\/g, '/').trim().split('/').filter(Boolean)
+  const name = (parts.pop() ?? '').replace(/\.(md|markdown)$/i, '')
+  if (!name) {
+    showToast(U.linkCheckCreateFail, 'err')
+    return
+  }
+  const dir =
+    parts.length > 0 ? [root, ...parts].join('/') : item.file.replace(/[\\/][^\\/]+$/, '')
+  try {
+    const created = await window.api.createDoc(dir, name)
+    await refreshTree()
+    await openPath(created)
+    showToast(U.wikilinkCreated.replace('{n}', name), 'ok')
+    linkCheckRef.value?.refresh()
+  } catch {
+    showToast(U.linkCheckCreateFail, 'err')
+  }
+}
+
 /** 全局替换完成：若当前正在编辑的文档在改写范围内，从磁盘重载以反映新内容 */
 function onSearchReplaced(paths: string[]): void {
   if (filePath.value && paths.includes(filePath.value)) {
@@ -473,6 +501,8 @@ const outlineVisible = ref(true)
 const snapshots = useSnapshotsStore()
 const snapshotOpen = ref(false)
 const linkCheckOpen = ref(false)
+/** 断链面板实例：一键创建成功后由 App 回调 refresh() 复检 */
+const linkCheckRef = ref<InstanceType<typeof LinkCheckPanel> | null>(null)
 const backlinksOpen = ref(false)
 const integrityOpen = ref(false)
 const backupOpen = ref(false)
@@ -1084,9 +1114,11 @@ onBeforeUnmount(() => {
 
         <LinkCheckPanel
           v-if="linkCheckOpen"
+          ref="linkCheckRef"
           :vault-path="vaultPath"
           @close="linkCheckOpen = false"
           @open="onOpenBrokenLink"
+          @create="onCreateBrokenLink"
         />
 
         <BacklinksPanel

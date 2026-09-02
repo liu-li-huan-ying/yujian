@@ -314,6 +314,8 @@ const enUS = {
     linkCheckBreakdown: 'Wiki {w} · Link {l} · Image {i}',
     linkCheckLocate: 'Go to line {n}',
     linkCheckContext: 'Source line:',
+    linkCheckCreate: 'Create the missing note',
+    linkCheckCreateFail: 'Failed to create note',
     /* ── Bidirectional links / backlinks panel (batch two: PKM core) ── */
     backlinks: 'Backlinks',
     backlinksTitle: 'Notes linking here',
@@ -326,6 +328,15 @@ const enUS = {
     backlinksOf: 'Backlinks · {n}',
     wikilinkOpenFail: 'Cannot open target note',
     wikilinkCreated: 'Created note "{n}"',
+    /* Unlinked mentions: notes naming this one in plain text, without [[ ]] */
+    unlinked: 'Unlinked mentions',
+    unlinkedEmpty: 'No unlinked mentions',
+    unlinkedScanning: 'Looking for unlinked mentions…',
+    unlinkedWrap: 'Wrap as link',
+    unlinkedHint: 'These spots name this note without linking — wrap them in [[ ]] with one click',
+    unlinkedDone: 'Wrapped {n} mention(s) as links',
+    unlinkedStale: 'Text changed — file untouched, refresh and try again',
+    unlinkedFail: 'Failed to wrap',
     /* ── Integrity check (batch one: data security) ── */
     integrity: 'Integrity check',
     integrityRerun: 'Rescan',

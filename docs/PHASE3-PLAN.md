@@ -136,7 +136,11 @@ Phase 3 新增两条：
 * 点击跳转：`MilkdownEditor` 派发 `wikilink` 事件 → `EditorHost` 透传 → `App` 经 `resolveWikiTarget` 解析；目标存在则打开，不存在则 `createDoc` 一键创建并打开。
 * 反链面板 `src/components/BacklinksPanel.vue`：玻璃面板，消费索引 `backLinks` 经 `getBacklinksWithContext` 抽取「来源笔记 + 引用行 + 上下文片段」，点击跳转（`onOpenResult` 复用）；切文档 / 重命名后随索引自动刷新；风格与断链面板一致。标题栏「更多」新增「反链」入口（`Icon` 新增 `backlink`）。
 * i18n（zh-CN / en-US）新增 `backlinks*` / `wikilinkCreated` / `wikilinkOpenFail`；编辑器内芯片 `.yj-wikilink__label` 玉质药丸样式见 `src/styles/editor.css`。
-* **未实现（沿用原决策，留待收尾）**：`[[` 自动补全浮层、未链接提及（unlinked mentions）一键包裹、断链面板「一键创建」入口。重命名不自动更新 `[[引用]]`（见下方待决策）。
+* **批次二三项收尾（2026-09-02 同日补齐）**：
+  - `[[` 自动补全浮层：`src/editor/features/wikilinkSuggest.ts`（`$prose` 触发检测插件，仅报坐标/拦按键，零 DOM 依赖）+ `src/components/WikiSuggest.vue`（玻璃浮层，挂 body 下 `position:fixed` 避 overflow 裁切）；`MilkdownEditor` 消费索引 `listNotes` 拉候选、前缀命中优先、↑↓/Enter/Tab/Esc 手势、选中即把 `[[查询词` 替换成 wikilink 真节点。
+  - 未链接提及一键包裹：`vaultIndex.getUnlinkedMentions`（回读正文扫词，跳过代码块/行内代码/已链 `[[ ]]`，软上限 200）+ `wrapUnlinkedMention`（按 `start/end` 回验原文再写回，绝不静默覆盖）+ 反链面板「未链接提及」分组 + 每条「包裹成链接」按钮，包裹后两分组自洽刷新。
+  - 断链面板「一键创建」：`LinkCheckPanel` 断链条目新增创建按钮 → `App.onCreateBrokenLink` 按目标写法落位（带路径建在对应子目录、裸名建在来源目录内聚）→ `createDoc` 创建并打开、刷新列表。
+* 重命名不自动更新 `[[引用]]`（沿用原决策；见下方待决策）。
 
 > ⚠️ **待决策（重要）**：**重命名 / 移动笔记时是否自动更新所有 `[[引用]]`？**
 > * 做：体验好，但会**批量改写其他文件原文**（触碰红线 1 精神）；若做须先展示将被改写的清单并经用户确认。

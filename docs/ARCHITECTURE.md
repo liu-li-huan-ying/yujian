@@ -1009,6 +1009,12 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **D. 索引消费（无新增索引层）**：批次零的 `vaultIndex.ts` 已派生 `backLinks`（目标 → 来源绝对路径集），本批次仅新增查询函数与 IPC，沿用既有的 `ensureIndex` 静默重建契约。
 
+**E. 批次二三项收尾（2026-09-02 同日补齐）**
+
+* **`[[` 自动补全浮层**：`src/editor/features/wikilinkSuggest.ts` 的 `$prose` 插件只做「判定触发 + 报视口坐标 + 拦截 ↑↓/Enter/Tab/Esc」（零 DOM 依赖，与 find-wysiwyg 同源分层）；`src/components/WikiSuggest.vue` 玻璃浮层挂 `body` 下 `position:fixed` 避 `.milkdown-host` 的 `overflow:hidden` 裁切。`MilkdownEditor` 经 `listNotes`（IPC `vault:listNotes`，消费索引 `listNoteTitles` 的纯元数据）拉候选，前缀命中优先于包含命中，选中即把 `[[查询词` 替换成 wikilink 真节点（光标落节点后）；Esc 同一次输入内不再弹回。
+* **未链接提及一键包裹**：`getUnlinkedMentions`（IPC `vault:unlinkedMentions`）回读正文扫词，跳过围栏代码块 / 行内代码 / 已成链的 `[[...]]`，软上限 200；`wrapUnlinkedMention`（IPC `vault:wrapMention`）写回前按 `start/end` 回验原文（`line.slice(start,end)===name`），原文已变则返回 `false`、不写坏内容（守批次一「绝不静默覆盖」红线）。反链面板新增「未链接提及」分组 + 每行「包裹成链接」按钮，包裹成功后反链与未链接两分组自洽刷新。
+* **断链面板「一键创建」**：`LinkCheckPanel` 每条断链新增创建按钮 → `App.onCreateBrokenLink`：目标带路径（`folder/Note`）建在 vault 对应子目录、裸名建在来源笔记所在目录（保持目录内聚），`createDoc` 创建并打开后刷新列表。
+
 ***
 
 ## 6. 技术写作场景专项设计
@@ -1094,7 +1100,7 @@ export interface SessionState {
 | **7. 打磨**      | 主题、体积裁剪、快捷键、设置面板                                | 安装包体积优化，可用                                                                           |
 | **8. 分发**      | electron-builder 打包                             | 产出 Windows 安装包，可安装运行                                                                 |
 | **9. Phase 2** | 多文档标签+查找替换+版本快照+写作统计+凝神(打字机/禅)模式+导出增强+写作辅助+断链检查 | ✅ 批次一已落地（多文档标签·文件内查找替换·选区字数）；批次二已落地（版本快照·写作统计·凝神模式）；批次三已落地（导出增强·写作辅助·断链检查，见 `docs/PHASE2-PLAN.md`） |
-| **10. Phase 3** | PKM：批次零(缺陷+统一索引地基)→一(数据安全)→二(双链+反链)→三(标签+MOC+关系图谱)→四(中文排版+体验)→五(技术写作+发布) | ✅ 批次零已落地（统一索引层`vaultIndex.ts`+`minisearch`死依赖移除）；✅ 批次一已落地（完整性自检·整库备份恢复·外部修改冲突三选一·表格压测19/19）；✅ 批次二已落地（wikilink 真节点·点击跳转/一键创建·反链面板消费索引 `backLinks`，见 §5.15）；批次三~五待启动 |
+| **10. Phase 3** | PKM：批次零(缺陷+统一索引地基)→一(数据安全)→二(双链+反链)→三(标签+MOC+关系图谱)→四(中文排版+体验)→五(技术写作+发布) | ✅ 批次零已落地（统一索引层`vaultIndex.ts`+`minisearch`死依赖移除）；✅ 批次一已落地（完整性自检·整库备份恢复·外部修改冲突三选一·表格压测19/19）；✅ 批次二已落地（wikilink 真节点·点击跳转/一键创建·反链面板消费索引 `backLinks`；收尾三项：`[[` 自动补全浮层·未链接提及一键包裹·断链面板一键创建，见 §5.15）；批次三~五待启动 |
 
 > 建议：**先只做阶段 0\~1**，跑通"打开→编辑→保存→切源码"这条最小闭环再继续。编辑器项目的复杂度集中在后段，早验证能省大量返工。
 

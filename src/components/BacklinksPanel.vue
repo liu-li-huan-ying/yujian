@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
-import type { BacklinkItem } from '../../electron/shared/ipc-channels'
+import type { BacklinkItem, UnlinkedMention } from '../../electron/shared/ipc-channels'
 
 const { t } = useI18n()
 const L = t.ui
@@ -19,10 +19,18 @@ const emit = defineEmits<{
 }>()
 
 const items = ref<BacklinkItem[]>([])
+/** 未链接提及：正文里以纯文本提到本笔记名、却没加 [[ ]] 的地方 */
+const mentions = ref<UnlinkedMention[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+/** 正在包裹的条目 key（path:line:start），用于单行转圈、避免连点 */
+const wrapping = ref<string | null>(null)
+const wrapError = ref<string | null>(null)
 
 const count = computed(() => items.value.length)
+const mentionCount = computed(() => mentions.value.length)
+/** 两个分组只要有一个非空，面板就有内容可展示 */
+const hasAny = computed(() => count.value > 0 || mentionCount.value > 0)
 
 function fileBase(p: string): string {
   const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
@@ -40,17 +48,53 @@ const idle = computed(
 
 async function run(): Promise<void> {
   error.value = null
+  wrapError.value = null
   if (!props.vaultPath || !props.activePath) {
     items.value = []
+    mentions.value = []
     return
   }
   loading.value = true
   try {
-    items.value = await window.api.getBacklinks(props.vaultPath, props.activePath)
+    // 反链走索引直查、未链接提及需回读正文扫词，两者互不依赖，并行发起省一半等待
+    const [back, unlinked] = await Promise.all([
+      window.api.getBacklinks(props.vaultPath, props.activePath),
+      window.api.getUnlinkedMentions(props.vaultPath, props.activePath)
+    ])
+    items.value = back
+    mentions.value = unlinked
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
     loading.value = false
+  }
+}
+
+function mentionKey(m: UnlinkedMention): string {
+  return `${m.path}:${m.line}:${m.start}`
+}
+
+/**
+ * 一键包裹：把该处纯文本替换成 [[笔记名]]。
+ * 主进程落笔前会回验原文，若文件在「查询」到「点击」之间已被改动则返回 false ——
+ * 此时只提示、绝不覆盖，符合批次一立的「绝不静默覆盖」红线。
+ * 包裹成功后重查全量：该处会从「未链接」转为真正的反链，两个分组同时自洽。
+ */
+async function wrap(m: UnlinkedMention): Promise<void> {
+  if (!props.vaultPath || wrapping.value) return
+  wrapping.value = mentionKey(m)
+  wrapError.value = null
+  try {
+    const ok = await window.api.wrapMention(props.vaultPath, m)
+    if (!ok) {
+      wrapError.value = L.unlinkedStale
+      return
+    }
+    await run()
+  } catch (e) {
+    wrapError.value = e instanceof Error ? e.message : L.unlinkedFail
+  } finally {
+    wrapping.value = null
   }
 }
 
@@ -61,7 +105,9 @@ watch(
     if (props.vaultPath && props.activePath) void run()
     else {
       items.value = []
+      mentions.value = []
       error.value = null
+      wrapError.value = null
     }
   }
 )
@@ -105,7 +151,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <Icon name="file" :size="16" />
       {{ L.backlinksEmpty }}
     </p>
-    <p v-else-if="loading" class="bl__empty">
+    <!-- 刷新时保留旧内容（loading && !hasAny），避免包裹成功后面板闪一下空白 -->
+    <p v-else-if="loading && !hasAny" class="bl__empty">
       <Icon name="loader" :size="16" class="bl__spin" />
       {{ L.backlinksScanning }}
     </p>
@@ -113,29 +160,68 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <Icon name="unlink" :size="16" />
       {{ error }}
     </p>
-    <p v-else-if="count === 0" class="bl__empty">
+    <p v-else-if="!hasAny" class="bl__empty">
       <Icon name="check" :size="16" />
       {{ L.backlinksEmpty }}
     </p>
 
     <template v-else>
       <div class="bl__list">
-        <button
-          v-for="(it, i) in items"
-          :key="i"
-          type="button"
-          class="row"
-          :title="`${fileBase(it.path)}:${it.line}\n${it.snippet}`"
-          @click="emit('open', it)"
-        >
-          <span class="row__top">
-            <span class="row__file">{{ fileBase(it.path) }}</span>
-            <span class="row__line">:{{ it.line }}</span>
-          </span>
-          <span class="row__ctx">{{ it.snippet }}</span>
-          <span class="row__dir">{{ fileDir(it.path) }}</span>
-        </button>
+        <!-- 反链：已成链的引用 -->
+        <div v-for="(it, i) in items" :key="i" class="row">
+          <button
+            type="button"
+            class="row__main"
+            :title="`${fileBase(it.path)}:${it.line}\n${it.snippet}`"
+            @click="emit('open', it)"
+          >
+            <span class="row__top">
+              <span class="row__file">{{ fileBase(it.path) }}</span>
+              <span class="row__line">:{{ it.line }}</span>
+            </span>
+            <span class="row__ctx">{{ it.snippet }}</span>
+            <span class="row__dir">{{ fileDir(it.path) }}</span>
+          </button>
+        </div>
+
+        <!-- 未链接提及：提到本笔记名但没加 [[ ]]，可一键包裹 -->
+        <template v-if="mentionCount > 0">
+          <div class="bl__sec">
+            <span class="bl__sec-name">{{ L.unlinked }}</span>
+            <span class="bl__sec-n">{{ mentionCount }}</span>
+          </div>
+          <div v-for="m in mentions" :key="mentionKey(m)" class="row">
+            <button
+              type="button"
+              class="row__main"
+              :title="`${fileBase(m.path)}:${m.line}\n${m.snippet}`"
+              @click="emit('open', m)"
+            >
+              <span class="row__top">
+                <span class="row__file">{{ fileBase(m.path) }}</span>
+                <span class="row__line">:{{ m.line }}</span>
+              </span>
+              <span class="row__ctx">{{ m.snippet }}</span>
+              <span class="row__dir">{{ fileDir(m.path) }}</span>
+            </button>
+            <button
+              type="button"
+              class="row__act"
+              :class="{ 'row__act--busy': wrapping === mentionKey(m) }"
+              :title="L.unlinkedWrap"
+              :disabled="wrapping !== null"
+              @click="wrap(m)"
+            >
+              <Icon
+                :name="wrapping === mentionKey(m) ? 'loader' : 'link'"
+                :size="13"
+                :class="{ bl__spin: wrapping === mentionKey(m) }"
+              />
+            </button>
+          </div>
+        </template>
       </div>
+      <p v-if="wrapError" class="bl__hint bl__hint--err">{{ wrapError }}</p>
       <p class="bl__hint">{{ L.backlinksHint }}</p>
     </template>
   </div>

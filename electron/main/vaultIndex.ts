@@ -1,6 +1,11 @@
 import { access, mkdir, readFile, readdir, rename, stat, writeFile, rm } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
-import type { SearchOptions, BacklinkItem } from '../shared/ipc-channels'
+import type {
+  SearchOptions,
+  BacklinkItem,
+  NoteTitleItem,
+  UnlinkedMention
+} from '../shared/ipc-channels'
 
 /**
  * 统一 vault 索引层 —— 整个 Phase 3 的地基。
@@ -444,6 +449,145 @@ export async function getBacklinksWithContext(
     }
   }
   return out
+}
+
+/**
+ * `[[` 自动补全候选：只取索引里的轻量元数据（路径 / 标题 / 基名），**不读正文**。
+ * 由渲染进程在浮层首次弹出时按需拉取并缓存，故大库也不会拖慢编辑器启动。
+ */
+export async function listNoteTitles(root: string): Promise<NoteTitleItem[]> {
+  const index = await ensureIndex(root)
+  const out: NoteTitleItem[] = []
+  for (const full of Object.keys(index.files)) {
+    const base = basename(full, extname(full))
+    out.push({ path: full, title: index.files[full].title || base, base })
+  }
+  return out
+}
+
+/**
+ * 行内「不可提及区」掩码：反引号代码段与已成链的 `[[...]]` 内部都不算未链接提及，
+ * 否则会把 `[[笔记名]]` 本身报成未链接（自指循环），也会误伤代码示例。
+ */
+function maskedPositions(line: string): boolean[] {
+  const mask = new Array<boolean>(line.length).fill(false)
+  const mark = (re: RegExp): void => {
+    re.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = re.exec(line)) !== null) {
+      for (let i = m.index; i < m.index + m[0].length; i++) mask[i] = true
+    }
+  }
+  mark(/`[^`]*`/g)
+  mark(/\[\[[^\]\n]*\]\]/g)
+  return mask
+}
+
+/** 未链接提及的软上限（与 checkLinks 的 MAX_ITEMS 同源策略，防止面板被高频词刷爆） */
+const MAX_MENTIONS = 200
+
+/** 在一篇笔记正文里找出「提到但没加链接」的笔记名片段（跳过围栏代码块与行内代码） */
+function findPlainMentions(src: string, content: string, name: string): UnlinkedMention[] {
+  const out: UnlinkedMention[] = []
+  const hay = name.toLowerCase()
+  const lines = content.split(/\r?\n/)
+  let inFence = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    if (inFence) continue
+    const low = line.toLowerCase()
+    if (!low.includes(hay)) continue
+    const mask = maskedPositions(line)
+    for (let s = low.indexOf(hay); s !== -1; s = low.indexOf(hay, s + 1)) {
+      const e = s + hay.length
+      let blocked = false
+      for (let k = s; k < e; k++) {
+        if (mask[k]) {
+          blocked = true
+          break
+        }
+      }
+      if (blocked) continue
+      out.push({
+        path: src,
+        line: i + 1,
+        snippet: line.trim().slice(0, 200),
+        start: s,
+        end: e,
+        name
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * 未链接提及查询：哪些笔记以**纯文本**提到 `absPath` 的笔记名，却没写成 `[[ ]]`。
+ * 与反链同源、同样消费索引；但反链有 `backLinks` 可直接命中，这里必须回读正文扫词，
+ * 因此是 O(库内笔记数) 次读文件——仅在面板打开/切文档时按需触发，不做任何周期任务。
+ * 排除自身（笔记提到自己的名字不构成有价值的未链接提及）。
+ */
+export async function getUnlinkedMentions(
+  root: string,
+  absPath: string
+): Promise<UnlinkedMention[]> {
+  const index = await ensureIndex(root)
+  const name = basename(absPath, extname(absPath))
+  if (!name) return []
+  const out: UnlinkedMention[] = []
+  for (const src of Object.keys(index.files)) {
+    if (src === absPath) continue
+    let content: string
+    try {
+      content = await readFile(src, 'utf-8')
+    } catch {
+      continue
+    }
+    out.push(...findPlainMentions(src, content, name))
+    // 与 checkLinks 同款软上限：极端情况下（笔记名是「的」这类高频词）不让面板被刷爆
+    if (out.length >= MAX_MENTIONS) break
+  }
+  return out
+}
+
+/** 单文件原子写（temp + rename），与主进程其它落盘路径同源，避免半截内容 */
+async function writeAtomic(path: string, data: string): Promise<void> {
+  const tmp = `${path}.${Date.now()}.tmp`
+  try {
+    await writeFile(tmp, data, 'utf-8')
+    await rename(tmp, path)
+  } catch {
+    try {
+      await rm(tmp, { force: true })
+    } catch {
+      /* ignore */
+    }
+    throw new Error('write failed')
+  }
+}
+
+/**
+ * 把一条未链接提及包裹成 `[[笔记名]]` 并写回磁盘。
+ * 落笔前按 start/end 回验该处文本仍等于原词——文件在「查询」到「点击」之间若已被改动
+ * （外部编辑、别的替换），宁可失败也不写坏内容，绝不静默覆盖。
+ * 保留原换行符（CRLF 不退化成 LF），避免整篇在 Git 里变成全量 diff。
+ */
+export async function wrapUnlinkedMention(root: string, item: UnlinkedMention): Promise<boolean> {
+  void root
+  const raw = await readFile(item.path, 'utf-8')
+  const eol = raw.includes('\r\n') ? '\r\n' : '\n'
+  const lines = raw.split(/\r?\n/)
+  const idx = item.line - 1
+  if (idx < 0 || idx >= lines.length) return false
+  const line = lines[idx]
+  if (line.slice(item.start, item.end) !== item.name) return false
+  lines[idx] = line.slice(0, item.start) + `[[${item.name}]]` + line.slice(item.end)
+  await writeAtomic(item.path, lines.join(eol))
+  return true
 }
 
 /* ── 持久化（原子写，沿用项目 temp+rename 优势，避免多文件非原子写） ── */
