@@ -12,6 +12,7 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
+import { shell } from 'electron'
 import type {
   FileNode,
   SearchFileResult,
@@ -79,6 +80,45 @@ async function collectMarkdownPaths(dir: string): Promise<string[]> {
   }
   await walk(dir)
   return out
+}
+
+/** 递归清除目标树内所有只读属性（Windows 上目录/文件只读会让 rm/scandir 抛 EPERM，外部盘/云同步常见） */
+async function clearReadOnlyRecursive(p: string): Promise<void> {
+  let st
+  try {
+    st = await stat(p)
+  } catch {
+    return
+  }
+  try {
+    await chmod(p, 0o777)
+  } catch {
+    // 单条失败忽略，继续处理其他条目
+  }
+  if (!st.isDirectory()) return
+  let entries
+  try {
+    entries = await readdir(p, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const e of entries) {
+    await clearReadOnlyRecursive(join(p, e.name))
+  }
+}
+
+/** 删除：优先进系统回收站（可恢复、且能规避多数 Windows 只读/外部盘 EPERM），失败回退 rm（清只读后） */
+async function trashOrRemove(targetPath: string): Promise<void> {
+  try {
+    await shell.trashItem(targetPath)
+    return
+  } catch {
+    // 回收站不可用（网络盘 / U 盘 / 沙箱）→ 回退 rm
+  }
+  if (process.platform === 'win32') {
+    await clearReadOnlyRecursive(targetPath).catch(() => {})
+  }
+  await rm(targetPath, { recursive: true, force: true })
 }
 
 /** 是否为权限类错误（Windows 上建目录/删目录常被只读属性或云盘驱动以 EPERM/EACCES 形式拦截） */
@@ -279,14 +319,15 @@ export async function deleteItem(targetPath: string): Promise<void> {
     }
   }
 
-  await rm(targetPath, { recursive: true, force: true })
+  // 优先进系统回收站（可恢复、且能规避多数 Windows 只读/外部盘 EPERM），失败回退 rm（清只读后）
+  await trashOrRemove(targetPath)
 
   try {
     const base = basename(targetPath)
     if (isMarkdown(base)) {
       const noExt = base.slice(0, base.toLowerCase().lastIndexOf('.'))
       const assets = join(dirname(targetPath), `${noExt}.assets`)
-      if (await exists(assets)) await rm(assets, { recursive: true, force: true })
+      if (await exists(assets)) await trashOrRemove(assets)
     }
   } catch {
     // 资源目录清理失败不影响删除结果

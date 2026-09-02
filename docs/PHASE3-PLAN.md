@@ -242,6 +242,17 @@ Phase 3 新增两条：
 
 ***
 
+## 5.6 删除 EPERM 复修 + 拖拽自动展开（补充）
+
+**删除 `vault:delete` 仍报 `EPERM: scandir`**：根因是 `deleteItem` 用裸 `rm(force)` 且**无 try/catch**，递归删外部盘/同步锁目录时 `scandir` 抛 EPERM 直冒 handler；且 `rm(force)` 是永久删除，违反「删除走回收站」红线。
+- 修复：主进程 `vault.ts` `import { shell } from 'electron'`，新增 `trashOrRemove()`（优先 `shell.trashItem` 进系统回收站，失败回退 `rm`、且回退前 `clearReadOnlyRecursive()` 递归清目标树只读属性）+ `clearReadOnlyRecursive()`；`deleteItem` 主目标与 `.assets` 均改调 `trashOrRemove`。删除现进回收站（可恢复、且 Explorer 删除路径更能规避 Windows 只读/外部盘 EPERM）。
+
+**跨层级（上上层）移动：逻辑本已支持，补拖拽可达性**
+- 核查：`moveItem`/`MoveDialog.flatDirs`/`FileTree.canDrop` 均只拦「自身/子孙/原父」、**不拦祖先** → 菜单「移动到…」与拖到任意可见上层目录行均支持上上层。体感「挪不上去」真因是拖拽目标目录须在侧栏展开可见。
+- 补强：拖拽悬停合法目录 300ms **自动展开**（`FileTree` 新增 `hover-expand` emit + 防抖 `requestHoverExpand`/`cancelHoverExpand`；`Sidebar` 接 `onHoverExpand`→`expand`，幂等），让深层/上上层目录在拖拽过程中直达。
+
+***
+
 ## 6. 验收标准
 
 * **批次零**：重载含 `\eqref` 的文档稳定显示 `(1)`（非 `???`）；手动重输仍正常；图片加载无回归；`minisearch` 已移除且文档表述修正；索引层建成——5000 文件库下输入无感知退化、索引内存 < 100MB、搜索不再受 80 文件上限限制；删掉索引后静默重建无报错。
