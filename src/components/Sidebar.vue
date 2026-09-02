@@ -57,6 +57,9 @@ const expanded = ref<Set<string>>(new Set())
 /** 正在内联重命名的节点路径（null 表示无） */
 const editingPath = ref<string | null>(null)
 
+/** 当前选中节点路径（键盘 Delete 删除 / 选中高亮用）；点击或右键即记录，独立于展开/打开状态 */
+const selectedPath = ref<string | null>(null)
+
 /** 右键上下文菜单状态 */
 const menu = ref<{ x: number; y: number; node: FileNode } | null>(null)
 
@@ -345,7 +348,47 @@ watch(
 /* ── 右键菜单 ── */
 
 function onContextMenu(payload: { x: number; y: number; node: FileNode }): void {
+  // 右键也记入选中，使随后的 Delete 键以该节点为目标
+  selectedPath.value = payload.node.path
   menu.value = payload
+}
+
+/* ── 选中 / 展开（同时记入 selectedPath，供 Delete 键使用）── */
+
+function onSelect(node: FileNode): void {
+  selectedPath.value = node.path
+  emit('select', node)
+}
+
+function onToggle(path: string): void {
+  selectedPath.value = path
+  toggle(path)
+}
+
+/** 双击文件名进入内联重命名（与右键「重命名」共用 editingPath 链路） */
+function onRenameStart(path: string): void {
+  selectedPath.value = path
+  editingPath.value = path
+}
+
+/**
+ * 键盘删除：选中节点后按 Delete 键（不含 Backspace，避免与「返回上一级」等习惯冲突）
+ * 视为删除请求。仅在侧栏自身或其子元素获得焦点时生效——焦点在编辑器 / 搜索框 /
+ * 重命名输入框时一律忽略，防止误删。已弹出确认框或正在重命名时也忽略。
+ */
+function onSidebarKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'Delete') return
+  if (editingPath.value || confirmState.value) return
+  const target = e.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return
+  }
+  const path = selectedPath.value
+  if (!path) return
+  const node = findNode(props.nodes, path)
+  if (!node) return
+  e.preventDefault()
+  confirmState.value = { open: true, node }
 }
 
 function buildMenuItems(_node: FileNode): MenuItem[] {
@@ -503,7 +546,12 @@ function startDrag(e: PointerEvent): void {
 </script>
 
 <template>
-  <aside class="sidebar jade" :class="{ 'is-collapsed': !visible }" :style="{ width: `${(visible ?? true) ? width : 0}px` }">
+  <aside
+    class="sidebar jade"
+    :class="{ 'is-collapsed': !visible }"
+    :style="{ width: `${(visible ?? true) ? width : 0}px` }"
+    @keydown="onSidebarKeydown"
+  >
     <header v-if="vaultPath" class="sidebar__head">
       <div class="sidebar__lead">
         <span class="sidebar__kicker">
@@ -781,11 +829,13 @@ function startDrag(e: PointerEvent): void {
           :active-path="activePath"
           :expanded="expanded"
           :editing-path="editingPath"
-          @select="emit('select', $event)"
-          @toggle="toggle"
+          :selected-path="selectedPath"
+          @select="onSelect"
+          @toggle="onToggle"
           @context-menu="onContextMenu"
           @rename-confirm="(p, v) => void doRename(p, v)"
           @rename-cancel="onRenameCancel"
+          @rename-start="onRenameStart"
         />
       </template>
     </div>

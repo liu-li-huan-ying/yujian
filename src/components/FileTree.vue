@@ -11,6 +11,8 @@ const props = defineProps<{
   expanded: Set<string>
   /** 正在内联重命名的节点路径（null 表示无）；由 Sidebar 持有 */
   editingPath: string | null
+  /** 当前选中节点路径（键盘 Delete 删除 / 选中高亮用）；由 Sidebar 持有 */
+  selectedPath: string | null
   depth?: number
 }>()
 
@@ -20,6 +22,8 @@ const emit = defineEmits<{
   (e: 'context-menu', payload: { x: number; y: number; node: FileNode }): void
   (e: 'rename-confirm', path: string, value: string): void
   (e: 'rename-cancel'): void
+  /** 双击文件名：进入内联重命名（与标签栏 / 右键重命名一致） */
+  (e: 'rename-start', path: string): void
 }>()
 
 const level = computed(() => props.depth ?? 0)
@@ -39,6 +43,11 @@ function isActiveAncestor(node: FileNode): boolean {
 
 function onContextMenu(node: FileNode, e: MouseEvent): void {
   emit('context-menu', { x: e.clientX, y: e.clientY, node })
+}
+
+/** 双击文件名：进入内联重命名 */
+function onDblClick(node: FileNode): void {
+  emit('rename-start', node.path)
 }
 
 function onRenameConfirm(node: FileNode, value: string): void {
@@ -63,7 +72,8 @@ function fwdRenameConfirm(path: string, value: string): void {
         :class="{
           'row--dir': node.type === 'dir',
           'row--active': node.type === 'file' && node.path === activePath,
-          'row--dir-active': isActiveAncestor(node)
+          'row--dir-active': isActiveAncestor(node),
+          'row--selected': node.path === selectedPath
         }"
         :style="{ paddingLeft: `${8 + level * 14}px` }"
         :title="node.name"
@@ -71,6 +81,7 @@ function fwdRenameConfirm(path: string, value: string): void {
         :aria-current="node.type === 'file' && node.path === activePath ? 'page' : undefined"
         type="button"
         @click="node.type === 'dir' ? emit('toggle', node.path) : emit('select', node)"
+        @dblclick="onDblClick(node)"
         @contextmenu.prevent="onContextMenu(node, $event)"
       >
         <!-- 目录：仅在有子节点时显示可展开箭头；文件：占位对齐 -->
@@ -123,12 +134,14 @@ function fwdRenameConfirm(path: string, value: string): void {
         :active-path="activePath"
         :expanded="expanded"
         :editing-path="editingPath"
+        :selected-path="selectedPath"
         :depth="level + 1"
         @select="emit('select', $event)"
         @toggle="emit('toggle', $event)"
         @context-menu="emit('context-menu', $event)"
         @rename-confirm="fwdRenameConfirm"
         @rename-cancel="onRenameCancel"
+        @rename-start="emit('rename-start', $event)"
       />
     </li>
   </ul>
@@ -200,6 +213,14 @@ function fwdRenameConfirm(path: string, value: string): void {
 .row:hover {
   background: var(--bg-hover);
   color: var(--hue-text-1);
+}
+
+/* 选中态（键盘 Delete 删除 / 单击选中）：比悬停更实一点，但弱于当前文档高亮，
+   形成「悬停 < 选中 < 当前文档」三级层次，不抢视觉 */
+.row--selected {
+  background: var(--hue-surface-2, var(--bg-hover));
+  color: var(--hue-text-1);
+  box-shadow: inset 2px 0 0 var(--hue-text-3);
 }
 
 /* 当前文档：玉质高亮底 + 强调色文字 + 左侧指示条 */
