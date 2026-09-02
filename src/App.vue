@@ -151,17 +151,48 @@ async function newDoc(): Promise<void> {
   await openPath(created)
 }
 
-/** 文件树里重命名了某个已开标签 → 同步该标签路径，避免继续往旧路径保存 */
+/**
+ * 同步标签路径：就地 / 文件夹重命名或移动后，把命中 oldPath 的标签（及其内部所有后代文档）
+ * 整体重映射到 newPath。文件夹的移动/重命名会让内部每篇文档的绝对路径都变化，必须前缀批量重映射，
+ * 否则嵌套的活动文档标签仍指向旧路径，编辑器自动保存会把已迁走的文件「复活」回来。
+ * 返回是否改动了当前激活标签路径（便于随后持久化），并收集需在 watcher 回声中免疫的路径集合。
+ */
+function remapTabPaths(
+  oldPath: string,
+  newPath: string,
+): { activeChanged: boolean; immune: string[] } {
+  const sep = oldPath.includes('\\') ? '\\' : '/'
+  const prefix = oldPath + sep
+  const immune = new Set<string>([oldPath, newPath, assetsPathOf(oldPath), assetsPathOf(newPath)])
+  for (const t of tabs.tabs) {
+    let np: string | null = null
+    if (t.path === oldPath) np = newPath
+    else if (t.path.startsWith(prefix)) np = newPath + t.path.slice(oldPath.length)
+    if (np) {
+      immune.add(t.path)
+      immune.add(np)
+      t.path = np
+    }
+  }
+  let activeChanged = false
+  const ap = tabs.activePath
+  if (oldPath === ap) {
+    tabs.activePath = newPath
+    activeChanged = true
+  } else if (ap && ap.startsWith(prefix)) {
+    tabs.activePath = newPath + ap.slice(oldPath.length)
+    activeChanged = true
+  }
+  return { activeChanged, immune: [...immune] }
+}
+
+/** 文件树里重命名了某个节点（文件或文件夹）→ 同步所有受影响标签路径，避免继续往旧路径保存 */
 function onRenamed(oldPath: string, newPath: string): void {
   // 抑制此次重命名的 watcher 回声（unlink+add）：既去重刷新，又避免当前文档被误判删除
-  markProgrammatic([oldPath, newPath, assetsPathOf(oldPath), assetsPathOf(newPath)])
-  const idx = tabs.tabs.findIndex((t) => t.path === oldPath)
-  if (idx === -1) return
-  tabs.tabs[idx].path = newPath
-  if (oldPath === tabs.activePath) {
-    tabs.activePath = newPath
-    void window.api.patchSession({ activePath: newPath, openTabs: tabs.paths })
-  }
+  const { activeChanged, immune } = remapTabPaths(oldPath, newPath)
+  markProgrammatic(immune)
+  if (activeChanged)
+    void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
 }
 
 /** 双击标签标题重命名：复用 renameItem + 同步标签路径 + 刷新树 */
@@ -175,30 +206,66 @@ async function onTabRename(payload: { path: string; name: string }): Promise<voi
   }
 }
 
-/** 文件树里删除了当前正在编辑的文档 → 关闭该标签并载入相邻文档 */
+/** 外部删除（含文件夹被外部删除时其内部各文件的 unlink）：把命中 path 的标签（及其后代）一并关闭，
+ *  且取消活动文档的待保存，避免自动保存把已删路径复活；同时抑制 watcher 回声，避免重复刷新。 */
 function onDeleted(path: string): void {
-  // 抑制此次删除的 watcher 回声（unlink）：避免重复刷新
-  markProgrammatic([path, assetsPathOf(path)])
-  if (path !== tabs.activePath) return
-  if (host.value?.dirty) void host.value.save()
-  tabs.close(path)
+  const sep = path.includes('\\') ? '\\' : '/'
+  const inside = (p: string): boolean => p === path || p.startsWith(path + sep)
+  const affected = tabs.tabs.filter((t) => inside(t.path))
+  if (!affected.length) return
+  const wasActive = affected.some((t) => t.path === tabs.activePath)
+  if (wasActive) host.value?.cancelPendingSave()
+  markProgrammatic([
+    path,
+    assetsPathOf(path),
+    ...affected.flatMap((t) => [t.path, assetsPathOf(t.path)]),
+  ])
+  for (const t of affected) tabs.close(t.path)
   void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
-  void syncEditorToActive()
+  if (wasActive) void syncEditorToActive()
 }
 
-/** 文件树里移动了某节点（拖拽或菜单）：抑制 watcher 回声、同步标签路径、刷新文件树 */
-async function onMoved(oldPath: string, newPath: string): Promise<void> {
-  // 抑制此次移动的 watcher 回声（unlink+add）：避免重复刷新，也避免当前文档被误判删除
-  markProgrammatic([oldPath, newPath, assetsPathOf(oldPath), assetsPathOf(newPath)])
-  const idx = tabs.tabs.findIndex((t) => t.path === oldPath)
-  if (idx !== -1) {
-    tabs.tabs[idx].path = newPath
-    if (oldPath === tabs.activePath) {
-      // 编辑器以 props.filePath 决定落盘路径，activePath 更新后即自动指向新位置，无需重载内容
-      tabs.activePath = newPath
-      void window.api.patchSession({ activePath: newPath, openTabs: tabs.paths })
-    }
+/**
+ * 文件树里删除节点（文件或文件夹）：先把「节点本身及其内部」所有已开标签关掉（含活动文档，
+ * 且取消其待保存以免自动保存重建已删文件/目录），再真正删除磁盘内容，最后单一刷新。
+ * 历史目录的迁移/清理由主进程 deleteItem 统一负责（按文档绝对路径哈希定位）。
+ */
+async function onDeleteNode(node: FileNode): Promise<void> {
+  const sep = node.path.includes('\\') ? '\\' : '/'
+  const inside = (p: string): boolean => p === node.path || p.startsWith(node.path + sep)
+  const affected = tabs.tabs.filter((t) => inside(t.path))
+  const wasActive = affected.some((t) => t.path === tabs.activePath)
+  if (wasActive) host.value?.cancelPendingSave()
+
+  // 抑制删除的 watcher 回声（unlink/unlinkDir）：含文件夹内各文件，避免重复刷新与误判
+  markProgrammatic([
+    node.path,
+    assetsPathOf(node.path),
+    ...affected.map((t) => t.path),
+    ...affected.map((t) => assetsPathOf(t.path)),
+  ])
+
+  // 先关标签，再删磁盘，避免编辑器自动保存把已删路径重建出来
+  for (const t of affected) tabs.close(t.path)
+  void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
+
+  try {
+    await window.api.deleteItem(node.path)
+  } catch (e) {
+    showToast(U.deleteFail.replace('{m}', e instanceof Error ? e.message : String(e)), 'err')
+    await refreshTree()
+    return
   }
+  if (wasActive) void syncEditorToActive()
+  await refreshTree()
+}
+
+/** 文件树里移动了某节点（拖拽或菜单，文件或文件夹）：重映射标签路径、抑制 watcher 回声、刷新文件树 */
+async function onMoved(oldPath: string, newPath: string): Promise<void> {
+  const { activeChanged, immune } = remapTabPaths(oldPath, newPath)
+  markProgrammatic(immune)
+  if (activeChanged)
+    void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
   await refreshTree()
 }
 
@@ -1144,7 +1211,7 @@ onBeforeUnmount(() => {
         @new-doc="newDoc"
         @update:width="sidebarWidth = $event"
         @renamed="onRenamed"
-        @deleted="onDeleted"
+        @delete-node="onDeleteNode"
         @moved="onMoved"
         @open-result="onOpenResult"
         @replaced="onSearchReplaced"

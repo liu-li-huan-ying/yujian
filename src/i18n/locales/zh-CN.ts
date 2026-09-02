@@ -461,6 +461,7 @@ const zhCN = {
     ctxMove: '移动到…',
     ctxDelete: '删除',
     renameFail: '重命名失败：{m}',
+    deleteFail: '删除失败：{m}',
     moveTitle: '移动到…',
     moveToRoot: '库根目录',
     moveConfirm: '移动',

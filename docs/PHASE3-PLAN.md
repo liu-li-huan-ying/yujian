@@ -212,27 +212,33 @@ Phase 3 新增两条：
 
 ***
 
-## 5.5 文件移动 + 刷新一致性（批次二收尾，已实现）
+## 5.5 文件移动 + 刷新一致性（批次二收尾，已实现并修正）
 
-**需求**：在目录树中把文件/文件夹移动到其他文件夹，支持拖拽与右键菜单两条入口；并修复刷新逻辑的重复刷新 / 竞态。
+**需求**：在目录树中把文件/文件夹移动到其他文件夹，支持拖拽与右键菜单两条入口；并修复刷新逻辑的重复刷新 / 竞态，且**文档、历史记录、附件等一切关联数据必须随文档一起挪动**。
 
-**主进程 `vault.ts` 新增 `moveItem(oldPath, destDir, newName?)`**
-- 校验：目标须为已存在目录；不能移动到自身或子孙目录；同名冲突自动追加序号（绝不覆盖）。
-- 同目录移动降级为 `renameItem`（复用 `.assets` 同步）；跨卷（`EXDEV`）回退为「递归复制 + 删源」，文件夹同样适用。
-- Windows 只读属性 / 云盘拦截：先 `chmod(destDir, 0o777)` 再试。
-- 即时维护统一索引层：文件精确「移除旧路径 + 登记新路径」；目录触发防抖 `reconcile`（与 `addDir`/`unlinkDir` 同机制），避免依赖 watcher 的 1s 延迟窗口读到陈旧路径。
+**主进程 `vault.ts`**
+- 新增 `moveItem(oldPath, destDir, newName?)`：校验目标须为已存在目录、禁自身/子孙、同名冲突追加序号（绝不覆盖）；同目录降级 `renameItem`；跨卷 `EXDEV` 回退「递归复制 + 删源」；Windows 只读属性先 `chmod(destDir,0o777)` 再试。
+- **关联数据随文档迁移/清理（核心修正：原实现只搬了 .md）**：
+  - 历史记录 `.yujian-history/<sha1(文档绝对路径)>`：`renameItem`/`moveItem`/`deleteItem` 在文档（或文件夹内每篇文档）绝对路径变化后，调用 `snapshots.moveHistory`/`deleteHistory` 把对应历史桶一并迁移/清走（走系统回收站，符合数据安全红线）。
+  - 附件 `.assets`：单文件移动/重命名时同步搬运同名 `.assets`；文件夹移动/重命名时整棵子树（含内部各 `.assets`）整体搬迁，无需逐文件处理。
+  - 统一索引层：文件精确「移除旧路径 + 登记新路径」；目录触发防抖 reconcile，避免依赖 watcher 的 1s 延迟窗口读到陈旧路径。
 - IPC：`VAULT_MOVE` → preload `window.api.moveItem`。
 
 **渲染层**
-- `FileTree.vue`：行 `draggable`，`dragstart/dragover/drop/dragend`；拖到目录 = 进入该目录，拖到树背景 = 移入库根；校验自身/子孙并高亮放置目标（`row--drop`）。
-- `MoveDialog.vue`：右键菜单「移动到…」打开库内文件夹选择弹窗（禁用自身 / 子孙 / 原父目录）。
-- `Sidebar.vue`：`doMove` 统一收口拖拽与菜单两条入口（校验 → `moveItem` → 展开目标目录、迁移展开/选中态 → emit `moved`）。
-- `App.vue`：`onMoved` 同步标签路径（编辑器以 `props.filePath` 决定落盘路径，无需重载内容）+ 单一刷新源。
+- `FileTree.vue`：行 `draggable` + `dragstart/over/drop/end`；拖到目录 = 进该目录，拖到树背景 = 移入库根；校验自身/子孙并高亮 `row--drop`。
+- `MoveDialog.vue`：右键「移动到…」库内文件夹选择弹窗（禁用自身/子孙/原父目录，含「库根目录」项）。
+- `Sidebar.vue`：`doMove` 收口拖拽与菜单两条入口；删除统一 `emit('delete-node', node)` 交给 App 编排（不再自行删磁盘）。
+- `App.vue`：
+  - `onMoved` / `onRenamed`：经 `remapTabPaths` **前缀批量重映射所有受影响标签**——文件夹移动/重命名让内部每篇文档绝对路径都变化，必须连嵌套的活动文档标签一起更新，否则旧路径标签会被编辑器自动保存「复活」。
+  - `onDeleteNode`（树驱动删除）：先关闭节点本身及其内部**全部**已开标签（含活动文档，且 `cancelPendingSave` 取消待保存以免自动保存重建已删文件/目录），再 `deleteItem`，最后单一刷新。
+  - `onDeleted`（外部删除）：同样按路径前缀批量关闭受影响标签并取消活动文档待保存。
 
 **刷新一致性修复（`src/refreshGuard.ts` + `App.onVaultChange`）**
-- 程序化改动（新建 / 重命名 / 删除 / 移动）后，以「路径集合 + 时间窗」标定同源事件，watcher 回声直接忽略 → **消除一次改动两次全量扫描的重复刷新**。
-- 关键竞态修复：移动/重命名**正在编辑**的文档时，watcher 的 `unlink(旧路径)` 不再被误判为「外部删除」而关掉标签（`onRenamed`/`onMoved` 在同步路径前先登记 immune）。
-- 真正的外部改动路径不在免疫集合内，照常触发刷新 / 冲突检测，无遗漏。
+- 程序化改动后，「路径集合 + 时间窗」标定同源事件，watcher 回声直接忽略 → **消除一次改动两次全量扫描的重复刷新**。
+- 关键竞态：移动/重命名正在编辑的文档时，`unlink(旧路径)` 不再被误判「外部删除」而关标签（`onRenamed`/`onMoved` 同步路径前先登记 immune）。
+- 真正的外部改动路径不在免疫集合内，照常刷新/冲突检测，无遗漏。
+
+**创建文件夹慢（已修）**：每次程序化改动（含 `createFolder`/`createDoc`）置 `progSuppressUntil`，让 `scheduleReconcile` 跳过昂贵的全量 `reconcileIndex`——索引已由每文件 `add`/`unlink` 事件增量维护，全量 reconcile 纯属冗余且在大库极重；外部结构改动仍照常 reconcile，不丢一致性。
 
 ***
 

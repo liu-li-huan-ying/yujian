@@ -25,6 +25,7 @@ import type {
   SearchResult,
 } from '../shared/ipc-channels'
 import * as Idx from './vaultIndex'
+import * as Snap from './snapshots'
 
 // 与 vault 索引层收拢同源判定（避免重复实现）
 const shouldSkipDir = Idx.shouldSkipDir
@@ -37,6 +38,47 @@ async function exists(p: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * 当前笔记库根（由 watchVault 写入）。移动 / 删除文档时需要它来定位
+ * `<root>/.yujian-history/<sha1(文档绝对路径)>` 历史目录，使历史随文档一起迁移 / 清理。
+ */
+let vaultRoot: string | null = null
+
+/**
+ * 程序化改动抑制窗：主进程自己执行 create / rename / move / delete 时置位，
+ * 让 watchVault 的 addDir/unlinkDir 不再触发昂贵的全量 reconcileIndex（每文件 add/unlink
+ * 事件已增量维护索引，全量 reconcile 纯属冗余且在大库上很重）。仅抑制「程序化」改动，
+ * 外部改动（资源管理器里建/删）仍会照常 reconcile，不丢索引一致性。
+ */
+let progSuppressUntil = 0
+function markProgrammaticChange(windowMs = 1500): void {
+  progSuppressUntil = Date.now() + windowMs
+}
+
+/** 递归收集目录树下全部 Markdown 文档绝对路径（与 listTree 同跳过规则，跳过 .yujian-history 等） */
+async function collectMarkdownPaths(dir: string): Promise<string[]> {
+  const out: string[] = []
+  async function walk(d: string): Promise<void> {
+    let entries
+    try {
+      entries = await readdir(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = join(d, entry.name)
+      if (entry.isDirectory()) {
+        if (shouldSkipDir(entry.name)) continue
+        await walk(full)
+      } else if (entry.isFile() && isMarkdown(entry.name)) {
+        out.push(full)
+      }
+    }
+  }
+  await walk(dir)
+  return out
 }
 
 /** 是否为权限类错误（Windows 上建目录/删目录常被只读属性或云盘驱动以 EPERM/EACCES 形式拦截） */
@@ -82,6 +124,7 @@ export function listTree(root: string): Promise<FileNode[]> {
 
 /** 新建文档。同名自动追加序号，绝不覆盖已有内容 */
 export async function createDoc(dir: string, baseName = '未命名'): Promise<string> {
+  markProgrammaticChange()
   await mkdir(dir, { recursive: true })
 
   let candidate = join(dir, `${baseName}.md`)
@@ -97,6 +140,7 @@ export async function createDoc(dir: string, baseName = '未命名'): Promise<st
 
 /** 新建文件夹（目录）。同名自动追加序号，绝不覆盖已有目录 */
 export async function createFolder(parentDir: string, baseName = '未命名文件夹'): Promise<string> {
+  markProgrammaticChange()
   await mkdir(parentDir, { recursive: true })
 
   let candidate = join(parentDir, baseName)
@@ -152,7 +196,37 @@ export async function renameItem(oldPath: string, newName: string): Promise<stri
   if (newPath === oldPath) return oldPath
   if (await exists(newPath)) throw new Error(`已存在同名项目：${name}`)
 
+  markProgrammaticChange()
+
+  // 移动前先记录「是否为目录 / 目录内各 md 的相对路径」，以便把历史一并迁移
+  let oldIsDir = false
+  let oldMdRels: string[] = []
+  try {
+    const st = await stat(oldPath)
+    oldIsDir = st.isDirectory()
+    if (oldIsDir) {
+      oldMdRels = (await collectMarkdownPaths(oldPath)).map((p) => relative(oldPath, p))
+    }
+  } catch {
+    // 取不到则跳过历史迁移
+  }
+
   await rename(oldPath, newPath)
+
+  // 把历史目录一并迁移到新绝对路径（内容不含绝对路径，整目录搬走即可）
+  if (vaultRoot) {
+    try {
+      if (oldIsDir) {
+        for (const rel of oldMdRels) {
+          await Snap.moveHistory(vaultRoot, join(oldPath, rel), join(newPath, rel))
+        }
+      } else {
+        await Snap.moveHistory(vaultRoot, oldPath, newPath)
+      }
+    } catch {
+      // 历史迁移失败不阻断主流程
+    }
+  }
 
   // 尽力同步同名 .assets（仅文档文件、且文件名确实变了时才搬）
   try {
@@ -178,6 +252,19 @@ export async function renameItem(oldPath: string, newName: string): Promise<stri
 
 /** 删除文件或文件夹（递归）。删除文档时一并清理同名的 `.assets` 资源目录 */
 export async function deleteItem(targetPath: string): Promise<void> {
+  markProgrammaticChange()
+
+  // 删除前先记录是否为目录 / 目录内各 md 路径，便于随后清理其历史
+  let deletingDir = false
+  let mdPaths: string[] = []
+  try {
+    const st = await stat(targetPath)
+    deletingDir = st.isDirectory()
+    if (deletingDir) mdPaths = await collectMarkdownPaths(targetPath)
+  } catch {
+    // 取不到则跳过历史清理
+  }
+
   // Windows 上目标或父目录的只读属性会让 rm 失败；先尽力清除只读属性再删
   if (process.platform === 'win32') {
     try {
@@ -203,6 +290,19 @@ export async function deleteItem(targetPath: string): Promise<void> {
     }
   } catch {
     // 资源目录清理失败不影响删除结果
+  }
+
+  // 清理对应的版本历史（走回收站）；文件夹则清理其中每篇文档的历史
+  if (vaultRoot) {
+    try {
+      if (deletingDir) {
+        for (const p of mdPaths) await Snap.deleteHistory(vaultRoot, p)
+      } else {
+        await Snap.deleteHistory(vaultRoot, targetPath)
+      }
+    } catch {
+      // 历史清理失败不影响删除结果
+    }
   }
 }
 
@@ -232,6 +332,8 @@ export async function moveItem(
   const name = (newName ?? '').trim() || basename(oldPath)
   if (/[\\/]/.test(name)) throw new Error('名称不能包含路径分隔符')
   if (name === '.' || name === '..') throw new Error('名称无效')
+
+  markProgrammaticChange()
 
   // 目标必须是已存在的目录
   let destStat
@@ -283,6 +385,43 @@ export async function moveItem(
       await rm(oldPath, { recursive: true, force: true })
     } else {
       throw e
+    }
+  }
+
+  // 移动前先记录「是否为目录 / 目录内各 md 的相对路径」，以便把历史一并迁移
+  let oldIsDir = false
+  let oldMdRels: string[] = []
+  try {
+    const st = await stat(oldPath)
+    oldIsDir = st.isDirectory()
+    if (oldIsDir) {
+      oldMdRels = (await collectMarkdownPaths(oldPath)).map((p) => relative(oldPath, p))
+    }
+  } catch {
+    // 取不到则跳过历史迁移（跨卷回退场景下 oldPath 已被删，下面用 target 兜底）
+    try {
+      const st2 = await stat(target)
+      oldIsDir = st2.isDirectory()
+      if (oldIsDir) {
+        oldMdRels = (await collectMarkdownPaths(target)).map((p) => relative(target, p))
+      }
+    } catch {
+      // 忽略
+    }
+  }
+
+  // 把历史目录一并迁移到新绝对路径（内容不含绝对路径，整目录搬走即可）
+  if (vaultRoot) {
+    try {
+      if (oldIsDir) {
+        for (const rel of oldMdRels) {
+          await Snap.moveHistory(vaultRoot, join(oldPath, rel), join(target, rel))
+        }
+      } else {
+        await Snap.moveHistory(vaultRoot, oldPath, target)
+      }
+    } catch {
+      // 历史迁移失败不阻断主流程
     }
   }
 
@@ -376,6 +515,9 @@ function scheduleSave(root: string): void {
 
 /** 目录级变动（新建/删除文件夹）后防抖全量对齐：仅重解析 mtime 变化者，禁周期重算 */
 function scheduleReconcile(root: string): void {
+  // 程序化改动（create/rename/move/delete）已由每文件 add/unlink 事件增量维护索引，
+  // 全量 reconcile 纯属冗余且在大库上极重，跳过它避免「建个空文件夹都要走一遍全库」
+  if (Date.now() < progSuppressUntil) return
   if (reconcileTimer) clearTimeout(reconcileTimer)
   reconcileTimer = setTimeout(() => {
     reconcileTimer = null
@@ -438,6 +580,7 @@ let watcher: FSWatcher | null = null
  */
 export function watchVault(root: string, onChange: (change: VaultChange) => void): void {
   stopWatching()
+  vaultRoot = root
 
   // 惰性建立 / 载入索引（不阻塞监听启动；搜索与后续维护会用到）
   void ensureIndex(root).catch(() => {})

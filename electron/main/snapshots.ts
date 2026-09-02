@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile, rename, cp, rm, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { shell } from 'electron'
@@ -58,6 +58,11 @@ function historyDir(vaultPath: string, filePath: string): string {
   return join(vaultPath, '.yujian-history', hashPath(filePath))
 }
 
+/** 导出：供 vault.ts 在移动/删除文档时定位其历史目录（与内部 historyDir 同实现） */
+export function historyDirFor(vaultPath: string, filePath: string): string {
+  return historyDir(vaultPath, filePath)
+}
+
 /** 把 `2026-08-29T21-52-00` 解析为 Date（文件名用 - 替代 : 以兼容文件系统） */
 function isoToDate(iso: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})$/.exec(iso)
@@ -74,7 +79,7 @@ export function displayTime(iso: string): string {
   const d = isoToDate(iso)
   const p = (n: number): string => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(
-    d.getMinutes()
+    d.getMinutes(),
   )}:${p(d.getSeconds())}`
 }
 
@@ -87,7 +92,7 @@ function nowIso(): string {
   const d = new Date()
   const p = (n: number): string => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}-${p(
-    d.getMinutes()
+    d.getMinutes(),
   )}-${p(d.getSeconds())}`
 }
 
@@ -161,7 +166,7 @@ function toInfo(m: SnapshotMeta): SnapshotInfo {
     branch: m.branch,
     parent: m.parent,
     charCount: m.charCount,
-    size: m.size
+    size: m.size,
   }
 }
 
@@ -181,7 +186,7 @@ async function readIndex(dir: string): Promise<SnapshotMeta[]> {
       ...m,
       tags: Array.isArray(m.tags) ? m.tags : [],
       branch: sanitizeBranch(m.branch),
-      parent: m.parent ?? null
+      parent: m.parent ?? null,
     }))
   }
   if (!metas) metas = await migrate(dir)
@@ -219,7 +224,7 @@ async function migrate(dir: string): Promise<SnapshotMeta[]> {
       branch: MAIN_BRANCH,
       parent: null,
       charCount: content.length,
-      size: content.length
+      size: content.length,
     })
   }
   metas.sort((a, b) => a.createdAt - b.createdAt)
@@ -236,9 +241,7 @@ async function writeIndex(dir: string, metas: SnapshotMeta[]): Promise<void> {
 export async function listSnapshots(vaultPath: string, filePath: string): Promise<SnapshotInfo[]> {
   const dir = historyDir(vaultPath, filePath)
   const metas = await readIndex(dir)
-  return metas
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map((m) => toInfo(m))
+  return metas.sort((a, b) => b.createdAt - a.createdAt).map((m) => toInfo(m))
 }
 
 /**
@@ -253,7 +256,7 @@ export async function createSnapshot(
   content: string,
   note?: string,
   tags?: string[],
-  branch?: string
+  branch?: string,
 ): Promise<SnapshotInfo> {
   const dir = historyDir(vaultPath, filePath)
   await mkdir(dir, { recursive: true })
@@ -277,9 +280,7 @@ export async function createSnapshot(
   }
 
   // parent 只认**同分支**的上一条 → 每条分支是独立的线性时间轴（无 merge / 无 DAG）
-  const sameBranch = metas
-    .filter((m) => m.branch === br)
-    .sort((a, b) => a.createdAt - b.createdAt)
+  const sameBranch = metas.filter((m) => m.branch === br).sort((a, b) => a.createdAt - b.createdAt)
 
   const meta: SnapshotMeta = {
     id,
@@ -291,7 +292,7 @@ export async function createSnapshot(
     branch: br,
     parent: sameBranch.length ? sameBranch[sameBranch.length - 1].id : null,
     charCount: content.length,
-    size: content.length
+    size: content.length,
   }
   metas.push(meta)
   await writeIndex(dir, metas)
@@ -303,7 +304,7 @@ export async function setSnapshotTags(
   vaultPath: string,
   filePath: string,
   id: string,
-  tags: string[]
+  tags: string[],
 ): Promise<SnapshotInfo | null> {
   const dir = historyDir(vaultPath, filePath)
   const metas = await readIndex(dir)
@@ -318,7 +319,7 @@ export async function setSnapshotTags(
 export async function restoreSnapshot(
   vaultPath: string,
   filePath: string,
-  id: string
+  id: string,
 ): Promise<string> {
   const dir = historyDir(vaultPath, filePath)
   const metas = await readIndex(dir)
@@ -331,7 +332,7 @@ export async function restoreSnapshot(
 export async function deleteSnapshot(
   vaultPath: string,
   filePath: string,
-  id: string
+  id: string,
 ): Promise<void> {
   const dir = historyDir(vaultPath, filePath)
   const metas = await readIndex(dir)
@@ -347,5 +348,57 @@ export async function deleteSnapshot(
   } catch {
     const { unlink } = await import('node:fs/promises')
     await unlink(target).catch(() => {})
+  }
+}
+
+/**
+ * 迁移某文档的历史目录：从「旧绝对路径」哈希桶搬到「新绝对路径」哈希桶。
+ * 历史内容（index.json + 快照 .md）本身不含绝对路径，只需整体搬目录，无需改写内容。
+ * 无历史（旧桶不存在）则静默无操作；跨卷 EXDEV 回退「复制+删源」。
+ * 文档移动/重命名（含所在文件夹被移动，导致内部每篇文档的绝对路径都变化）时由 vault.ts 逐文件调用。
+ */
+export async function moveHistory(
+  vaultPath: string,
+  oldFilePath: string,
+  newFilePath: string,
+): Promise<void> {
+  const oldDir = historyDir(vaultPath, oldFilePath)
+  const newDir = historyDir(vaultPath, newFilePath)
+  if (oldDir === newDir) return
+  let oldStat: { isDirectory(): boolean }
+  try {
+    oldStat = await stat(oldDir)
+  } catch {
+    return // 无历史，无需迁移
+  }
+  if (!oldStat.isDirectory()) return
+  try {
+    await rename(oldDir, newDir)
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code === 'EXDEV') {
+      await cp(oldDir, newDir, { recursive: true })
+      await rm(oldDir, { recursive: true, force: true })
+    } else {
+      throw e
+    }
+  }
+}
+
+/**
+ * 删除某文档的全部历史（走系统回收站，绝不 rm，符合数据安全红线）；无历史则静默无操作。
+ * 删除文档/文件夹时由 vault.ts 调用（文件夹会逐篇内部文档调用）。
+ */
+export async function deleteHistory(vaultPath: string, filePath: string): Promise<void> {
+  const dir = historyDir(vaultPath, filePath)
+  try {
+    await stat(dir)
+  } catch {
+    return // 无历史
+  }
+  try {
+    await shell.trashItem(dir)
+  } catch {
+    // 回收站不可用（沙箱 / 网络盘）时退回强制删除，避免历史残留无限堆积
+    await rm(dir, { recursive: true, force: true })
   }
 }
