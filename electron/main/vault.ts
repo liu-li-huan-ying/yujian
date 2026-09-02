@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
 import type {
@@ -26,6 +26,12 @@ async function exists(p: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** 是否为权限类错误（Windows 上建目录/删目录常被只读属性或云盘驱动以 EPERM/EACCES 形式拦截） */
+function isPermError(e: unknown): boolean {
+  const code = (e as NodeJS.ErrnoException)?.code
+  return code === 'EPERM' || code === 'EACCES'
 }
 
 /** 递归扫描，产出「目录在前、名称升序」的树；空目录也会保留（否则新建文件夹后侧栏看不到） */
@@ -89,8 +95,37 @@ export async function createFolder(parentDir: string, baseName = '未命名文�
     n += 1
   }
 
-  await mkdir(candidate)
+  await mkdirRobust(candidate, parentDir)
   return candidate
+}
+
+/**
+ * 建目录并兼容 Windows 特有的「父目录只读属性」拦截：
+ * 某些 Git / 云盘 / 从光盘复制来的文件夹会被打上只读 DOS 属性，导致 Node 的
+ * fs.mkdir 建子目录时抛 EPERM（但建文件正常）。先清除父目录只读属性再重试一次。
+ * 若仍失败，抛出清晰可执行的报错，而非把底层 EPERM 直接甩给用户。
+ */
+async function mkdirRobust(target: string, parent: string): Promise<void> {
+  try {
+    await mkdir(target)
+  } catch (e) {
+    if (isPermError(e) && process.platform === 'win32') {
+      try {
+        await chmod(parent, 0o777)
+        await mkdir(target)
+        return
+      } catch {
+        // 落到下方清晰报错
+      }
+    }
+    if (isPermError(e)) {
+      throw new Error(
+        `无法创建文件夹（权限不足或被云同步 / 杀软拦截）：${target}。` +
+          `请确认该位置非只读，或暂时退出 OneDrive / 坚果云等同步、以管理员身份运行后重试。`
+      )
+    }
+    throw e
+  }
 }
 
 /** 重命名文件或文件夹。会顺带搬运同名的 `.assets` 资源目录（文档图片存储约定） */
@@ -132,6 +167,20 @@ export async function renameItem(oldPath: string, newName: string): Promise<stri
 
 /** 删除文件或文件夹（递归）。删除文档时一并清理同名的 `.assets` 资源目录 */
 export async function deleteItem(targetPath: string): Promise<void> {
+  // Windows 上目标或父目录的只读属性会让 rm 失败；先尽力清除只读属性再删
+  if (process.platform === 'win32') {
+    try {
+      await chmod(targetPath, 0o777)
+    } catch {
+      // 目标可能已不存在或权限极高，rm 的 force 会兜底
+    }
+    try {
+      await chmod(dirname(targetPath), 0o777)
+    } catch {
+      // 忽略
+    }
+  }
+
   await rm(targetPath, { recursive: true, force: true })
 
   try {
