@@ -23,7 +23,7 @@ import {
   type FileStat,
   type UnlinkedMention
 } from '../shared/ipc-channels'
-import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
+import { createDoc, createFolder, deleteItem, listTree, renameItem, moveItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
 import * as VaultIndex from './vaultIndex'
 import * as VaultIntegrity from './vaultIntegrity'
 import * as VaultBackup from './vaultBackup'
@@ -280,6 +280,12 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.VAULT_DELETE, async (_event, targetPath: string) =>
     deleteItem(targetPath)
+  )
+
+  ipcMain.handle(
+    IPC.VAULT_MOVE,
+    async (_event, oldPath: string, destDir: string, newName?: string) =>
+      moveItem(oldPath, destDir, newName)
   )
 
   ipcMain.handle(IPC.DIALOG_OPEN_FILE, async () => {
