@@ -25,7 +25,16 @@ import CompilePanel from './components/CompilePanel.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import type { EditorMode } from './editor/EditorHost.vue'
-import type { FileNode, VaultChange, StartupMode, ZenPrefs, BrokenLinkItem, ExportResult, ExportPayload, IntegrityReport } from '../electron/shared/ipc-channels'
+import type {
+  FileNode,
+  VaultChange,
+  StartupMode,
+  ZenPrefs,
+  BrokenLinkItem,
+  ExportResult,
+  ExportPayload,
+  IntegrityReport,
+} from '../electron/shared/ipc-channels'
 import { inlineImages } from './export/imageInline'
 import { parseFrontmatter } from './editor/frontmatter'
 import { type ExportKind } from './export/types'
@@ -34,7 +43,7 @@ import {
   kindLabel,
   bytesToBase64,
   type BuiltExport,
-  type ExportContext
+  type ExportContext,
 } from './export/buildExport'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
@@ -63,12 +72,10 @@ const sidebarWidth = ref(224)
 const pendingPath = ref<string | null>(null)
 
 const fileName = computed(() =>
-  filePath.value ? filePath.value.split(/[\\/]/).pop() ?? '' : U.untitled
+  filePath.value ? (filePath.value.split(/[\\/]/).pop() ?? '') : U.untitled,
 )
 
-const modeLabel = computed(() =>
-  requestedMode.value === 'wysiwyg' ? U.modeWysiwyg : U.modeSource
-)
+const modeLabel = computed(() => (requestedMode.value === 'wysiwyg' ? U.modeWysiwyg : U.modeSource))
 
 async function refreshTree(): Promise<void> {
   tree.value = vaultPath.value ? await window.api.listVault(vaultPath.value) : []
@@ -122,7 +129,7 @@ watch(
     const path = pendingPath.value
     pendingPath.value = null
     void host.value?.load(path)
-  }
+  },
 )
 
 /** 编辑器就绪后若会话记录开启了凝神模式，则恢复（插件已注册，切开关即生效） */
@@ -130,7 +137,7 @@ watch(
   () => host.value?.ready,
   (ready) => {
     if (ready && focusMode.value) host.value?.setZen(true)
-  }
+  },
 )
 
 function onSelect(node: FileNode): void {
@@ -146,6 +153,8 @@ async function newDoc(): Promise<void> {
 
 /** 文件树里重命名了某个已开标签 → 同步该标签路径，避免继续往旧路径保存 */
 function onRenamed(oldPath: string, newPath: string): void {
+  // 抑制此次重命名的 watcher 回声（unlink+add）：既去重刷新，又避免当前文档被误判删除
+  markProgrammatic([oldPath, newPath, assetsPathOf(oldPath), assetsPathOf(newPath)])
   const idx = tabs.tabs.findIndex((t) => t.path === oldPath)
   if (idx === -1) return
   tabs.tabs[idx].path = newPath
@@ -168,11 +177,29 @@ async function onTabRename(payload: { path: string; name: string }): Promise<voi
 
 /** 文件树里删除了当前正在编辑的文档 → 关闭该标签并载入相邻文档 */
 function onDeleted(path: string): void {
+  // 抑制此次删除的 watcher 回声（unlink）：避免重复刷新
+  markProgrammatic([path, assetsPathOf(path)])
   if (path !== tabs.activePath) return
   if (host.value?.dirty) void host.value.save()
   tabs.close(path)
   void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
   void syncEditorToActive()
+}
+
+/** 文件树里移动了某节点（拖拽或菜单）：抑制 watcher 回声、同步标签路径、刷新文件树 */
+async function onMoved(oldPath: string, newPath: string): Promise<void> {
+  // 抑制此次移动的 watcher 回声（unlink+add）：避免重复刷新，也避免当前文档被误判删除
+  markProgrammatic([oldPath, newPath, assetsPathOf(oldPath), assetsPathOf(newPath)])
+  const idx = tabs.tabs.findIndex((t) => t.path === oldPath)
+  if (idx !== -1) {
+    tabs.tabs[idx].path = newPath
+    if (oldPath === tabs.activePath) {
+      // 编辑器以 props.filePath 决定落盘路径，activePath 更新后即自动指向新位置，无需重载内容
+      tabs.activePath = newPath
+      void window.api.patchSession({ activePath: newPath, openTabs: tabs.paths })
+    }
+  }
+  await refreshTree()
 }
 
 /** 全文搜索结果点击：打开文档并定位到命中行（源码模式可精确定位） */
@@ -183,11 +210,13 @@ async function onOpenResult(payload: { path: string; line: number }): Promise<vo
 }
 
 /** 源码模式命中高亮：把侧栏搜索状态（query/选项/当前行）转交给编辑器，复用统一搜索逻辑 */
-function onFindHighlight(payload: {
-  query: string
-  opts: { caseSensitive: boolean; wholeWord: boolean; regex?: boolean }
-  currentLine?: number
-} | null): void {
+function onFindHighlight(
+  payload: {
+    query: string
+    opts: { caseSensitive: boolean; wholeWord: boolean; regex?: boolean }
+    currentLine?: number
+  } | null,
+): void {
   if (payload) host.value?.setFindHighlight(payload.query, payload.opts, payload.currentLine)
   else host.value?.setFindHighlight()
 }
@@ -216,8 +245,7 @@ async function onCreateBrokenLink(item: BrokenLinkItem): Promise<void> {
     showToast(U.linkCheckCreateFail, 'err')
     return
   }
-  const dir =
-    parts.length > 0 ? [root, ...parts].join('/') : item.file.replace(/[\\/][^\\/]+$/, '')
+  const dir = parts.length > 0 ? [root, ...parts].join('/') : item.file.replace(/[\\/][^\\/]+$/, '')
   try {
     const created = await window.api.createDoc(dir, name)
     await refreshTree()
@@ -265,6 +293,13 @@ function closeToRight(path: string): void {
 let treeTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
+ * 程序化改动的同源事件抑制（见 src/refreshGuard.ts）：我们在渲染层显式刷新后，主进程
+ * watcher 还会把同一磁盘改动再推回来。以「路径集合 + 时间窗」标定我们刚亲手做过的改动，
+ * 让同源事件直接忽略——既去重刷新，也避免当前文档被移动/重命名时误判为「外部删除」。
+ */
+import { isVaultEventSuppressed, markProgrammatic, assetsPathOf } from './refreshGuard'
+
+/**
  * 外部修改冲突检测：当笔记库里「当前正在编辑」的文档被玉笺之外（别的编辑器 / Git 切分支 /
  * 资源管理器改名）改写时，若磁盘内容与编辑器内存内容不同，弹出三选一对话框，绝不静默覆盖。
  * - 自己的保存回声：磁盘 == 内存（我们刚写过的内容）→ 直接忽略，不误报。
@@ -291,7 +326,7 @@ async function detectConflict(path: string): Promise<void> {
       path,
       mine,
       disk,
-      diskMtime: st?.exists ? st.mtimeMs : null
+      diskMtime: st?.exists ? st.mtimeMs : null,
     }
     conflictOpen.value = true
   } catch {
@@ -349,6 +384,10 @@ function onBackupRestored(): void {
 }
 
 function onVaultChange(change: VaultChange): void {
+  // 程序化改动的回声（重命名 / 移动 / 删除 / 新建）：我们已在渲染层显式刷新并同步状态，
+  // 这里的同源事件直接忽略，避免重复刷新与「当前文档被误判删除」的竞态
+  if (isVaultEventSuppressed(change.path)) return
+
   // 内容变化：仅对「当前正在编辑」的文档做冲突检测；其他文件改动不影响当前编辑，忽略
   if (change.kind === 'change') {
     if (change.path === filePath.value && filePath.value) {
@@ -448,11 +487,7 @@ function onKeydown(e: KeyboardEvent): void {
 const toast = ref<{ msg: string; type: 'ok' | 'err' | 'info' } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-function showToast(
-  msg: string,
-  type: 'ok' | 'err' | 'info' = 'info',
-  duration = 2600
-): void {
+function showToast(msg: string, type: 'ok' | 'err' | 'info' = 'info', duration = 2600): void {
   toast.value = { msg, type }
   if (toastTimer) clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = null), duration)
@@ -519,14 +554,16 @@ const integrityOpen = ref(false)
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
 const lastIntegrityReport = ref<IntegrityReport | null>(null)
-const conflict = ref<{ path: string; mine: string; disk: string; diskMtime: number | null } | null>(null)
+const conflict = ref<{ path: string; mine: string; disk: string; diskMtime: number | null } | null>(
+  null,
+)
 const conflictOpen = ref(false)
 const statsOpen = ref(false)
 const focusMode = ref(false)
 /** 写作目标字数（会话级持久化；0 = 未设） */
 const writingGoal = ref(0)
 const stats = computed<TextStats>(
-  () => host.value?.stats ?? { han: 0, words: 0, chars: 0, charsNoSpace: 0, readingMinutes: 0 }
+  () => host.value?.stats ?? { han: 0, words: 0, chars: 0, charsNoSpace: 0, readingMinutes: 0 },
 )
 
 /** 打开/关闭快照面板：打开时刷新当前文档快照列表（快照功能已于 2026-08-30 经用户运行期验证可用） */
@@ -562,7 +599,7 @@ const zenPrefs = ref<ZenPrefs>({
   scroll: 0.16,
   fullscreen: false,
   retreatBar: true,
-  blockZoom: true
+  blockZoom: true,
 })
 /** 本次凝神是否因偏好自动全屏（退出时只还原自己转的全屏，不碰用户手动 F11） */
 let zenAutoFullscreen = false
@@ -728,7 +765,8 @@ async function onPublishImages(): Promise<void> {
   } else if (!res.ok) {
     showToast(`${U.toastImgHostPublishFail}${res.error ?? ''}`, 'err')
   } else {
-    const failedText = res.failed > 0 ? U.toastImgHostPartialFail.replace('{n}', String(res.failed)) : ''
+    const failedText =
+      res.failed > 0 ? U.toastImgHostPartialFail.replace('{n}', String(res.failed)) : ''
     showToast(U.toastImgHostPublishOk.replace('{n}', String(res.uploaded)) + failedText, 'ok')
   }
 }
@@ -745,7 +783,7 @@ const exportPrefs = ref({
   cover: false,
   inline: true,
   selection: false,
-  preview: false
+  preview: false,
 })
 
 /** 导出菜单切换一个选项 */
@@ -771,7 +809,7 @@ function readExportMeta(base: string): { title?: string; author?: string; date?:
   return {
     title: pick('title') ?? base,
     author: pick('author', 'authors'),
-    date: pick('date', 'updated', 'created')
+    date: pick('date', 'updated', 'created'),
   }
 }
 
@@ -792,7 +830,7 @@ async function writeExport(built: BuiltExport): Promise<void> {
     defaultName: built.defaultName,
     filters: built.filters,
     binaryBase64: built.binary ? bytesToBase64(built.binary) : undefined,
-    mime: built.mime
+    mime: built.mime,
   }
   let res: ExportResult
   try {
@@ -824,7 +862,7 @@ function exportContext(): ExportContext {
     readExportMeta,
     readAsDataUrl,
     showToast,
-    U
+    U,
   }
 }
 
@@ -833,10 +871,7 @@ function exportContext(): ExportContext {
  * @param kind  html 网页 / pdf 文档 / latex 源文件
  * @param scope all 整篇 / selection 当前选中（无选区时回退整篇）
  */
-async function doExport(
-  kind: ExportKind,
-  scope: 'all' | 'selection' = 'all'
-): Promise<void> {
+async function doExport(kind: ExportKind, scope: 'all' | 'selection' = 'all'): Promise<void> {
   if (!filePath.value) {
     showToast(U.toastNoDoc, 'err')
     return
@@ -930,12 +965,17 @@ async function onCompile(payload: {
       return
     }
 
-    const built = await buildExportContent(payload.kind, 'all', {
-      title: payload.title,
-      bodyHtml: combinedHtml,
-      markdown: combinedMd,
-      forceInline: true
-    }, exportContext())
+    const built = await buildExportContent(
+      payload.kind,
+      'all',
+      {
+        title: payload.title,
+        bodyHtml: combinedHtml,
+        markdown: combinedMd,
+        forceInline: true,
+      },
+      exportContext(),
+    )
     if (!built) return
 
     if (payload.preview) {
@@ -1000,7 +1040,12 @@ onMounted(async () => {
   setZenPrefs(zenPrefs.value)
 
   // 动态获取真实应用版本（打包后取 package.json 的 version），展示在「关于」面板
-  window.api.appVersion().then((v) => { if (v) appVersion.value = v }).catch(() => {})
+  window.api
+    .appVersion()
+    .then((v) => {
+      if (v) appVersion.value = v
+    })
+    .catch(() => {})
 
   // 启动偏好为「全新页面」时不恢复上次笔记库/文档，打开即空白
   if (session.startupMode !== 'fresh') {
@@ -1026,7 +1071,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="shell" :data-zen="focusMode ? 'on' : null" :data-zen-block-zoom="zenPrefs.blockZoom ? 'on' : 'off'">
+  <div
+    class="shell"
+    :data-zen="focusMode ? 'on' : null"
+    :data-zen-block-zoom="zenPrefs.blockZoom ? 'on' : 'off'"
+  >
     <TitleBar
       :file-name="fileName"
       :mode="requestedMode"
@@ -1096,6 +1145,7 @@ onBeforeUnmount(() => {
         @update:width="sidebarWidth = $event"
         @renamed="onRenamed"
         @deleted="onDeleted"
+        @moved="onMoved"
         @open-result="onOpenResult"
         @replaced="onSearchReplaced"
         @find-highlight="onFindHighlight"
@@ -1107,11 +1157,11 @@ onBeforeUnmount(() => {
           :file-path="filePath"
           :vault-path="vaultPath"
           :requested-mode="requestedMode"
-        :lang-key="langVer"
-        @saved="lastSavedAt = Date.now()"
-        @error="onEditorError"
-        @wikilink="onWikilink"
-      />
+          :lang-key="langVer"
+          @saved="lastSavedAt = Date.now()"
+          @error="onEditorError"
+          @wikilink="onWikilink"
+        />
 
         <SnapshotPanel
           v-if="snapshotOpen"
@@ -1194,22 +1244,25 @@ onBeforeUnmount(() => {
       />
     </div>
 
-      <footer class="statusbar jade">
-        <div class="statusbar__inner">
-          <div class="statusbar__grp">
-            <span>{{ filePath ?? U.statusNoFile }}</span>
-          </div>
-          <div class="statusbar__grp">
-            <span v-if="host?.willNormalize" class="warn">{{ U.willNormalize }}</span>
-            <span>
-              <i class="dot" :class="host?.dirty ? 'dot--dirty' : 'dot--saved'" />
-              {{ host?.dirty ? U.statusUnsaved : U.statusSaved }}
-            </span>
+    <footer class="statusbar jade">
+      <div class="statusbar__inner">
+        <div class="statusbar__grp">
+          <span>{{ filePath ?? U.statusNoFile }}</span>
+        </div>
+        <div class="statusbar__grp">
+          <span v-if="host?.willNormalize" class="warn">{{ U.willNormalize }}</span>
+          <span>
+            <i class="dot" :class="host?.dirty ? 'dot--dirty' : 'dot--saved'" />
+            {{ host?.dirty ? U.statusUnsaved : U.statusSaved }}
+          </span>
           <span>{{ modeLabel }}</span>
-          <span v-if="host?.selectionCount" class="sel">{{ U.selection }} {{ host.selectionCount }}</span>
+          <span v-if="host?.selectionCount" class="sel"
+            >{{ U.selection }} {{ host.selectionCount }}</span
+          >
           <button class="stat-chip" type="button" @click="onToggleStats" :title="U.stats">
-            {{ stats.han }}<i class="u">{{ U.unitHan }}</i> · {{ stats.words }}<i class="u">{{ U.unitWord }}</i> ·
-            {{ stats.readingMinutes }}<i class="u">{{ U.unitMin }}</i>
+            {{ stats.han }}<i class="u">{{ U.unitHan }}</i> · {{ stats.words
+            }}<i class="u">{{ U.unitWord }}</i> · {{ stats.readingMinutes
+            }}<i class="u">{{ U.unitMin }}</i>
           </button>
           <button
             v-if="lastIntegrityReport && lastIntegrityReport.total > 0"
@@ -1224,86 +1277,81 @@ onBeforeUnmount(() => {
           <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
             {{ localeLabel }}
           </button>
-          </div>
         </div>
-      </footer>
-    </div>
-
-    <!-- 凝神 2.0：轻退栏（Esc 掀帘看一眼）+ 设置面板 -->
-    <ZenRetreatBar
-      v-if="focusMode"
-      :file-name="fileName"
-      :han="stats.han"
-      :saved-at="lastSavedAt"
-      :open="retreatOpen"
-      :tabs="tabs.tabs"
-      :active-path="filePath"
-      @settings="onZenSettings"
-      @exit="onToggleFocus"
-      @activate="onZenActivateTab"
-      @hide="retreatOpen = false"
-    />
-
-    <ZenSettings
-      v-if="zenSettingsOpen"
-      :prefs="zenPrefs"
-      @change="onZenPrefsChange"
-      @close="zenSettingsOpen = false"
-    />
-
-    <!-- 导出结果轻提示：玻璃质感浮层，自动消失 -->
-    <Transition name="toast">
-      <div v-if="toast" class="toast" :class="`toast--${toast.type}`">
-        {{ toast.msg }}
       </div>
-    </Transition>
+    </footer>
+  </div>
 
-    <!-- 图床设置 / 上传弹窗 -->
-    <ImgHostSettings
-      v-if="showImgHost"
-      :has-doc="!!filePath"
-      @close="showImgHost = false"
-      @publish="onPublishImages"
-    />
+  <!-- 凝神 2.0：轻退栏（Esc 掀帘看一眼）+ 设置面板 -->
+  <ZenRetreatBar
+    v-if="focusMode"
+    :file-name="fileName"
+    :han="stats.han"
+    :saved-at="lastSavedAt"
+    :open="retreatOpen"
+    :tabs="tabs.tabs"
+    :active-path="filePath"
+    @settings="onZenSettings"
+    @exit="onToggleFocus"
+    @activate="onZenActivateTab"
+    @hide="retreatOpen = false"
+  />
 
-    <!-- 外观设置（皮肤 / 明暗）-->
-    <AppearanceSettings v-if="showAppearance" @close="showAppearance = false" />
+  <ZenSettings
+    v-if="zenSettingsOpen"
+    :prefs="zenPrefs"
+    @change="onZenPrefsChange"
+    @close="zenSettingsOpen = false"
+  />
 
-    <!-- 偏好设置（启动行为）-->
-    <PreferencesSettings
-      v-if="showPreferences"
-      :value="startupMode"
-      @close="showPreferences = false"
-      @change="onStartupMode"
-    />
+  <!-- 导出结果轻提示：玻璃质感浮层，自动消失 -->
+  <Transition name="toast">
+    <div v-if="toast" class="toast" :class="`toast--${toast.type}`">
+      {{ toast.msg }}
+    </div>
+  </Transition>
 
-    <!-- 帮助面板（快捷键 + 使用指南）-->
-    <HelpPanel
-      v-if="showHelp"
-      :initial="helpTab"
-      :version="appVersion"
-      @close="showHelp = false"
-    />
+  <!-- 图床设置 / 上传弹窗 -->
+  <ImgHostSettings
+    v-if="showImgHost"
+    :has-doc="!!filePath"
+    @close="showImgHost = false"
+    @publish="onPublishImages"
+  />
 
-    <!-- 导出前预览（玻璃浮层；HTML/PDF 渲染真实排版，LaTeX 显示源码）-->
-    <ExportPreview
-      v-if="showPreview && previewState"
-      :content="previewState.content"
-      :kind="previewState.kind"
-      :default-name="previewState.defaultName"
-      @confirm="confirmExport"
-      @cancel="cancelExport"
-    />
+  <!-- 外观设置（皮肤 / 明暗）-->
+  <AppearanceSettings v-if="showAppearance" @close="showAppearance = false" />
 
-    <!-- 多文件合订面板 -->
-    <CompilePanel
-      v-if="showCompile"
-      :tree="tree"
-      :vault-path="vaultPath"
-      :preview="exportPrefs.preview"
-      @close="showCompile = false"
-      @compile="onCompile"
-    />
+  <!-- 偏好设置（启动行为）-->
+  <PreferencesSettings
+    v-if="showPreferences"
+    :value="startupMode"
+    @close="showPreferences = false"
+    @change="onStartupMode"
+  />
+
+  <!-- 帮助面板（快捷键 + 使用指南）-->
+  <HelpPanel v-if="showHelp" :initial="helpTab" :version="appVersion" @close="showHelp = false" />
+
+  <!-- 导出前预览（玻璃浮层；HTML/PDF 渲染真实排版，LaTeX 显示源码）-->
+  <ExportPreview
+    v-if="showPreview && previewState"
+    :content="previewState.content"
+    :kind="previewState.kind"
+    :default-name="previewState.defaultName"
+    @confirm="confirmExport"
+    @cancel="cancelExport"
+  />
+
+  <!-- 多文件合订面板 -->
+  <CompilePanel
+    v-if="showCompile"
+    :tree="tree"
+    :vault-path="vaultPath"
+    :preview="exportPrefs.preview"
+    @close="showCompile = false"
+    @compile="onCompile"
+  />
 </template>
 
 <style scoped>
@@ -1478,7 +1526,8 @@ onBeforeUnmount(() => {
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: opacity var(--dur-fast, 0.18s) var(--ease, ease),
+  transition:
+    opacity var(--dur-fast, 0.18s) var(--ease, ease),
     transform var(--dur-fast, 0.18s) var(--ease, ease);
 }
 

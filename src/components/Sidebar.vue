@@ -5,10 +5,12 @@ import {
   SIDEBAR_MIN,
   type FileNode,
   type SearchFileResult,
-  type SearchResult
+  type SearchResult,
 } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
+import { markProgrammatic, assetsPathOf } from '../refreshGuard'
 import FileTree from './FileTree.vue'
+import MoveDialog from './MoveDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import SearchResults from './SearchResults.vue'
@@ -39,16 +41,21 @@ const emit = defineEmits<{
   (e: 'renamed', oldPath: string, newPath: string): void
   /** 删除了当前正在编辑的文档：让 App 清空活动路径 */
   (e: 'deleted', path: string): void
+  /** 移动了节点：让 App 同步标签路径 + 抑制 watcher 回声 + 刷新文件树 */
+  (e: 'moved', oldPath: string, newPath: string): void
   /** 全文搜索结果点击：让 App 打开文档并定位到命中行 */
   (e: 'open-result', payload: { path: string; line: number }): void
   /** 全局替换完成：把被改写的文件列表抛给 App，便于重载正在编辑的文档 */
   (e: 'replaced', paths: string[]): void
   /** 双范围命中高亮状态：有查询且已打开文档时把 query/选项/当前行交给编辑器（源码 + 所见即所得两端高亮） */
-  (e: 'find-highlight', payload: {
-    query: string
-    opts: { caseSensitive: boolean; wholeWord: boolean; regex?: boolean }
-    currentLine?: number
-  } | null): void
+  (
+    e: 'find-highlight',
+    payload: {
+      query: string
+      opts: { caseSensitive: boolean; wholeWord: boolean; regex?: boolean }
+      currentLine?: number
+    } | null,
+  ): void
 }>()
 
 /** 目录默认折叠，展开状态提升到此处，方便会话恢复时自动展开祖先链 */
@@ -65,6 +72,12 @@ const menu = ref<{ x: number; y: number; node: FileNode } | null>(null)
 
 /** 删除二次确认状态 */
 const confirmState = ref<{ open: boolean; node: FileNode } | null>(null)
+
+/** 拖拽移动：当前被拖拽的节点路径（null 表示无拖拽进行中） */
+const draggingPath = ref<string | null>(null)
+
+/** 「移动到…」对话框状态：记录源节点 */
+const moveState = ref<{ node: FileNode } | null>(null)
 
 /** 轻量错误提示 */
 const toast = ref<{ msg: string } | null>(null)
@@ -94,7 +107,7 @@ const currentFindLine = ref<number | undefined>(undefined)
 
 /** 跨文件扁平化全部命中，供「第 N / 共 M」计数与循环导航 */
 const flatHits = computed<{ path: string; line: number }[]>(() =>
-  searchResults.value.flatMap((f) => f.hits.map((h) => ({ path: f.path, line: h.line })))
+  searchResults.value.flatMap((f) => f.hits.map((h) => ({ path: f.path, line: h.line }))),
 )
 /** 当前选中的命中序号（-1 表示未选）；导航与计数据此推进 */
 const currentIndex = ref(-1)
@@ -123,7 +136,7 @@ function prevHit(): void {
 
 /** 当前范围对应的检索文件：本文档范围传 activePath，全库范围不传（递归全库） */
 function scopeFile(): string | undefined {
-  return searchScope.value === 'doc' ? props.activePath ?? undefined : undefined
+  return searchScope.value === 'doc' ? (props.activePath ?? undefined) : undefined
 }
 
 /**
@@ -136,8 +149,12 @@ function syncFindHighlight(): void {
   if (searchQuery.value.trim() && props.activePath) {
     emit('find-highlight', {
       query: searchQuery.value.trim(),
-      opts: { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
-      currentLine: currentFindLine.value
+      opts: {
+        caseSensitive: caseSensitive.value,
+        wholeWord: wholeWord.value,
+        regex: useRegex.value,
+      },
+      currentLine: currentFindLine.value,
     })
   } else {
     emit('find-highlight', null)
@@ -158,7 +175,7 @@ async function executeSearch(): Promise<void> {
       props.vaultPath,
       query,
       { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
-      scopeFile()
+      scopeFile(),
     )
   } catch (e) {
     showToast(errMsg(e))
@@ -177,12 +194,20 @@ function runSearch(): void {
 
 /** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑搜索并同步源码高亮 */
 watch(
-  [searchQuery, caseSensitive, wholeWord, useRegex, searchScope, () => props.activePath, () => props.vaultPath],
+  [
+    searchQuery,
+    caseSensitive,
+    wholeWord,
+    useRegex,
+    searchScope,
+    () => props.activePath,
+    () => props.vaultPath,
+  ],
   () => {
     currentIndex.value = -1
     runSearch()
     syncFindHighlight()
-  }
+  },
 )
 
 /* ── 替换（双范围共用一套：file 参数决定范围）── */
@@ -212,9 +237,11 @@ async function doReplace(): Promise<void> {
       searchQuery.value,
       replaceQuery.value,
       { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
-      scopeFile()
+      scopeFile(),
     )
-    showToast(L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)))
+    showToast(
+      L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)),
+    )
     emit('replaced', res.paths)
     // 立即刷新结果（不走输入防抖），反映替换后状态
     await executeSearch()
@@ -332,7 +359,7 @@ watch(
   ([path, nodes]) => {
     if (path && nodes.length) expandAncestors(nodes, path)
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 // 换库时清空展开状态，避免残留上一个库的路径
@@ -342,7 +369,7 @@ watch(
     expanded.value = new Set()
     searchQuery.value = ''
     searchResponse.value = { results: [], truncated: false }
-  }
+  },
 )
 
 /* ── 右键菜单 ── */
@@ -380,7 +407,10 @@ function onSidebarKeydown(e: KeyboardEvent): void {
   if (e.key !== 'Delete') return
   if (editingPath.value || confirmState.value) return
   const target = e.target as HTMLElement | null
-  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+  if (
+    target &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  ) {
     return
   }
   const path = selectedPath.value
@@ -397,7 +427,8 @@ function buildMenuItems(_node: FileNode): MenuItem[] {
     { action: 'new-folder', label: L.ctxNewFolder },
     { action: 'sep', label: '', separator: true },
     { action: 'rename', label: L.ctxRename },
-    { action: 'delete', label: L.ctxDelete, danger: true }
+    { action: 'move', label: L.ctxMove },
+    { action: 'delete', label: L.ctxDelete, danger: true },
   ]
   return items
 }
@@ -420,6 +451,9 @@ function onMenuSelect(action: string): void {
     case 'rename':
       editingPath.value = node.path
       break
+    case 'move':
+      moveState.value = { node }
+      break
     case 'delete':
       confirmState.value = { open: true, node }
       break
@@ -431,6 +465,8 @@ function onMenuSelect(action: string): void {
 async function createNewFile(parent: string): Promise<void> {
   try {
     const path = await window.api.createDoc(parent)
+    // 抑制新建的 watcher 回声（add）：仅保留这次显式刷新
+    markProgrammatic([path, assetsPathOf(path)])
     expand(parent)
     await props.refreshTree()
     editingPath.value = path
@@ -443,6 +479,7 @@ async function createNewFile(parent: string): Promise<void> {
 async function createNewFolder(parent: string): Promise<void> {
   try {
     const path = await window.api.createFolder(parent)
+    markProgrammatic([path])
     expand(parent)
     await props.refreshTree()
     editingPath.value = path
@@ -485,6 +522,8 @@ async function doDelete(): Promise<void> {
   const node = confirmState.value?.node
   if (!node) return
   try {
+    // 抑制删除的 watcher 回声（unlink）：仅保留这次显式刷新
+    markProgrammatic([node.path, assetsPathOf(node.path)])
     await window.api.deleteItem(node.path)
     if (node.path === props.activePath) emit('deleted', node.path)
   } catch (e) {
@@ -504,6 +543,52 @@ function findNode(nodes: FileNode[], path: string): FileNode | null {
     }
   }
   return null
+}
+
+/* ── 移动 ── */
+
+/** 把一个节点移动到目标目录（destDir 为目录绝对路径，或库根 rootPath） */
+async function doMove(srcPath: string, destDir: string): Promise<void> {
+  const node = findNode(props.nodes, srcPath)
+  if (!node) return
+
+  // 落到原父目录 = 没动，直接忽略（移动对话框也会禁用该项）
+  if (destDir === parentDir(srcPath)) {
+    showToast(L.moveSameDir)
+    return
+  }
+  // 不能移动到自身或子孙目录（菜单对话框已禁用，这里再兜一层）
+  if (node.type === 'dir') {
+    const sep = srcPath.includes('\\') ? '\\' : '/'
+    if (destDir === srcPath || destDir.startsWith(srcPath + sep)) {
+      showToast(L.moveInvalid)
+      return
+    }
+  }
+
+  let newPath = ''
+  try {
+    newPath = await window.api.moveItem(srcPath, destDir)
+  } catch (e) {
+    showToast(L.moveFail.replace('{m}', errMsg(e)))
+    return
+  }
+
+  // 让目标目录展开，移动后立即可见；并迁移目录的展开态
+  expand(destDir)
+  if (node.type === 'dir' && expanded.value.has(srcPath)) {
+    const next = new Set(expanded.value)
+    next.delete(srcPath)
+    next.add(newPath)
+    expanded.value = next
+  }
+  // 选中态跟随到新位置
+  if (props.activePath && srcPath === props.activePath) {
+    selectedPath.value = newPath
+  }
+
+  // 交给 App：同步标签路径 + 抑制 watcher 回声 + 刷新文件树（单一刷新源）
+  emit('moved', srcPath, newPath)
 }
 
 /* ── 轻量错误提示 ── */
@@ -527,10 +612,7 @@ function startDrag(e: PointerEvent): void {
   const startWidth = props.width
 
   const onMove = (ev: PointerEvent): void => {
-    const next = Math.min(
-      SIDEBAR_MAX,
-      Math.max(SIDEBAR_MIN, startWidth + ev.clientX - startX)
-    )
+    const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + ev.clientX - startX))
     emit('update:width', next)
   }
 
@@ -721,9 +803,18 @@ function startDrag(e: PointerEvent): void {
             </button>
           </div>
           <div v-if="confirming !== null" class="repl__confirm">
-            <span class="repl__confirm-text">{{ L.replaceConfirm.replace('{n}', String(confirming)) }}</span>
-            <button type="button" class="repl__ok" :disabled="replacing" @click="doReplace">确认</button>
-            <button type="button" class="repl__cancel" :disabled="replacing" @click="confirming = null">
+            <span class="repl__confirm-text">{{
+              L.replaceConfirm.replace('{n}', String(confirming))
+            }}</span>
+            <button type="button" class="repl__ok" :disabled="replacing" @click="doReplace">
+              确认
+            </button>
+            <button
+              type="button"
+              class="repl__cancel"
+              :disabled="replacing"
+              @click="confirming = null"
+            >
               取消
             </button>
           </div>
@@ -740,10 +831,21 @@ function startDrag(e: PointerEvent): void {
           @click="prevHit"
         >
           <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
-            <path d="M9 3L5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path
+              d="M9 3L5 7l4 4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
         </button>
-        <span class="nav__count">{{ L.findCount.replace('{n}', String(currentIndex >= 0 ? currentIndex + 1 : 0)).replace('{m}', String(totalHits)) }}</span>
+        <span class="nav__count">{{
+          L.findCount
+            .replace('{n}', String(currentIndex >= 0 ? currentIndex + 1 : 0))
+            .replace('{m}', String(totalHits))
+        }}</span>
         <button
           class="nav__btn"
           type="button"
@@ -752,7 +854,14 @@ function startDrag(e: PointerEvent): void {
           @click="nextHit"
         >
           <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
-            <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path
+              d="M5 3l4 4-4 4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
         </button>
       </div>
@@ -816,7 +925,12 @@ function startDrag(e: PointerEvent): void {
                 stroke-width="1.5"
                 stroke-linejoin="round"
               />
-              <path d="M13 3v5h5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              <path
+                d="M13 3v5h5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+              />
             </svg>
           </div>
           <p class="empty-state__title">{{ L.emptyFolderTitle }}</p>
@@ -830,12 +944,17 @@ function startDrag(e: PointerEvent): void {
           :expanded="expanded"
           :editing-path="editingPath"
           :selected-path="selectedPath"
+          :root-path="vaultPath"
+          :drag-source="draggingPath"
           @select="onSelect"
           @toggle="onToggle"
           @context-menu="onContextMenu"
           @rename-confirm="(p, v) => void doRename(p, v)"
           @rename-cancel="onRenameCancel"
           @rename-start="onRenameStart"
+          @drag-start="(p) => (draggingPath = p)"
+          @drag-end="draggingPath = null"
+          @move="(s, d) => void doMove(s, d)"
         />
       </template>
     </div>
@@ -869,6 +988,25 @@ function startDrag(e: PointerEvent): void {
       danger
       @confirm="void doDelete()"
       @cancel="confirmState = null"
+    />
+
+    <!-- 移动到…（菜单操作入口）：从库内文件夹树中选择目标目录 -->
+    <MoveDialog
+      v-if="moveState"
+      :open="true"
+      :nodes="nodes"
+      :vault-path="vaultPath"
+      :root-name="vaultName ?? L.moveToRoot"
+      :source-path="moveState.node.path"
+      :source-name="moveState.node.name"
+      @confirm="
+        (d) => {
+          const s = moveState?.node.path
+          moveState = null
+          if (s) void doMove(s, d)
+        }
+      "
+      @cancel="moveState = null"
     />
 
     <!-- 操作失败提示 -->
@@ -1443,7 +1581,9 @@ function startDrag(e: PointerEvent): void {
   font-size: 12px;
   line-height: 1.5;
   color: var(--hue-text-1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 12px 32px rgba(0, 0, 0, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 12px 32px rgba(0, 0, 0, 0.34);
   animation: toast-in var(--dur-base) var(--ease);
 }
 

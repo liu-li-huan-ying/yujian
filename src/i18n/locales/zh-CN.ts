@@ -15,26 +15,26 @@ const zhCN = {
       h5: { label: '标题 5' },
       h6: { label: '标题 6' },
       quote: { label: '引用' },
-      divider: { label: '分隔线' }
+      divider: { label: '分隔线' },
     },
     listGroup: {
       label: '列表',
       bulletList: { label: '无序列表' },
       orderedList: { label: '有序列表' },
-      taskList: { label: '任务列表' }
+      taskList: { label: '任务列表' },
     },
     advancedGroup: {
       label: '高级',
       image: { label: '图片' },
       codeBlock: { label: '代码块' },
       table: { label: '表格' },
-      math: { label: '公式' }
-    }
+      math: { label: '公式' },
+    },
   },
 
   /* ── Crepe Placeholder ── */
   placeholder: {
-    text: '请输入内容…'
+    text: '请输入内容…',
   },
 
   /* ── Crepe ImageBlock ── */
@@ -44,7 +44,7 @@ const zhCN = {
     blockCaptionPlaceholderText: '输入图片说明',
     blockUploadPlaceholderText: '或粘贴图片链接…',
     inlineUploadButton: '上传',
-    inlineUploadPlaceholderText: '或粘贴链接…'
+    inlineUploadPlaceholderText: '或粘贴链接…',
   },
 
   /* ── Crepe CodeMirror（源码模式）── */
@@ -55,7 +55,7 @@ const zhCN = {
     noResultText: '无匹配语言',
     copyText: '复制',
     editLabel: '编辑',
-    hideLabel: '隐藏'
+    hideLabel: '隐藏',
   },
 
   /* ── 应用 UI ── */
@@ -350,7 +350,8 @@ const zhCN = {
     integrityEmpty: '未发现异常 ✓',
     integrityReportOnly: '缺失附件 / 断链为报告项，不自动改写文件，请手动处理',
     integrityRepair: '一键修复',
-    integrityRepairConfirm: '将重建索引并删除孤儿快照（走回收站）；缺失附件与断链需手动处理。是否继续？',
+    integrityRepairConfirm:
+      '将重建索引并删除孤儿快照（走回收站）；缺失附件与断链需手动处理。是否继续？',
     integrityNothingToRepair: '无可修复项',
     /* ── 整库备份 / 恢复（批次一）── */
     backup: '整库备份',
@@ -430,7 +431,7 @@ const zhCN = {
       snipFoot: '脚注',
       snipMermaid: '流程图',
       snipMath: '公式块',
-      toastApplied: '文档属性已更新'
+      toastApplied: '文档属性已更新',
     },
     /* ── P2-3 收编：窗口按钮 / 导出菜单分组 / 上下文菜单 / 侧栏控件 / 加载 / 搜索 / 错误态 / 对话默认按钮 ── */
     loading: '加载中',
@@ -457,8 +458,17 @@ const zhCN = {
     ctxNewFile: '新建文件',
     ctxNewFolder: '新建文件夹',
     ctxRename: '重命名',
+    ctxMove: '移动到…',
     ctxDelete: '删除',
     renameFail: '重命名失败：{m}',
+    moveTitle: '移动到…',
+    moveToRoot: '库根目录',
+    moveConfirm: '移动',
+    moveCancel: '取消',
+    moveSameDir: '已在该文件夹中，无需移动',
+    moveInvalid: '不能移动到自身或其子文件夹内',
+    moveFail: '移动失败：{m}',
+    moveDone: '已移动到「{n}」',
     sidebarOpenVault: '打开笔记库',
     sidebarSearch: '搜索',
     sidebarClear: '清除',
@@ -467,7 +477,7 @@ const zhCN = {
     sidebarTitle: '目录',
     sidebarNoVault: '未打开笔记库',
     sidebarDeleteConfirm: '删除确认',
-    snapDialog: '版本快照'
+    snapDialog: '版本快照',
   },
 
   /* ── 帮助面板：快捷键 + 使用指南 ── */
@@ -497,40 +507,40 @@ const zhCN = {
     guideSections: [
       {
         h: '1 · 打开笔记库',
-        p: '点击侧栏「选择文件夹」或标题栏文件夹图标，选定一个本地文件夹作为笔记库。库内的 .md 文档与同级 .assets 资源会实时显示在左侧文件树。'
+        p: '点击侧栏「选择文件夹」或标题栏文件夹图标，选定一个本地文件夹作为笔记库。库内的 .md 文档与同级 .assets 资源会实时显示在左侧文件树。',
       },
       {
         h: '2 · 多标签与写作',
-        p: '标题栏「＋」在库中新建文档；从文件树可同时打开多篇文档，在标签条上随时切换。正文默认所见即所得；需要精确排版时用「渲染 / 源码」分段或 Ctrl+/ 切换。'
+        p: '标题栏「＋」在库中新建文档；从文件树可同时打开多篇文档，在标签条上随时切换。正文默认所见即所得；需要精确排版时用「渲染 / 源码」分段或 Ctrl+/ 切换。',
       },
       {
         h: '3 · 搜索与替换',
-        p: '左侧搜索框统一检索：切到「全部」对整个笔记库全文搜索、命中可一键批量替换；切到「本文档」只在当前文档内查找 / 替换。两种范围共用同一套检索逻辑，仅范围不同；命中结果点击即跳转。两种范围都支持「区分大小写 / 全词匹配」。Ctrl+F 快速聚焦搜索框。'
+        p: '左侧搜索框统一检索：切到「全部」对整个笔记库全文搜索、命中可一键批量替换；切到「本文档」只在当前文档内查找 / 替换。两种范围共用同一套检索逻辑，仅范围不同；命中结果点击即跳转。两种范围都支持「区分大小写 / 全词匹配」。Ctrl+F 快速聚焦搜索框。',
       },
       {
         h: '4 · 快照与写作统计',
-        p: '标题栏「历史」图标为当前文档留版本快照，可加备注、行级 diff 对比与回滚；状态栏实时统计汉字 / 词 / 阅读时长，点击弹出写作目标进度环。'
+        p: '标题栏「历史」图标为当前文档留版本快照，可加备注、行级 diff 对比与回滚；状态栏实时统计汉字 / 词 / 阅读时长，点击弹出写作目标进度环。',
       },
       {
         h: '5 · 凝神沉浸写作',
-        p: '标题栏「月亮」一键进入凝神模式：两侧退入雾中、其余文本块按距离雾化衰减，光标行由「纸卷」缓动锚定；Esc 轻退查看文件名与字数，设置面板可调锚点 / 雾化 / 平滑度。'
+        p: '标题栏「月亮」一键进入凝神模式：两侧退入雾中、其余文本块按距离雾化衰减，光标行由「纸卷」缓动锚定；Esc 轻退查看文件名与字数，设置面板可调锚点 / 雾化 / 平滑度。',
       },
       {
         h: '6 · 导出与分享',
-        p: '标题栏「导出」可生成单篇 HTML 或 PDF。导出直取编辑区 DOM，所见即所得；资源可选随附 .assets 或内联 base64。'
+        p: '标题栏「导出」可生成单篇 HTML 或 PDF。导出直取编辑区 DOM，所见即所得；资源可选随附 .assets 或内联 base64。',
       },
       {
         h: '7 · 图片与图床',
-        p: '本地图片默认存于文档同名 .assets 文件夹，链接保持相对路径。发布到外部平台时，在「更多 · 图床设置」配置图床并一键替换为远程链接。'
+        p: '本地图片默认存于文档同名 .assets 文件夹，链接保持相对路径。发布到外部平台时，在「更多 · 图床设置」配置图床并一键替换为远程链接。',
       },
       {
         h: '8 · 外观与皮肤',
-        p: '标题栏调色板图标可在五套中国传统窑色皮肤（青瓷 / 天青 / 月白 / 黛 / 琥珀）与深 / 浅 / 跟随系统之间自由切换，材质与皮肤解耦，切换零卡顿。'
-      }
+        p: '标题栏调色板图标可在五套中国传统窑色皮肤（青瓷 / 天青 / 月白 / 黛 / 琥珀）与深 / 浅 / 跟随系统之间自由切换，材质与皮肤解耦，切换零卡顿。',
+      },
     ],
     aboutBody:
-      '玉笺 · 玉质 Markdown 编辑器\nElectron + Vue 3 + Milkdown\n本地优先 · 往返保真 · 无云端追踪'
-  }
+      '玉笺 · 玉质 Markdown 编辑器\nElectron + Vue 3 + Milkdown\n本地优先 · 往返保真 · 无云端追踪',
+  },
 }
 
 export type Locale = typeof zhCN

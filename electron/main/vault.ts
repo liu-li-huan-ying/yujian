@@ -1,4 +1,15 @@
-import { access, chmod, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  access,
+  chmod,
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
 import type {
@@ -11,7 +22,7 @@ import type {
   BrokenLinkItem,
   BrokenLinkReport,
   SearchOptions,
-  SearchResult
+  SearchResult,
 } from '../shared/ipc-channels'
 import * as Idx from './vaultIndex'
 
@@ -121,7 +132,7 @@ async function mkdirRobust(target: string, parent: string): Promise<void> {
     if (isPermError(e)) {
       throw new Error(
         `无法创建文件夹（权限不足或被云同步 / 杀软拦截）：${target}。` +
-          `请确认该位置非只读，或暂时退出 OneDrive / 坚果云等同步、以管理员身份运行后重试。`
+          `请确认该位置非只读，或暂时退出 OneDrive / 坚果云等同步、以管理员身份运行后重试。`,
       )
     }
     throw e
@@ -192,6 +203,145 @@ export async function deleteItem(targetPath: string): Promise<void> {
     }
   } catch {
     // 资源目录清理失败不影响删除结果
+  }
+}
+
+/**
+ * 递归复制（跨卷移动回退用：同卷 rename 偶发 EXDEV 时，先复制整棵子树再删源）。
+ * 既处理文件也处理目录；失败向上抛，由调用方决定是否拆掉半成品。
+ */
+async function copyRecursive(src: string, dest: string): Promise<void> {
+  await cp(src, dest, { recursive: true })
+}
+
+/**
+ * 移动文件或文件夹到目标目录。
+ * - 校验：目标必须存在且为目录；不能移动到自身或其子孙目录；
+ * - 同名冲突自动追加序号（绝不覆盖已有内容）；
+ * - 同目录移动降级为重命名（复用 renameItem，含同名 `.assets` 同步）；
+ * - 跨卷（EXDEV）回退为「复制 + 删源」，对文件夹同样适用；
+ * - Windows 只读属性 / 云盘拦截：先清除目标父目录只读属性再试；
+ * - 即时维护统一索引层：文件精确「移除旧 + 登记新」，目录触发防抖 reconcile，
+ *   避免依赖 watcher 的 1s 延迟窗口造成搜索 / 双链读到陈旧路径。
+ */
+export async function moveItem(
+  oldPath: string,
+  destDir: string,
+  newName?: string,
+): Promise<string> {
+  const name = (newName ?? '').trim() || basename(oldPath)
+  if (/[\\/]/.test(name)) throw new Error('名称不能包含路径分隔符')
+  if (name === '.' || name === '..') throw new Error('名称无效')
+
+  // 目标必须是已存在的目录
+  let destStat
+  try {
+    destStat = await stat(destDir)
+  } catch {
+    throw new Error(`目标文件夹不存在：${destDir}`)
+  }
+  if (!destStat.isDirectory()) throw new Error(`目标不是文件夹：${destDir}`)
+
+  const normOld = oldPath.replace(/[\\/]$/, '')
+  const normDest = destDir.replace(/[\\/]$/, '')
+  if (normOld === normDest) throw new Error('不能移动到自身')
+  // 不能移动到子孙目录（否则会把自己挂到自己里面，破坏整棵子树）
+  const sep = normOld.includes('\\') ? '\\' : '/'
+  if (normDest.startsWith(normOld + sep)) throw new Error('不能移动到其子文件夹内')
+
+  const parent = dirname(oldPath)
+  if (normDest === parent.replace(/[\\/]$/, '')) {
+    // 落到原父目录 = 纯重命名，复用既有逻辑（含 .assets 同步）
+    return renameItem(oldPath, name)
+  }
+
+  // 同名冲突：追加序号，绝不覆盖
+  let target = join(destDir, name)
+  let n = 1
+  while (await exists(target)) {
+    const ext = extname(name)
+    const base = name.slice(0, name.length - ext.length)
+    target = join(destDir, `${base} ${n}${ext}`)
+    n += 1
+  }
+
+  // Windows 只读属性 / 云盘拦截：先清除目标父目录只读属性再试
+  if (process.platform === 'win32') {
+    try {
+      await chmod(destDir, 0o777)
+    } catch {
+      // 清不掉也无妨，交给下面的 rename 报错
+    }
+  }
+
+  try {
+    await rename(oldPath, target)
+  } catch (e) {
+    // 跨卷（EXDEV 等）rename 不支持 → 递归复制后删源
+    if ((e as NodeJS.ErrnoException)?.code === 'EXDEV') {
+      await copyRecursive(oldPath, target)
+      await rm(oldPath, { recursive: true, force: true })
+    } else {
+      throw e
+    }
+  }
+
+  // 文件：顺带搬运同名的 `.assets` 资源目录（与 renameItem 同约定）
+  try {
+    if (isMarkdown(basename(oldPath))) {
+      const oldNoExt = basename(oldPath, extname(oldPath))
+      const newNoExt = basename(target, extname(target))
+      if (oldNoExt && newNoExt) {
+        const oldAssets = join(parent, `${oldNoExt}.assets`)
+        const newAssets = join(dirname(target), `${newNoExt}.assets`)
+        if ((await exists(oldAssets)) && !(await exists(newAssets))) {
+          try {
+            if (process.platform === 'win32') await chmod(oldAssets, 0o777).catch(() => {})
+            await rename(oldAssets, newAssets)
+          } catch {
+            // 复制回退场景下 .assets 也走复制删除
+            try {
+              await copyRecursive(oldAssets, newAssets)
+              await rm(oldAssets, { recursive: true, force: true })
+            } catch {
+              // 资源目录搬运失败不阻断主流程
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // 资源目录同步失败不应让主流程报错
+  }
+
+  // 即时维护统一索引层，避免依赖 watcher 的延迟窗口
+  syncIndexForMove(normOld, target)
+
+  return target
+}
+
+/** 移动后即时维护索引：文件精确移除+登记；目录触发防抖全量 reconcile */
+function syncIndexForMove(oldPath: string, newPath: string): void {
+  if (!idx || idxRoot === null) return
+  const root = idxRoot
+  if (isMarkdown(basename(newPath))) {
+    Idx.removeFileFromIndex(idx, oldPath)
+    // 登记新位置（异步读取正文，不阻塞 move 返回）
+    void (async () => {
+      try {
+        const content = await readFile(newPath, 'utf-8')
+        const mtime = (await stat(newPath)).mtimeMs
+        Idx.indexFile(idx!, root, newPath, content, mtime, getMaps(root))
+      } catch {
+        // 读不到则等 watcher 兜底
+      }
+      invalidateMaps()
+      scheduleSave(root)
+    })()
+  } else {
+    // 目录：旧路径条目随 reconcile 被纠正；先让路径映射失效并立即排一次全量对齐
+    invalidateMaps()
+    scheduleReconcile(root)
   }
 }
 
@@ -297,7 +447,7 @@ export function watchVault(root: string, onChange: (change: VaultChange) => void
     ignored: (p: string) => p !== root && shouldSkipDir(basename(p)),
     ignoreInitial: true,
     // 保存是「写临时文件 + rename」，等落盘稳定再上报，避免读到半截内容
-    awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 40 }
+    awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 40 },
   })
 
   const emit =
@@ -343,7 +493,7 @@ const SOFT_FILE_CAP = 1000
 async function searchInFile(
   file: string,
   query: string,
-  opts?: SearchOptions
+  opts?: SearchOptions,
 ): Promise<SearchLineHit[]> {
   let content: string
   try {
@@ -408,7 +558,7 @@ export async function searchVault(
   root: string,
   query: string,
   opts?: SearchOptions,
-  file?: string
+  file?: string,
 ): Promise<SearchResult> {
   const q = query.trim()
   if (!q) return { results: [], truncated: false }
@@ -419,7 +569,7 @@ export async function searchVault(
     const truncated = hits.length >= PER_FILE_HIT_CAP
     return {
       results: hits.length ? [{ path: file, name: basename(file), hits }] : [],
-      truncated
+      truncated,
     }
   }
 
@@ -452,7 +602,7 @@ export async function replaceInVault(
   query: string,
   replacement: string,
   opts?: SearchOptions,
-  file?: string
+  file?: string,
 ): Promise<ReplaceResult> {
   const q = query.trim()
   if (!q) return { replaced: 0, files: 0, paths: [] }
@@ -566,13 +716,13 @@ export async function checkLinks(root: string): Promise<BrokenLinkReport> {
         let target = m[1].trim().split('|')[0].split('#')[0].trim()
         if (!target) continue
         const key = target.replace(/^\.\//, '').replace(/\.(md|markdown)$/i, '')
-        const match =
-          key.includes('/')
-            ? byRel.get(key.toLowerCase())
-            : byBase.get(basename(key).toLowerCase())
+        const match = key.includes('/')
+          ? byRel.get(key.toLowerCase())
+          : byBase.get(basename(key).toLowerCase())
         if (!match) {
           items.push({ file, line: lineNo, raw: m[0], target, kind: 'wikilink', context: line })
-          if (items.length >= MAX_ITEMS) return { scanned: allMd.length, total: items.length, items }
+          if (items.length >= MAX_ITEMS)
+            return { scanned: allMd.length, total: items.length, items }
         }
       }
 
@@ -599,9 +749,10 @@ export async function checkLinks(root: string): Promise<BrokenLinkReport> {
             raw: m[0],
             target,
             kind: isImage ? 'image' : 'mdlink',
-            context: line
+            context: line,
           })
-          if (items.length >= MAX_ITEMS) return { scanned: allMd.length, total: items.length, items }
+          if (items.length >= MAX_ITEMS)
+            return { scanned: allMd.length, total: items.length, items }
         }
       }
     }

@@ -15,26 +15,26 @@ const enUS = {
       h5: { label: 'Heading 5' },
       h6: { label: 'Heading 6' },
       quote: { label: 'Quote' },
-      divider: { label: 'Divider' }
+      divider: { label: 'Divider' },
     },
     listGroup: {
       label: 'List',
       bulletList: { label: 'Bullet List' },
       orderedList: { label: 'Ordered List' },
-      taskList: { label: 'Task List' }
+      taskList: { label: 'Task List' },
     },
     advancedGroup: {
       label: 'Advanced',
       image: { label: 'Image' },
       codeBlock: { label: 'Code Block' },
       table: { label: 'Table' },
-      math: { label: 'Math' }
-    }
+      math: { label: 'Math' },
+    },
   },
 
   /* ── Crepe Placeholder ── */
   placeholder: {
-    text: 'Please enter…'
+    text: 'Please enter…',
   },
 
   /* ── Crepe ImageBlock ── */
@@ -44,7 +44,7 @@ const enUS = {
     blockCaptionPlaceholderText: 'Write image caption',
     blockUploadPlaceholderText: 'or paste the image link…',
     inlineUploadButton: 'Upload',
-    inlineUploadPlaceholderText: 'or paste link…'
+    inlineUploadPlaceholderText: 'or paste link…',
   },
 
   /* ── Crepe CodeMirror (source mode) ── */
@@ -55,7 +55,7 @@ const enUS = {
     noResultText: 'No match',
     copyText: 'Copy',
     editLabel: 'Edit',
-    hideLabel: 'Hide'
+    hideLabel: 'Hide',
   },
 
   /* ── App UI ── */
@@ -349,13 +349,16 @@ const enUS = {
     integrityScanning: 'Scanning vault…',
     integrityNoVault: 'Open a vault first',
     integrityEmpty: 'No issues found ✓',
-    integrityReportOnly: 'Missing attachments / broken links are reported only — files are not auto-modified; please fix manually',
+    integrityReportOnly:
+      'Missing attachments / broken links are reported only — files are not auto-modified; please fix manually',
     integrityRepair: 'Repair',
-    integrityRepairConfirm: 'This rebuilds the index and deletes orphan snapshots (via trash). Missing attachments and broken links need manual fixes. Continue?',
+    integrityRepairConfirm:
+      'This rebuilds the index and deletes orphan snapshots (via trash). Missing attachments and broken links need manual fixes. Continue?',
     integrityNothingToRepair: 'Nothing to repair',
     /* ── Vault backup / restore (batch one) ── */
     backup: 'Vault backup',
-    backupTitleDesc: 'Pack the whole vault into a .zip (snapshots & attachments included, rebuildable index excluded) or restore from one.',
+    backupTitleDesc:
+      'Pack the whole vault into a .zip (snapshots & attachments included, rebuildable index excluded) or restore from one.',
     backupClose: 'Close',
     backupCreate: 'Create backup',
     backupRestore: 'Restore backup',
@@ -366,16 +369,19 @@ const enUS = {
     backupDone: 'Backed up {n} files ({size})',
     backupRestoreDone: 'Restored {n} files ({size})',
     backupSkipped: '{n} entries skipped due to path escape',
-    backupRestoreConfirm: 'Restoring will overwrite files with the same name in the vault. Continue?',
+    backupRestoreConfirm:
+      'Restoring will overwrite files with the same name in the vault. Continue?',
     backupConflictBothSaved: 'Your version saved as {p}',
     backupFailed: 'Operation failed: {e}',
     /* ── External modification conflict (batch one) ── */
     conflict: 'File modified externally',
-    conflictIntro: 'This document was modified outside 玉笺 while you also have unsaved changes. Choose how to resolve:',
+    conflictIntro:
+      'This document was modified outside 玉笺 while you also have unsaved changes. Choose how to resolve:',
     conflictMine: 'Keep mine',
     conflictDisk: 'Use disk',
     conflictBoth: 'Keep both',
-    conflictMineHint: 'Ignore the external change, keep the editor content (mark dirty, overwrite disk on save)',
+    conflictMineHint:
+      'Ignore the external change, keep the editor content (mark dirty, overwrite disk on save)',
     conflictDiskHint: 'Discard editor changes, reload the disk version',
     conflictBothHint: 'Save your version as .mine.md, then load the disk version',
     conflictMineChars: 'Mine: {n} chars',
@@ -431,7 +437,7 @@ const enUS = {
       snipFoot: 'Footnote',
       snipMermaid: 'Diagram',
       snipMath: 'Math block',
-      toastApplied: 'Document properties updated'
+      toastApplied: 'Document properties updated',
     },
     /* ── P2-3: window buttons / export-menu groups / context menu / sidebar controls / loading / search / error states / dialog defaults ── */
     loading: 'Loading',
@@ -458,8 +464,17 @@ const enUS = {
     ctxNewFile: 'New file',
     ctxNewFolder: 'New folder',
     ctxRename: 'Rename',
+    ctxMove: 'Move to…',
     ctxDelete: 'Delete',
     renameFail: 'Rename failed: {m}',
+    moveTitle: 'Move to…',
+    moveToRoot: 'Vault root',
+    moveConfirm: 'Move',
+    moveCancel: 'Cancel',
+    moveSameDir: 'Already in that folder',
+    moveInvalid: 'Cannot move into itself or a subfolder',
+    moveFail: 'Move failed: {m}',
+    moveDone: 'Moved to "{n}"',
     sidebarOpenVault: 'Open vault',
     sidebarSearch: 'Search',
     sidebarClear: 'Clear',
@@ -468,7 +483,7 @@ const enUS = {
     sidebarTitle: 'Directory',
     sidebarNoVault: 'No vault opened',
     sidebarDeleteConfirm: 'Confirm deletion',
-    snapDialog: 'Version snapshots'
+    snapDialog: 'Version snapshots',
   },
 
   /* ── Help panel: shortcuts + guide ── */
@@ -498,40 +513,40 @@ const enUS = {
     guideSections: [
       {
         h: '1 · Open a vault',
-        p: 'Click "Choose Folder" in the sidebar or the folder icon in the title bar to pick a local folder as your vault. Its .md files and sibling .assets show up live in the left file tree.'
+        p: 'Click "Choose Folder" in the sidebar or the folder icon in the title bar to pick a local folder as your vault. Its .md files and sibling .assets show up live in the left file tree.',
       },
       {
         h: '2 · Tabs & write',
-        p: 'The "＋" in the title bar creates a document in the vault; open several docs at once from the tree and switch on the tab bar. The body is WYSIWYG by default; switch to precise editing via the "WYSIWYG / Source" segment or Ctrl+/.'
+        p: 'The "＋" in the title bar creates a document in the vault; open several docs at once from the tree and switch on the tab bar. The body is WYSIWYG by default; switch to precise editing via the "WYSIWYG / Source" segment or Ctrl+/.',
       },
       {
         h: '3 · Search & replace',
-        p: 'The sidebar search box unifies retrieval: switch to “All” to full-text search the whole vault (one-click batch replace on hits); switch to “This doc” to find / replace within the current document only. Both scopes share the same search engine and differ only by scope; clicking a hit jumps to it. Both support “Match case / Whole word”. Ctrl+F focuses the search box.'
+        p: 'The sidebar search box unifies retrieval: switch to “All” to full-text search the whole vault (one-click batch replace on hits); switch to “This doc” to find / replace within the current document only. Both scopes share the same search engine and differ only by scope; clicking a hit jumps to it. Both support “Match case / Whole word”. Ctrl+F focuses the search box.',
       },
       {
         h: '4 · Snapshots & stats',
-        p: 'The "history" icon snapshots the current document with notes, line-level diff preview and rollback; the status bar counts hanzi / words / reading time live, and the popover shows a goal progress ring.'
+        p: 'The "history" icon snapshots the current document with notes, line-level diff preview and rollback; the status bar counts hanzi / words / reading time live, and the popover shows a goal progress ring.',
       },
       {
         h: '5 · Focus mode',
-        p: 'The "moon" icon enters zen writing: side panels recede into fog, other text blocks fade by distance, and the caret line is anchored by a gentle paper-scroll. Esc reveals a slim retreat bar; settings tune anchor / fog / smoothness.'
+        p: 'The "moon" icon enters zen writing: side panels recede into fog, other text blocks fade by distance, and the caret line is anchored by a gentle paper-scroll. Esc reveals a slim retreat bar; settings tune anchor / fog / smoothness.',
       },
       {
         h: '6 · Export & share',
-        p: 'The title-bar "Export" produces a single HTML or PDF. Export reads the editor DOM directly, true WYSIWYG; assets can ship as a sibling .assets folder or inline base64.'
+        p: 'The title-bar "Export" produces a single HTML or PDF. Export reads the editor DOM directly, true WYSIWYG; assets can ship as a sibling .assets folder or inline base64.',
       },
       {
         h: '7 · Images & img host',
-        p: 'Local images live in a same-named .assets folder with relative links. To publish externally, configure an img host under "More · Image Host" and replace links in one click.'
+        p: 'Local images live in a same-named .assets folder with relative links. To publish externally, configure an img host under "More · Image Host" and replace links in one click.',
       },
       {
         h: '8 · Appearance & skins',
-        p: 'The palette icon cycles five traditional Chinese kiln skins (Celadon / Sky / Moon / Dai / Amber) and dark / light / system — material and hue are decoupled, switching is instant.'
-      }
+        p: 'The palette icon cycles five traditional Chinese kiln skins (Celadon / Sky / Moon / Dai / Amber) and dark / light / system — material and hue are decoupled, switching is instant.',
+      },
     ],
     aboutBody:
-      '玉笺 · Jade Markdown Editor\nElectron + Vue 3 + Milkdown\nLocal-first · Faithful round-trip · No cloud tracking'
-  }
+      '玉笺 · Jade Markdown Editor\nElectron + Vue 3 + Milkdown\nLocal-first · Faithful round-trip · No cloud tracking',
+  },
 }
 
 export default enUS

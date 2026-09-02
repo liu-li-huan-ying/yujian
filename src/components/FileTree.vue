@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { FileNode } from '../../electron/shared/ipc-channels'
 import RenameInput from './RenameInput.vue'
 import Icon from './Icon.vue'
@@ -13,6 +13,10 @@ const props = defineProps<{
   editingPath: string | null
   /** 当前选中节点路径（键盘 Delete 删除 / 选中高亮用）；由 Sidebar 持有 */
   selectedPath: string | null
+  /** 笔记库根目录绝对路径（拖到树背景 = 移入库根用） */
+  rootPath: string | null
+  /** 当前正被拖拽的节点路径（由 Sidebar 持有，用于校验放置目标 + 高亮） */
+  dragSource: string | null
   depth?: number
 }>()
 
@@ -24,6 +28,11 @@ const emit = defineEmits<{
   (e: 'rename-cancel'): void
   /** 双击文件名：进入内联重命名（与标签栏 / 右键重命名一致） */
   (e: 'rename-start', path: string): void
+  /** 拖拽开始 / 结束：向上传递被拖拽节点路径，便于 Sidebar 维护 dragSource */
+  (e: 'drag-start', path: string): void
+  (e: 'drag-end'): void
+  /** 把 srcPath 移动到 destDir（destDir 为目录绝对路径，或根目录 rootPath） */
+  (e: 'move', srcPath: string, destDir: string): void
 }>()
 
 const level = computed(() => props.depth ?? 0)
@@ -39,6 +48,78 @@ function isActiveAncestor(node: FileNode): boolean {
   if (node.type !== 'dir' || !props.activePath) return false
   const sep = node.path.includes('\\') ? '\\' : '/'
   return props.activePath.startsWith(node.path + sep)
+}
+
+/* ── 拖拽移动 ── */
+
+/** 当前悬停的可放置目录路径（高亮放置目标），null 表示无 */
+const dropTarget = ref<string | null>(null)
+
+const sepOf = (p: string): string => (p.includes('\\') ? '\\' : '/')
+
+/** 校验能否把 src 放到 destDir（destDir 必为目录）：排除自身、子孙、原父目录 */
+function canDrop(src: string | null, destDir: string): boolean {
+  if (!src) return false
+  const normSrc = src.replace(/[\\/]$/, '')
+  const normDest = destDir.replace(/[\\/]$/, '')
+  if (normSrc === normDest) return false
+  const sep = sepOf(normSrc)
+  // 不能放进自己或自己的子孙目录
+  if (normDest.startsWith(normSrc + sep)) return false
+  // 放到原父目录 = 没动，不允许（那是重命名的事）
+  const parent = normSrc.slice(0, Math.max(normSrc.lastIndexOf('/'), normSrc.lastIndexOf('\\')))
+  if (normDest === parent) return false
+  return true
+}
+
+function onDragStart(node: FileNode, e: DragEvent): void {
+  if (e.dataTransfer) {
+    e.dataTransfer.setData('text/plain', node.path)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  dropTarget.value = null
+  emit('drag-start', node.path)
+}
+
+function onDragOver(node: FileNode, e: DragEvent): void {
+  // 仅目录、且为合法目标时才允许放置；否则截断冒泡，避免落到 <ul> 的背景「移入库根」逻辑
+  if (node.type !== 'dir' || !canDrop(props.dragSource, node.path)) {
+    e.stopPropagation()
+    return
+  }
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropTarget.value = node.path
+}
+
+function onDrop(node: FileNode, e: DragEvent): void {
+  if (node.type !== 'dir') return
+  if (!canDrop(props.dragSource, node.path)) return
+  e.preventDefault()
+  e.stopPropagation()
+  const src = props.dragSource
+  dropTarget.value = null
+  if (src) emit('move', src, node.path)
+}
+
+function onDragEnd(): void {
+  dropTarget.value = null
+  emit('drag-end')
+}
+
+/** 拖到树的背景（非具体行）= 移入库根 */
+function onDropRoot(e: DragEvent): void {
+  if (!props.rootPath || !canDrop(props.dragSource, props.rootPath)) return
+  e.preventDefault()
+  const src = props.dragSource
+  dropTarget.value = null
+  if (src) emit('move', src, props.rootPath)
+}
+
+function onDragOverRoot(e: DragEvent): void {
+  if (!props.rootPath || !canDrop(props.dragSource, props.rootPath)) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 }
 
 function onContextMenu(node: FileNode, e: MouseEvent): void {
@@ -65,7 +146,7 @@ function fwdRenameConfirm(path: string, value: string): void {
 </script>
 
 <template>
-  <ul class="tree">
+  <ul class="tree" @dragover.prevent="onDragOverRoot" @drop.prevent="onDropRoot">
     <li v-for="node in nodes" :key="node.path" :style="{ '--lv': level }">
       <button
         class="row"
@@ -73,16 +154,23 @@ function fwdRenameConfirm(path: string, value: string): void {
           'row--dir': node.type === 'dir',
           'row--active': node.type === 'file' && node.path === activePath,
           'row--dir-active': isActiveAncestor(node),
-          'row--selected': node.path === selectedPath
+          'row--selected': node.path === selectedPath,
+          'row--dragging': node.path === dragSource,
+          'row--drop': node.type === 'dir' && node.path === dropTarget,
         }"
         :style="{ paddingLeft: `${8 + level * 14}px` }"
         :title="node.name"
         :aria-expanded="node.type === 'dir' ? expanded.has(node.path) : undefined"
         :aria-current="node.type === 'file' && node.path === activePath ? 'page' : undefined"
         type="button"
+        draggable="true"
         @click="node.type === 'dir' ? emit('toggle', node.path) : emit('select', node)"
         @dblclick="onDblClick(node)"
         @contextmenu.prevent="onContextMenu(node, $event)"
+        @dragstart="onDragStart(node, $event)"
+        @dragover="onDragOver(node, $event)"
+        @drop="onDrop(node, $event)"
+        @dragend="onDragEnd"
       >
         <!-- 目录：仅在有子节点时显示可展开箭头；文件：占位对齐 -->
         <svg
@@ -107,11 +195,7 @@ function fwdRenameConfirm(path: string, value: string): void {
 
         <Icon
           :name="
-            node.type === 'dir'
-              ? expanded.has(node.path)
-                ? 'folder-open'
-                : 'folder'
-              : 'file-text'
+            node.type === 'dir' ? (expanded.has(node.path) ? 'folder-open' : 'folder') : 'file-text'
           "
           :size="14"
           class="ico"
@@ -135,6 +219,8 @@ function fwdRenameConfirm(path: string, value: string): void {
         :expanded="expanded"
         :editing-path="editingPath"
         :selected-path="selectedPath"
+        :root-path="rootPath"
+        :drag-source="dragSource"
         :depth="level + 1"
         @select="emit('select', $event)"
         @toggle="emit('toggle', $event)"
@@ -142,6 +228,9 @@ function fwdRenameConfirm(path: string, value: string): void {
         @rename-confirm="fwdRenameConfirm"
         @rename-cancel="onRenameCancel"
         @rename-start="emit('rename-start', $event)"
+        @drag-start="emit('drag-start', $event)"
+        @drag-end="emit('drag-end')"
+        @move="(s: string, d: string) => emit('move', s, d)"
       />
     </li>
   </ul>
@@ -249,6 +338,23 @@ function fwdRenameConfirm(path: string, value: string): void {
 .row:focus-visible {
   outline: 2px solid var(--hue-accent);
   outline-offset: -2px;
+}
+
+/* 正在被拖拽的源：降透明，给出「拿起」的反馈 */
+.row--dragging {
+  opacity: 0.45;
+}
+
+/* 可放置目标（目录）：青瓷描边 + 微亮底，提示「松手即放入此文件夹」 */
+.row--drop {
+  background: var(--hue-active);
+  color: var(--hue-accent);
+  box-shadow: inset 0 0 0 1.5px var(--hue-accent);
+}
+
+.row--drop .name {
+  color: var(--hue-accent);
+  font-weight: 500;
 }
 
 /* 目录与文件用不同明度的文字，强化层级但不割裂 */

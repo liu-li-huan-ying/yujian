@@ -22,10 +22,11 @@ export const IPC = {
   VAULT_UNWATCH: 'vault:unwatch',
   VAULT_CHANGE: 'vault:change',
 
-  // 笔记库：文件树变更（新建文件夹 / 重命名 / 删除）
+  // 笔记库：文件树变更（新建文件夹 / 重命名 / 删除 / 移动）
   VAULT_CREATE_DIR: 'vault:createDir',
   VAULT_RENAME: 'vault:rename',
   VAULT_DELETE: 'vault:delete',
+  VAULT_MOVE: 'vault:move',
 
   // 笔记库：全文搜索
   VAULT_SEARCH: 'vault:search',
@@ -89,7 +90,7 @@ export const IPC = {
   SNAPSHOT_CREATE: 'snapshot:create',
   SNAPSHOT_RESTORE: 'snapshot:restore',
   SNAPSHOT_DELETE: 'snapshot:delete',
-  SNAPSHOT_SET_TAGS: 'snapshot:setTags'
+  SNAPSHOT_SET_TAGS: 'snapshot:setTags',
 } as const
 
 export interface WindowState {
@@ -238,7 +239,7 @@ export const DEFAULT_ZEN_PREFS: ZenPrefs = {
   fog: 'mid',
   scroll: 0.16,
   fullscreen: false,
-  retreatBar: true
+  retreatBar: true,
 }
 
 /* ── 会话状态（崩溃恢复）────────────────────── */
@@ -278,7 +279,7 @@ export const DEFAULT_SESSION: SessionState = {
   outlineVisible: true,
   focusMode: false,
   writingGoal: 0,
-  zenPrefs: { ...DEFAULT_ZEN_PREFS }
+  zenPrefs: { ...DEFAULT_ZEN_PREFS },
 }
 
 /* ── 导出（HTML / PDF）────────────────────────── */
@@ -389,7 +390,6 @@ export interface PublishResult {
   /** 失败时的错误信息 */
   error?: string
 }
-
 
 /* ── 版本快照（Phase 2 批次二）────────────────────── */
 

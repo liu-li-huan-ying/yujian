@@ -26,7 +26,7 @@ import {
   type RestoreResult,
   type BacklinkItem,
   type NoteTitleItem,
-  type UnlinkedMention
+  type UnlinkedMention,
 } from '../shared/ipc-channels'
 
 /**
@@ -43,11 +43,9 @@ const api = {
     ipcRenderer.invoke(IPC.APP_SET_NATIVE_THEME, mode),
 
   /** 用系统默认浏览器打开外部链接（Ctrl/⌘+点击编辑器内链接跳转） */
-  openExternal: (url: string): Promise<void> =>
-    ipcRenderer.invoke(IPC.APP_OPEN_EXTERNAL, url),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke(IPC.APP_OPEN_EXTERNAL, url),
 
-  readFile: (filePath: string): Promise<string> =>
-    ipcRenderer.invoke(IPC.FILE_READ, filePath),
+  readFile: (filePath: string): Promise<string> => ipcRenderer.invoke(IPC.FILE_READ, filePath),
 
   /** 读二进制并按扩展名推断 mime，返回 data URL（导出内联图片用）；失败返回 ok:false */
   readFileBase64: (filePath: string): Promise<ReadBase64Result> =>
@@ -57,8 +55,7 @@ const api = {
     ipcRenderer.invoke(IPC.FILE_WRITE, filePath, content),
 
   /** 文件元信息（mtime / 字节数），冲突检测展示磁盘修改时间用 */
-  statFile: (filePath: string): Promise<FileStat> =>
-    ipcRenderer.invoke(IPC.FILE_STAT, filePath),
+  statFile: (filePath: string): Promise<FileStat> => ipcRenderer.invoke(IPC.FILE_STAT, filePath),
 
   /** 在指定目录新建文档，返回最终路径（重名自动加序号，不覆盖已有内容） */
   createDoc: (dir: string, name?: string): Promise<string> =>
@@ -76,8 +73,11 @@ const api = {
   deleteItem: (targetPath: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_DELETE, targetPath),
 
-  openFileDialog: (): Promise<string | null> =>
-    ipcRenderer.invoke(IPC.DIALOG_OPEN_FILE),
+  /** 移动文件或文件夹到目标目录（跨卷自动复制+删源，含同名 .assets 同步） */
+  moveItem: (oldPath: string, destDir: string, newName?: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.VAULT_MOVE, oldPath, destDir, newName),
+
+  openFileDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.DIALOG_OPEN_FILE),
 
   saveFileDialog: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke(IPC.DIALOG_SAVE_FILE, defaultPath),
@@ -87,8 +87,7 @@ const api = {
 
   // ── 笔记库 ──
 
-  listVault: (root: string): Promise<FileNode[]> =>
-    ipcRenderer.invoke(IPC.VAULT_LIST, root),
+  listVault: (root: string): Promise<FileNode[]> => ipcRenderer.invoke(IPC.VAULT_LIST, root),
 
   /** 全文搜索：在笔记库内检索 Markdown 文档内容，返回命中行。
       file 传入时只搜该单文件（左侧「本文档」范围），不传则递归全库（「全部」范围）。
@@ -97,9 +96,8 @@ const api = {
     root: string,
     query: string,
     opts?: SearchOptions,
-    file?: string
-  ): Promise<SearchResult> =>
-    ipcRenderer.invoke(IPC.VAULT_SEARCH, root, query, opts, file),
+    file?: string,
+  ): Promise<SearchResult> => ipcRenderer.invoke(IPC.VAULT_SEARCH, root, query, opts, file),
 
   /** 替换：在搜索命中的文件范围内把 query 全部替换为 replacement（匹配规则与 searchVault 一致）。
       file 传入时仅在单文档范围内替换，不传则全库命中文件范围。 */
@@ -108,7 +106,7 @@ const api = {
     query: string,
     replacement: string,
     opts?: SearchOptions,
-    file?: string
+    file?: string,
   ): Promise<ReplaceResult> =>
     ipcRenderer.invoke(IPC.VAULT_REPLACE, root, query, replacement, opts, file),
 
@@ -152,8 +150,7 @@ const api = {
   wrapMention: (root: string, item: UnlinkedMention): Promise<boolean> =>
     ipcRenderer.invoke(IPC.VAULT_WRAP_MENTION, root, item),
 
-  watchVault: (root: string): Promise<void> =>
-    ipcRenderer.invoke(IPC.VAULT_WATCH, root),
+  watchVault: (root: string): Promise<void> => ipcRenderer.invoke(IPC.VAULT_WATCH, root),
 
   unwatchVault: (): Promise<void> => ipcRenderer.invoke(IPC.VAULT_UNWATCH),
 
@@ -201,8 +198,7 @@ const api = {
 
   // ── 图床（密钥只在主进程）──
 
-  getImgHost: (): Promise<ImgHostConfig | null> =>
-    ipcRenderer.invoke(IPC.IMGHOST_GET),
+  getImgHost: (): Promise<ImgHostConfig | null> => ipcRenderer.invoke(IPC.IMGHOST_GET),
 
   /**
    * 保存图床配置。token 为密钥明文，仅经此 IPC 传入主进程后由 safeStorage 加密落盘，
@@ -231,7 +227,7 @@ const api = {
     content: string,
     note?: string,
     tags?: string[],
-    branch?: string
+    branch?: string,
   ): Promise<SnapshotInfo> =>
     ipcRenderer.invoke(IPC.SNAPSHOT_CREATE, vaultPath, filePath, content, note, tags, branch),
 
@@ -248,9 +244,9 @@ const api = {
     vaultPath: string,
     filePath: string,
     id: string,
-    tags: string[]
+    tags: string[],
   ): Promise<SnapshotInfo | null> =>
-    ipcRenderer.invoke(IPC.SNAPSHOT_SET_TAGS, vaultPath, filePath, id, tags)
+    ipcRenderer.invoke(IPC.SNAPSHOT_SET_TAGS, vaultPath, filePath, id, tags),
 }
 
 export type ElectronAPI = typeof api
