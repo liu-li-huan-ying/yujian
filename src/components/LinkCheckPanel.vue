@@ -14,6 +14,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'open', item: BrokenLinkItem): void
+  /** 断链目标一键创建：由 App 建笔记并打开，成功后回调本面板 refresh() 复检 */
+  (e: 'create', item: BrokenLinkItem): void
 }>()
 
 const report = ref<BrokenLinkReport | null>(null)
@@ -101,6 +103,9 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+/** 供 App 在「一键创建」成功后复检（新建的笔记会让该条断链转为正常） */
+defineExpose({ refresh: run })
 </script>
 
 <template>
@@ -158,25 +163,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <span class="lc__break">{{ breakdown }}</span>
       </div>
       <div class="lc__list">
-        <button
-          v-for="(it, i) in filtered"
-          :key="i"
-          type="button"
-          class="row"
-          :title="rowTitle(it)"
-          @click="emit('open', it)"
-        >
-          <span class="row__kind" :class="`row__kind--${it.kind}`">{{ kindLabel[it.kind] }}</span>
-          <span class="row__body">
-            <span class="row__top">
-              <span class="row__file">{{ fileBase(it.file) }}</span>
-              <span class="row__line">:{{ it.line }}</span>
+        <div v-for="(it, i) in filtered" :key="i" class="row">
+          <button type="button" class="row__main" :title="rowTitle(it)" @click="emit('open', it)">
+            <span class="row__kind" :class="`row__kind--${it.kind}`">{{ kindLabel[it.kind] }}</span>
+            <span class="row__body">
+              <span class="row__top">
+                <span class="row__file">{{ fileBase(it.file) }}</span>
+                <span class="row__line">:{{ it.line }}</span>
+              </span>
+              <span class="row__target">{{ it.target }}</span>
+              <span class="row__ctx">{{ it.context }}</span>
             </span>
-            <span class="row__target">{{ it.target }}</span>
-            <span class="row__ctx">{{ it.context }}</span>
-          </span>
-          <span class="row__dir">{{ fileDir(it.file) }}</span>
-        </button>
+            <span class="row__dir">{{ fileDir(it.file) }}</span>
+          </button>
+          <!-- 只有笔记链接能「一键创建」：图片/附件缺失靠创建空文件无意义 -->
+          <button
+            v-if="it.kind === 'wikilink'"
+            type="button"
+            class="row__act"
+            :title="L.linkCheckCreate"
+            @click="emit('create', it)"
+          >
+            <Icon name="plus" :size="13" />
+          </button>
+        </div>
       </div>
       <p class="lc__hint">{{ L.linkCheckHint }}</p>
     </template>
@@ -351,23 +361,66 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 4px;
 }
 
+/* 行容器：把「跳转」与「一键创建」两个动作并排装下，故 .row 从按钮降为容器 */
 .row {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 9px;
+  align-items: stretch;
+  gap: 2px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: var(--hue-surface);
-  cursor: pointer;
-  text-align: left;
   transition:
     background var(--dur-fast, 0.12s) var(--ease, ease),
     border-color var(--dur-fast, 0.12s) var(--ease, ease);
 }
 .row:hover {
   background: var(--hue-surface-2);
+  border-color: var(--hue-accent);
+}
+.row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+/* 一键创建：默认压得很轻，只在悬停该行时才浮出来，避免每行一个加号把列表变噪 */
+.row__act {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  margin: 5px 5px 5px 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-3);
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast, 0.12s) var(--ease, ease),
+    color var(--dur-fast, 0.12s) var(--ease, ease),
+    opacity var(--dur-fast, 0.12s) var(--ease, ease);
+}
+.row:hover .row__act {
+  opacity: 1;
+  border-color: var(--hue-border-subtle);
+}
+.row__act:hover {
+  background: var(--hue-accent);
+  border-color: var(--hue-accent);
+  color: var(--hue-on-accent);
+}
+.row__act:focus-visible {
+  opacity: 1;
+  outline: none;
   border-color: var(--hue-accent);
 }
 

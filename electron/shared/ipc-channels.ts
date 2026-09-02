@@ -47,6 +47,12 @@ export const IPC = {
   VAULT_RESOLVE_WIKILINK: 'vault:resolveWikilink',
   // 笔记库：反链查询（哪些笔记链接到当前笔记，含引用行上下文）
   VAULT_GET_BACKLINKS: 'vault:getBacklinks',
+  // 笔记库：列出全部笔记标题（供 [[ 自动补全浮层消费，纯索引元数据、不读正文）
+  VAULT_LIST_NOTES: 'vault:listNotes',
+  // 笔记库：未链接提及查询（纯文本提到当前笔记名但未加 [[ ]] 的片段）
+  VAULT_UNLINKED_MENTIONS: 'vault:unlinkedMentions',
+  // 笔记库：把未链接提及的片段包裹成 [[链接]] 并写回磁盘
+  VAULT_WRAP_MENTION: 'vault:wrapMention',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -106,6 +112,32 @@ export interface BacklinkItem {
   line: number
   /** 引用所在行的上下文片段（已截断） */
   snippet: string
+}
+
+/** `[[` 自动补全候选：仅在弹出浮层时按需拉取，只含轻量元数据 */
+export interface NoteTitleItem {
+  /** 绝对路径 */
+  path: string
+  /** 显示名：frontmatter title > 文件名（不含扩展名） */
+  title: string
+  /** 文件名（不含扩展名），用于 `[[` 里最常见的按名匹配 */
+  base: string
+}
+
+/** 未链接提及单条：某篇笔记以纯文本提到当前笔记名，但未加 `[[ ]]` */
+export interface UnlinkedMention {
+  /** 来源文件绝对路径 */
+  path: string
+  /** 命中所在行号（从 1 开始） */
+  line: number
+  /** 命中所在行的上下文片段（已截断） */
+  snippet: string
+  /** 命中片段在**该行内**的起始字符下标（用于精确包裹，避免同串重复替换） */
+  start: number
+  /** 命中片段在**该行内**的结束字符下标（不含） */
+  end: number
+  /** 被提及的笔记名（写回时即以此为链接目标） */
+  name: string
 }
 
 export type EditorMode = 'wysiwyg' | 'source'

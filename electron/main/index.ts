@@ -20,7 +20,8 @@ import {
   type WindowState,
   type SearchOptions,
   type IntegrityAction,
-  type FileStat
+  type FileStat,
+  type UnlinkedMention
 } from '../shared/ipc-channels'
 import { createDoc, createFolder, deleteItem, listTree, renameItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
 import * as VaultIndex from './vaultIndex'
@@ -374,6 +375,18 @@ function registerIpc(): void {
   // 双链：反链查询——哪些笔记链接到指定文档，附引用行上下文片段
   ipcMain.handle(IPC.VAULT_GET_BACKLINKS, (_event, root: string, absPath: string) =>
     VaultIndex.getBacklinksWithContext(root, absPath)
+  )
+  // 双链：[[ 自动补全候选——全部笔记标题（纯索引元数据，不读正文）
+  ipcMain.handle(IPC.VAULT_LIST_NOTES, (_event, root: string) => VaultIndex.listNoteTitles(root))
+  // 双链：未链接提及查询——纯文本提到当前笔记名但未加 [[ ]] 的片段
+  ipcMain.handle(IPC.VAULT_UNLINKED_MENTIONS, (_event, root: string, absPath: string) =>
+    VaultIndex.getUnlinkedMentions(root, absPath)
+  )
+  // 双链：把未链接提及包裹成 [[链接]] 写回磁盘（落笔前回验原文，绝不静默覆盖）
+  ipcMain.handle(
+    IPC.VAULT_WRAP_MENTION,
+    async (_event, root: string, item: UnlinkedMention) =>
+      VaultIndex.wrapUnlinkedMention(root, item)
   )
 
   // ── 会话持久化（崩溃恢复）──

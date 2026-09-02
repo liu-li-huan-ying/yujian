@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { languages } from '@codemirror/language-data'
 import { Crepe } from '@milkdown/crepe'
 import { editorViewCtx, parserCtx, schemaCtx, serializerCtx } from '@milkdown/core'
@@ -20,6 +20,9 @@ import {
   remarkWikilink,
   wikiLinkInputRule
 } from './features/wikilink'
+import { createWikiSuggestPlugin, type WikiSuggestTrigger } from './features/wikilinkSuggest'
+import WikiSuggest from '../components/WikiSuggest.vue'
+import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
 import {
   highlightSchema,
   inlineMarkInputRules,
@@ -67,6 +70,131 @@ const emit = defineEmits<{
 const host = ref<HTMLDivElement | null>(null)
 let crepe: Crepe | null = null
 let imgObserver: MutationObserver | null = null
+
+/* ── [[ 自动补全浮层（批次二收尾）────────────────
+ * 分工：wikilinkSuggest 插件只负责「判定触发 + 报坐标 + 拦按键」，
+ * 候选数据与浮层渲染全部留在这一层，插件保持零 DOM 依赖。
+ */
+const SUGGEST_LIMIT = 8
+const suggest = ref<WikiSuggestTrigger | null>(null)
+const suggestIndex = ref(0)
+const notes = ref<NoteTitleItem[]>([])
+/** Esc 关闭后记住触发起点：同一次输入里不再弹回，直到用户真的另起一个 `[[` */
+let dismissedFrom: number | null = null
+
+const candidates = computed<NoteTitleItem[]>(() => {
+  const s = suggest.value
+  if (!s) return []
+  const q = s.query.trim().toLowerCase()
+  if (!q) return notes.value.slice(0, SUGGEST_LIMIT)
+  // 前缀命中优先于包含命中：敲「季度」时「季度财报」必须排在「第三季度小结」前面
+  const starts: NoteTitleItem[] = []
+  const contains: NoteTitleItem[] = []
+  for (const n of notes.value) {
+    const t = n.title.toLowerCase()
+    const b = n.base.toLowerCase()
+    if (t.startsWith(q) || b.startsWith(q)) starts.push(n)
+    else if (t.includes(q) || b.includes(q)) contains.push(n)
+  }
+  return [...starts, ...contains].slice(0, SUGGEST_LIMIT)
+})
+
+/**
+ * 候选按需拉取：只在浮层「由关到开」的那一刻取一次，之后敲字走前端内存过滤不再请求。
+ * 索引里只有元数据、不读正文，一次开销可忽略；换来的是刚新建的笔记立刻能补全，
+ * 不必等索引事件或重启 —— 对一个边写边建库的工具来说，新鲜度比省这一次 IPC 重要。
+ */
+async function loadNotes(): Promise<void> {
+  const root = props.vaultPath
+  if (!root) {
+    notes.value = []
+    return
+  }
+  try {
+    notes.value = await window.api.listNotes(root)
+  } catch {
+    notes.value = []
+  }
+}
+
+function onSuggestState(t: WikiSuggestTrigger | null): void {
+  if (t && t.from === dismissedFrom) {
+    suggest.value = null
+    return
+  }
+  if (!t) {
+    suggest.value = null
+    dismissedFrom = null
+    return
+  }
+  const opened = suggest.value === null
+  suggest.value = t
+  suggestIndex.value = 0
+  if (opened) void loadNotes()
+}
+
+function closeSuggest(): void {
+  dismissedFrom = suggest.value?.from ?? null
+  suggest.value = null
+}
+
+/** 把 `[[查询词` 整段替换成 wikilink 真节点，光标落到节点之后 */
+function acceptSuggest(item: NoteTitleItem): void {
+  const s = suggest.value
+  const view = getEditorView()
+  if (!s || !view) return
+  const type = view.state.schema.nodes[wikiLinkId]
+  if (!type) return
+  // 目标一律用文件名（不含扩展名）：与索引按名解析的口径一致；不写别名，
+  // 免得笔记改名后别名残留成 stale 文本。
+  const node = type.create({ target: item.base, alias: null, anchor: null })
+  const tr = view.state.tr.replaceWith(s.from, s.to, node)
+  const after = Math.min(s.from + node.nodeSize, tr.doc.content.size)
+  tr.setSelection(TextSelection.near(tr.doc.resolve(after)))
+  view.dispatch(tr)
+  view.focus()
+  suggest.value = null
+  dismissedFrom = null
+}
+
+function onPick(i: number): void {
+  const it = candidates.value[i]
+  if (it) acceptSuggest(it)
+}
+
+/** 浮层打开期间的按键裁决：返回 true 表示已消费，ProseMirror 不再处理 */
+function onSuggestKey(e: KeyboardEvent): boolean {
+  const n = candidates.value.length
+  if (e.key === 'Escape') {
+    closeSuggest()
+    return true
+  }
+  if (e.key === 'ArrowDown') {
+    if (n > 0) suggestIndex.value = (suggestIndex.value + 1) % n
+    return true
+  }
+  if (e.key === 'ArrowUp') {
+    if (n > 0) suggestIndex.value = (suggestIndex.value - 1 + n) % n
+    return true
+  }
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    // 无候选时放行，让 Enter 正常换行 —— 补全不该吞掉普通输入
+    if (n === 0) return false
+    const it = candidates.value[suggestIndex.value] ?? candidates.value[0]
+    if (it) acceptSuggest(it)
+    return true
+  }
+  return false
+}
+
+watch(
+  () => props.vaultPath,
+  () => {
+    notes.value = []
+    suggest.value = null
+    dismissedFrom = null
+  }
+)
 
 /* ── 图片粘贴落盘 ─────────────────────────────── */
 
@@ -352,6 +480,10 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.editor.use(remarkWikilink)
   crepe.editor.use(wikiLinkSchema)
   crepe.editor.use(wikiLinkInputRule)
+  // 双向链接：`[[` 自动补全（插件只报触发状态与按键，浮层由 WikiSuggest 渲染在 body 下）
+  crepe.editor.use(
+    $prose(() => createWikiSuggestPlugin({ onState: onSuggestState, onKey: onSuggestKey }))
+  )
   // 行内数学 $…$ 改由 MathJax 渲染（接管 math_inline 节点显示）
   crepe.editor.use($prose(() => mathInlineNodeViewPlugin()))
   // 块级数学 $$…$$ 走 renderPreview（language='latex'）。Crepe 的 Latex 特性会在 create()
@@ -611,6 +743,19 @@ defineExpose({
 
 <template>
   <div ref="host" class="milkdown-host" />
+  <!-- 挂到 body：避开 .milkdown-host 的 overflow:hidden 裁切，也免于被编辑器层叠上下文压住 -->
+  <Teleport to="body">
+    <WikiSuggest
+      v-if="suggest"
+      :items="candidates"
+      :active-index="suggestIndex"
+      :x="suggest.x"
+      :y="suggest.y"
+      @pick="onPick"
+      @hover="suggestIndex = $event"
+      @close="closeSuggest"
+    />
+  </Teleport>
 </template>
 
 <style scoped>
