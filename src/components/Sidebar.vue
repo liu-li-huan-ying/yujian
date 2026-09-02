@@ -327,6 +327,11 @@ function expand(path: string): void {
   expanded.value = next
 }
 
+/** 拖拽悬停目录时自动展开该目录，便于跨多层级 / 上上层目录直达（幂等：已展开不变） */
+function onHoverExpand(path: string): void {
+  expand(path)
+}
+
 function toggle(path: string): void {
   const next = new Set(expanded.value)
   if (next.has(path)) next.delete(path)
@@ -941,6 +946,7 @@ function startDrag(e: PointerEvent): void {
           :drag-source="draggingPath"
           @select="onSelect"
           @toggle="onToggle"
+          @hover-expand="onHoverExpand"
           @context-menu="onContextMenu"
           @rename-confirm="(p, v) => void doRename(p, v)"
           @rename-cancel="onRenameCancel"

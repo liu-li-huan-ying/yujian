@@ -33,6 +33,8 @@ const emit = defineEmits<{
   (e: 'drag-end'): void
   /** 把 srcPath 移动到 destDir（destDir 为目录绝对路径，或根目录 rootPath） */
   (e: 'move', srcPath: string, destDir: string): void
+  /** 拖拽悬停合法目录时请求自动展开，便于跨多层级 / 上上层目录直达 */
+  (e: 'hover-expand', path: string): void
 }>()
 
 const level = computed(() => props.depth ?? 0)
@@ -72,6 +74,19 @@ function canDrop(src: string | null, destDir: string): boolean {
   return true
 }
 
+/** 拖拽悬停目录时延迟请求自动展开，便于跨多层级直达（防抖，避免拖过即乱展开） */
+let hoverExpandTimer: ReturnType<typeof setTimeout> | null = null
+function requestHoverExpand(p: string): void {
+  if (hoverExpandTimer) clearTimeout(hoverExpandTimer)
+  hoverExpandTimer = setTimeout(() => emit('hover-expand', p), 300)
+}
+function cancelHoverExpand(): void {
+  if (hoverExpandTimer) {
+    clearTimeout(hoverExpandTimer)
+    hoverExpandTimer = null
+  }
+}
+
 function onDragStart(node: FileNode, e: DragEvent): void {
   if (e.dataTransfer) {
     e.dataTransfer.setData('text/plain', node.path)
@@ -85,11 +100,13 @@ function onDragOver(node: FileNode, e: DragEvent): void {
   // 仅目录、且为合法目标时才允许放置；否则截断冒泡，避免落到 <ul> 的背景「移入库根」逻辑
   if (node.type !== 'dir' || !canDrop(props.dragSource, node.path)) {
     e.stopPropagation()
+    cancelHoverExpand()
     return
   }
   e.preventDefault()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
   dropTarget.value = node.path
+  requestHoverExpand(node.path)
 }
 
 function onDrop(node: FileNode, e: DragEvent): void {
@@ -99,11 +116,13 @@ function onDrop(node: FileNode, e: DragEvent): void {
   e.stopPropagation()
   const src = props.dragSource
   dropTarget.value = null
+  cancelHoverExpand()
   if (src) emit('move', src, node.path)
 }
 
 function onDragEnd(): void {
   dropTarget.value = null
+  cancelHoverExpand()
   emit('drag-end')
 }
 
