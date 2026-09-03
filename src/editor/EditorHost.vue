@@ -341,7 +341,8 @@ watch(
 /* ── 保存 ─────────────────────────────────── */
 
 function scheduleSave(): void {
-  if (!props.filePath) return
+  // 仅当保真层已绑定到某文档时才允许自动保存；目标路径由 docPath 决定，而非实时 props.filePath
+  if (!fidelity.docPath.value) return
   if (timer) clearTimeout(timer)
   timer = setTimeout(() => void save(), AUTOSAVE_DELAY)
 }
@@ -354,32 +355,59 @@ function cancelPendingSave(): void {
   }
 }
 
+/** 等待可能正在执行的保存完成，避免在途保存与切换/重指竞争保真层 */
+async function waitSavingIdle(): Promise<void> {
+  while (saving.value) {
+    await new Promise((r) => setTimeout(r, 10))
+  }
+}
+
 async function save(): Promise<void> {
-  if (!props.filePath || saving.value) return
+  // 目标路径锁定为「当前保真层所属的文档」，content 与 target 在同一时刻捕获，
+  // 杜绝切换文档时把上一文档内容写到新文档路径（B 内容变 A 的事故根因）
+  const target = fidelity.docPath.value
+  const content = fidelity.currentText.value
+  if (!target || saving.value) return
   if (timer) {
     clearTimeout(timer)
     timer = null
   }
   saving.value = true
   try {
-    await window.api.writeFile(props.filePath, fidelity.currentText.value)
-    fidelity.afterSave()
-    emit('saved', props.filePath)
+    await window.api.writeFile(target, content)
+    // 仅当目标仍指向同一文档时才固化保真层，避免陈旧保存污染已切换的新文档
+    if (fidelity.docPath.value === target) fidelity.afterSave()
+    emit('saved', target)
   } finally {
     saving.value = false
   }
 }
 
 /** 从磁盘载入文档 */
+let loadToken = 0
 async function load(path: string): Promise<void> {
+  const myToken = ++loadToken
+  // 1) 若有在途保存，先等它落盘到「旧文档」路径（save 只写 docPath，不会串写到新文档）
+  await waitSavingIdle()
+  // 2) 切换文档前，先把当前文档(A)未落盘的编辑写回 A 自己的路径。
+  //    否则 props.filePath 已指向 B、保真层仍持 A 时，挂起/在途的自动保存会把 A 覆盖写到 B。
+  if (fidelity.docPath.value && fidelity.isDirty.value) {
+    await save()
+  }
+  cancelPendingSave()
+  // 3) 此刻保真层仍属于 A，没有任何待写/在途写；开始加载 B
   loadPath.value = path
   startLoading()
   try {
     const text = await window.api.readFile(path)
+    // 加载期间若又切换了文档，本次结果作废，避免把旧文件内容灌进新文档视图
+    if (myToken !== loadToken) return
     fidelity.loadFromDisk(text)
+    fidelity.setDocPath(path)
     milkdown.value?.setMarkdown(text)
     stopLoading()
   } catch (e) {
+    if (myToken !== loadToken) return
     failLoading(`无法载入文件：${errMsg(e)}`)
   }
 }
@@ -406,6 +434,7 @@ function onReady(): void {
 function clear(): void {
   loadPath.value = null
   fidelity.loadFromDisk('')
+  fidelity.setDocPath(null)
   milkdown.value?.setMarkdown('')
   stopLoading()
 }

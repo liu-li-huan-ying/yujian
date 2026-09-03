@@ -208,10 +208,10 @@
 }
 
 /* ── 列表 ───────────────────────────────────
-   旧：原生 ::marker + 偏灰的 accent，暗色下对比弱、数字细，看着「费眼」。
-   改：关掉原生标记，改用自定义 ::before —— 有序列表走 CSS 计数器生成
-   「1. 2. 3.」（嵌套自动从 1 重计），无序列表用实心青玉圆点；二者都取
-   --hue-list-marker（皎洁月光：暗色近白带玉调 + 柔光晕，亮色深玉保证可读）。
+   关掉原生标记，改用自定义 ::before —— 有序列表走 CSS 计数器生成
+   「1. 2. 3.」（嵌套自动从 1 重计），无序列表用实心圆点；二者都取
+   --hue-list-marker（照搬浮块图标「从暗淡改明亮」经验：基底用 --hue-text-2 提亮，
+   不再用近白+光晕的自创方案）。已勾选任务用 --hue-accent 强调，与浮块图标选中态同源。
    任务列表（.milkdown-list-item-block）自带复选框，圆点必须排除，
    否则会凭空多出一个圆点。 */
 .milkdown .ProseMirror ul,
@@ -262,13 +262,12 @@
   filter: var(--hue-list-glow-dot);
 }
 
-/* ── 任务列表：复选框统一为青玉，勾选态用月光色 ────────────── */
+/* ── 任务列表：复选框统一为中性灰，勾选态用强调色（照搬浮块图标选中/hover 提亮经验）── */
 .milkdown .milkdown-list-item-block li .label-wrapper svg {
   fill: var(--hue-text-3);
 }
 .milkdown .milkdown-list-item-block li .label-wrapper .checked svg {
-  fill: var(--hue-list-marker);
-  filter: var(--hue-list-glow-dot);
+  fill: var(--hue-accent);
 }
 
 /* ── 表格（Crepe 包在 .milkdown-table-block 内，选择器更具体，

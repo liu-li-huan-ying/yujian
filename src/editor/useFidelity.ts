@@ -16,12 +16,22 @@ export function useFidelity() {
   const rawText = ref('')
   const docText = ref('')
   const isDirty = ref(false)
+  /**
+   * 当前保真层内容所属的文档路径。save() 只能写到此路径，
+   * 绝不写到实时 props.filePath —— 否则切换文档时的异步加载窗口会把上一文档内容串写到新文档。
+   */
+  const docPath = ref<string | null>(null)
 
   /** 从磁盘载入：以原文为准 */
   function loadFromDisk(text: string): void {
     rawText.value = text
     docText.value = text
     isDirty.value = false
+  }
+
+  /** 重指保真层所属文档（仅在与内容同步变更时调用，保证 docPath 与 currentText 始终对应） */
+  function setDocPath(path: string | null): void {
+    docPath.value = path
   }
 
   /**
@@ -70,12 +80,14 @@ export function useFidelity() {
     rawText,
     docText,
     isDirty,
+    docPath,
     currentText,
     willNormalize,
     loadFromDisk,
+    setDocPath,
     markEdited,
     onSourceEdited,
     afterSave,
-    applyExternal
+    applyExternal,
   }
 }
