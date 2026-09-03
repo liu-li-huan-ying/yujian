@@ -208,65 +208,40 @@
 }
 
 /* ── 列表 ───────────────────────────────────
-   关掉原生标记，改用自定义 ::before —— 有序列表走 CSS 计数器生成
-   「1. 2. 3.」（嵌套自动从 1 重计），无序列表用实心圆点；二者都取
-   --hue-list-marker（照搬浮块图标「从暗淡改明亮」经验：基底用 --hue-text-2 提亮，
-   不再用近白+光晕的自创方案）。已勾选任务用 --hue-accent 强调，与浮块图标选中态同源。
-   任务列表（.milkdown-list-item-block）自带复选框，圆点必须排除，
-   否则会凭空多出一个圆点。 */
+   ⚠️ 关键踩坑：Crepe 的 list-item-block 会为每个列表项渲染**真实标记元素**——
+   `<li class="list-item"> > .label-wrapper > Icon.label`，内容为 ⦿（无序）/ 序号（有序）/ 复选框（任务）。
+   所以列表标记**既不是原生 ::marker，也不存在 li::before**；此前改 ::before 等于
+   在改一个根本不会渲染的东西，这就是「怎么改看起来都一样」的真根因。
+   照搬浮块图标「从暗淡改明亮」经验：把标记由 Crepe 默认的 --crepe-color-outline
+   （≈ --hue-border-subtle，极暗）提到 --hue-list-marker（--hue-text-2）提亮，
+   已勾选复选框用 --hue-accent 强调，与浮块图标选中/hover 态同源。 */
 .milkdown .ProseMirror ul,
 .milkdown .ProseMirror ol {
   padding-left: 1.6em;
   margin: 0 0 14px;
-  /* 关掉原生标记：后续统一由 ::before 绘制，获得完整色彩/字重/字号控制 */
+  /* 关掉原生标记：标记全部由 Crepe 的 .label 元素绘制 */
   list-style: none;
 }
 .milkdown .ProseMirror li {
-  position: relative;
   margin-bottom: 6px;
 }
 .milkdown .ProseMirror li p {
   margin: 0;
 }
 
-/* 有序列表：计数器生成编号 */
-.milkdown .ProseMirror ol {
-  counter-reset: yj-ol;
-}
-.milkdown .ProseMirror ol > li {
-  counter-increment: yj-ol;
-}
-.milkdown .ProseMirror ol > li::before {
-  content: counter(yj-ol) '.';
-  position: absolute;
-  left: -1.55em;
-  width: 1.35em;
-  text-align: right;
+/* 列表标记：直接给 Crepe 渲染的真实标记上色。
+   color 与 fill 都设，兼顾「文本字符」与「SVG」两种渲染形态；
+   选择器与 Crepe 同特异性、但排在其后，故生效。 */
+.milkdown .milkdown-list-item-block li .label-wrapper,
+.milkdown .milkdown-list-item-block li .label-wrapper .label {
   color: var(--hue-list-marker);
-  font-weight: 600;
-  /* 等宽数字：1→10 进位时编号不左右跳动 */
-  font-variant-numeric: tabular-nums;
-  text-shadow: var(--hue-list-glow-text);
 }
-
-/* 无序列表：实心青玉圆点（避开任务列表），带月华柔光 */
-.milkdown .ProseMirror ul:not(.milkdown-list-item-block) > li::before {
-  content: '';
-  position: absolute;
-  left: -1.05em;
-  top: 0.62em;
-  width: 0.44em;
-  height: 0.44em;
-  border-radius: 50%;
-  background: var(--hue-list-marker);
-  filter: var(--hue-list-glow-dot);
-}
-
-/* ── 任务列表：复选框统一为中性灰，勾选态用强调色（照搬浮块图标选中/hover 提亮经验）── */
 .milkdown .milkdown-list-item-block li .label-wrapper svg {
-  fill: var(--hue-text-3);
+  fill: var(--hue-list-marker);
 }
-.milkdown .milkdown-list-item-block li .label-wrapper .checked svg {
+/* 已勾选：强调色。注意 .checked 就长在 svg 自身上，故写 `svg.checked`；
+   此前写成 `.checked svg`（找 .checked 的后代 svg）匹配不到任何元素，勾选态从未生效。 */
+.milkdown .milkdown-list-item-block li .label-wrapper svg.checked {
   fill: var(--hue-accent);
 }
 
