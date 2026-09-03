@@ -416,12 +416,14 @@
    亮色：退为深玉色，保证白底上清晰可读（近白在白底会隐形）。
    各皮肤通过 rgb(var(--hue-tint-1)) 自动取自身色调，统一跟随。 */
 [data-mode='dark'] {
-  --hue-list-marker: color-mix(in srgb, #ffffff 70%, rgb(var(--hue-tint-1)) 30%);
-  --hue-list-glow-text: 0 0 8px rgba(255, 255, 255, 0.22);
-  --hue-list-glow-dot: drop-shadow(0 0 5px rgba(255, 255, 255, 0.35));
+  /* 照搬浮块图标「从暗淡改明亮」的经验：浮块图标由 on-surface-variant(text-3) 提到
+     --hue-text-2 提亮、强调态用 --hue-accent；列表标记同法——基底改 text-2，已勾选用 accent。 */
+  --hue-list-marker: var(--hue-text-2);
+  --hue-list-glow-text: none;
+  --hue-list-glow-dot: none;
 }
 [data-mode='light'] {
-  --hue-list-marker: color-mix(in srgb, rgb(var(--hue-tint-1)) 52%, #16201d 48%);
+  --hue-list-marker: var(--hue-text-2);
   --hue-list-glow-text: none;
   --hue-list-glow-dot: none;
 }

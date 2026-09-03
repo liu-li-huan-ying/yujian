@@ -1117,6 +1117,7 @@ export interface SessionState {
 | 5 | **KaTeX 字体导出丢失**                | 中  | 导出 HTML 时内联字体或使用本地字体文件                                          |
 | 6 | **electron-builder 打包需下载 NSIS** | 低  | 同风险 3，配镜像解决                                                     |
 | 7 | pinia 4 与 Vue 3.5 的 peer 兼容性    | 低  | 安装时若报冲突，降级到 `pinia@^2`                                          |
+| 8 | **切换文档时内容串写（B 被 A 覆盖）**     | 高  | 保存目标绑定 `fidelity.docPath`（绝不用实时 `props.filePath`）；`load()` 先 `waitSavingIdle()` + 若旧文档脏则 `save()` flush 回旧路径，再用 `loadToken` 丢弃过期加载结果。见 `src/editor/useFidelity.ts` 的 `docPath`/`setDocPath` 与 `EditorHost.vue` 的 `save`/`load` |
 
 ***
 
