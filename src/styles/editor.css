@@ -135,11 +135,7 @@
   padding: 10px 0 10px 16px;
   border-left: 3px solid var(--hue-accent);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: linear-gradient(
-    90deg,
-    var(--hue-active) 0%,
-    transparent 70%
-  );
+  background: linear-gradient(90deg, var(--hue-active) 0%, transparent 70%);
   color: var(--hue-text-2);
 }
 .milkdown .ProseMirror blockquote p {
@@ -211,21 +207,56 @@
   letter-spacing: 0.06em;
 }
 
-/* ── 列表 ─────────────────────────────────── */
+/* ── 列表 ───────────────────────────────────
+   旧：原生 ::marker + 偏灰的 accent，暗色下对比弱、数字细，看着「费眼」。
+   改：关掉原生标记，改用自定义 ::before —— 有序列表走 CSS 计数器生成
+   「1. 2. 3.」（嵌套自动从 1 重计），无序列表用实心青瓷圆点；二者都取
+   accent 色 + 加粗，清晰但不抢戏。任务列表（.milkdown-list-item-block）
+   自带复选框，必须排除，否则会凭空多出一个圆点。 */
 .milkdown .ProseMirror ul,
 .milkdown .ProseMirror ol {
-  padding-left: 26px;
+  padding-left: 1.6em;
   margin: 0 0 14px;
+  /* 关掉原生标记：后续统一由 ::before 绘制，获得完整色彩/字重/字号控制 */
+  list-style: none;
 }
 .milkdown .ProseMirror li {
+  position: relative;
   margin-bottom: 6px;
 }
 .milkdown .ProseMirror li p {
   margin: 0;
 }
-/* 标记点用强调色，呼应品牌 */
-.milkdown .ProseMirror li::marker {
+
+/* 有序列表：计数器生成编号 */
+.milkdown .ProseMirror ol {
+  counter-reset: yj-ol;
+}
+.milkdown .ProseMirror ol > li {
+  counter-increment: yj-ol;
+}
+.milkdown .ProseMirror ol > li::before {
+  content: counter(yj-ol) '.';
+  position: absolute;
+  left: -1.55em;
+  width: 1.35em;
+  text-align: right;
   color: var(--hue-accent);
+  font-weight: 600;
+  /* 等宽数字：1→10 进位时编号不左右跳动 */
+  font-variant-numeric: tabular-nums;
+}
+
+/* 无序列表：实心青瓷圆点（避开任务列表） */
+.milkdown .ProseMirror ul:not(.milkdown-list-item-block) > li::before {
+  content: '';
+  position: absolute;
+  left: -1.05em;
+  top: 0.62em;
+  width: 0.42em;
+  height: 0.42em;
+  border-radius: 50%;
+  background: var(--hue-accent);
 }
 
 /* ── 任务列表：复选框统一为青瓷 ────────────── */
@@ -313,9 +344,14 @@
   pointer-events: none;
 }
 
-/* ── 选区 ─────────────────────────────────── */
+/* ── 选区 ───────────────────────────────────
+   旧：background 用 --hue-active（暗色仅 16% 透明度），选中文字几乎看不出高亮，
+   导致「选中后不知道选没选上、复制粘贴片段操作费解」。
+   改：用专属 --hue-selection（约 34% 透明度的 tint 色相），清晰可辨且不刺眼；
+   文字色 inherit 保持原样，避免反相带来的阅读跳跃。 */
 .milkdown .ProseMirror ::selection {
-  background: var(--hue-active);
+  background: var(--hue-selection);
+  color: inherit;
 }
 
 /* ── 块操作手柄（增加块 / 拖拽）：Notion 式一致左轨，绝不压字 ──
@@ -372,7 +408,9 @@
   backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
   -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
   border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 48px rgba(0, 0, 0, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 18px 48px rgba(0, 0, 0, 0.38);
 }
 [data-skin][data-mode='light'] .milkdown .milkdown-slash-menu,
 [data-skin][data-mode='light'] .milkdown .milkdown-toolbar,
@@ -380,7 +418,9 @@
 [data-skin][data-mode='light'] .milkdown .milkdown-link-edit > .link-edit {
   background: rgba(245, 248, 246, 0.78);
   border: 1px solid rgba(20, 30, 28, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 18px 48px rgba(20, 30, 28, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 18px 48px rgba(20, 30, 28, 0.18);
 }
 /* 菜单项 hover/选中沿用玉质令牌（Crepe 默认用 --crepe-color-*，已重映射） */
 
@@ -423,7 +463,7 @@
 .source-host .cm-editor .cm-selectionBackground,
 .source-host .cm-editor.cm-focused .cm-selectionBackground,
 .source-host .cm-editor .cm-content ::selection {
-  background: var(--hue-active) !important;
+  background: var(--hue-selection) !important;
 }
 
 .source-host > .cm-editor .cm-scroller {
@@ -469,7 +509,7 @@
 
 .cm-editor .cm-selectionBackground,
 .cm-editor .cm-content ::selection {
-  background: var(--hue-active) !important;
+  background: var(--hue-selection) !important;
 }
 
 /* ── 源码模式搜索命中常驻高亮（本文档范围，复用统一搜索 query）──
@@ -804,11 +844,21 @@
    非破坏性注入（只加 class，不改文档），退出即还原。
    「雾感」只走 opacity（大文档逐块 blur 必掉帧）；上下羽化遮罩由 shell 级
    .editor::before/::after 承担（styles/zen.css）。 */
-.milkdown .ProseMirror .zen-dim-1 { opacity: var(--fog-1, 0.55); }
-.milkdown .ProseMirror .zen-dim-2 { opacity: var(--fog-2, 0.38); }
-.milkdown .ProseMirror .zen-dim-3 { opacity: var(--fog-3, 0.28); }
-.milkdown .ProseMirror .zen-dim-4 { opacity: var(--fog-4, 0.22); }
-.milkdown .ProseMirror .zen-dim-5 { opacity: var(--fog-5, 0.18); }
+.milkdown .ProseMirror .zen-dim-1 {
+  opacity: var(--fog-1, 0.55);
+}
+.milkdown .ProseMirror .zen-dim-2 {
+  opacity: var(--fog-2, 0.38);
+}
+.milkdown .ProseMirror .zen-dim-3 {
+  opacity: var(--fog-3, 0.28);
+}
+.milkdown .ProseMirror .zen-dim-4 {
+  opacity: var(--fog-4, 0.22);
+}
+.milkdown .ProseMirror .zen-dim-5 {
+  opacity: var(--fog-5, 0.18);
+}
 .milkdown .ProseMirror .zen-dim-1,
 .milkdown .ProseMirror .zen-dim-2,
 .milkdown .ProseMirror .zen-dim-3,

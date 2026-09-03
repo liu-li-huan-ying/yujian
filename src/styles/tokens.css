@@ -5,11 +5,10 @@
 
 :root {
   /* ── 结构层：排版 ───────────────────────────── */
-  --font-ui: -apple-system, "PingFang SC", "Microsoft YaHei",
-             "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-ui:
+    -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif;
   /* Sarasa Mono SC 不可省：技术写作含大量中文注释，缺失会导致缩进错乱 */
-  --font-mono: "JetBrains Mono", "Sarasa Mono SC", "Cascadia Code",
-               Menlo, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', 'Sarasa Mono SC', 'Cascadia Code', Menlo, Consolas, monospace;
 
   /* ── 结构层：尺寸 ───────────────────────────── */
   --h-titlebar: 38px;
@@ -308,7 +307,8 @@
 
 .jade {
   position: relative;
-  background: linear-gradient(180deg, var(--material-highlight-top) 0%, transparent 20%),
+  background:
+    linear-gradient(180deg, var(--material-highlight-top) 0%, transparent 20%),
     radial-gradient(
       120% 62% at 12% 0%,
       rgba(var(--hue-tint-1), var(--material-tint-1-alpha)) 0%,
@@ -343,7 +343,9 @@
   backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
   -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
   border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 48px rgba(0, 0, 0, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 18px 48px rgba(0, 0, 0, 0.38);
 }
 
 /* 亮色：羊脂玉半透玻璃，与暗色同一套模糊/描边语言，仅换透光色相 */
@@ -351,7 +353,9 @@
 .glass[data-mode='light'] {
   background: rgba(245, 248, 246, 0.78);
   border: 1px solid rgba(20, 30, 28, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 18px 48px rgba(20, 30, 28, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 18px 48px rgba(20, 30, 28, 0.18);
 }
 
 /* ============================================================
@@ -374,6 +378,9 @@
   --hue-scrollbar-thumb: rgba(255, 255, 255, 0.14);
   --hue-scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
   --hue-scrollbar-track: transparent;
+  /* 文本选区高亮：比 --hue-active（仅 16% 用于 hover/聚焦）更实，
+     确保选中片段清晰可辨、不刺眼；跨皮肤统一走 tint 色相，明度随皮肤自适应 */
+  --hue-selection: rgba(var(--hue-tint-1), 0.34);
 }
 
 [data-skin][data-mode='light'] {
@@ -388,6 +395,8 @@
   --hue-scrollbar-thumb: rgba(0, 0, 0, 0.15);
   --hue-scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
   --hue-scrollbar-track: transparent;
+  /* 文本选区高亮：亮色下 tint 明度本就高，略降透明度避免压过正文 */
+  --hue-selection: rgba(var(--hue-tint-1), 0.3);
 }
 
 /* ============================================================
