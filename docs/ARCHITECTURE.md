@@ -1042,6 +1042,36 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ***
 
+### 5.16 Phase 3 批次三（一）：#标签 内联语法 + 标签聚合面板（2026-09-03，已落地）
+
+> 对应 `docs/PHASE3-PLAN.md` 批次三。PKM 第二条杠杆——正文写 `#标签` 即真节点，与 frontmatter `tags` 双轨聚合；标签面板浏览标签树、钻取旗下笔记。MOC 与关系图谱见批次三（二）。
+
+**A. 编辑器内真节点（`src/editor/features/tag.ts`）**
+
+* `remarkTag`（$remark）：递归改写正文文本里的 `#标签` 为自定义 mdast 节点 `tag`（代码块 / 行内代码无 text 子节点，天然不命中）。
+* `tagSchema`（$nodeSchema）：行内原子节点 → `toDOM` 渲染 `.yj-tag > .yj-tag__hash(#) + .yj-tag__label(名)`（玉质药丸，中性色，与 wikilink 同族但不用 accent——「分类」而非「导航」）；`toMarkdown` handler **原样输出** `#标签`（守 §5.2 往返保真红线）。
+* `tagInputRule`（$inputRule）：标签无闭合定界符，以「标签后的空白」为结束信号，敲空格即刻转节点。
+* 语法 `#标签` / `#父/子`（嵌套）；与标题 `# 标题` / `## 标题` 区分（`#` 后须紧跟非空白非 `#` 字符）。中文无词边界，标签延伸到空白 / 标点 / 行尾（与 Obsidian 同，彻底分词属批次四）。
+
+**B. 索引采集（双轨合并，`electron/main/vaultIndex.ts`）**
+
+* `extractInlineTags(content)`：裸文本扫描，正则与 `tag.ts` 的 `buildTagRe` 完全一致（保证「索引采集 = 编辑器显示」）；`#` 在代码里极常见（CSS `#id`、Python `# 注释`），故先剥 frontmatter / 围栏代码块 / 行内代码再扫。
+* `parseFile` 把内联标签与 `parseFrontmatter` 的 `fm.tags` 合并去重（统一转小写 key），写入既有 `IndexEntry.tags`（无新增索引结构）。
+
+**C. 标签面板（`src/components/TagPanel.vue`）**
+
+* 玻璃浮层，入口：标题栏「更多 ⌄ · 标签」（`Icon` 新增 `tag` 书签图标 + `chevron-right` 箭头）。
+* 两视图：`browse`（标签树，按 `/` 嵌套、可展开/折叠、可过滤）→ 点击标签名钻入 `notes`（面包屑 `全部标签 / 父 / 子` + 该标签及全部子标签旗下笔记列表，点击打开）。
+* 设计令牌（见 `docs/PHASE3-UI-DESIGN.md` §4.2）：标签项 28px、# 走 `--hue-text-3`、标签名走 `--hue-text-1`；嵌套缩进每级 14px；选中态 `--hue-active` 底 + 左侧 2px accent 竖条；计数徽标 `min-width:20px` 钉死居中；`role=tree/treeitem` + `aria-expanded`。
+
+**D. 聚合 API（由索引派生，不存原始图）**
+
+* `listTags(root)`（IPC `vault:listTags`）：统计每枚标签命中文件数，按 `/` 推导父级与深度，返回 `TagItem { name, count, parent, depth }`（前端据此在面板构建嵌套树）。
+* `getNotesByTag(root, tag)`（IPC `vault:getNotesByTag`）：返回该标签及全部子标签旗下笔记 `TagNoteItem { path, title, base }`（父标签含子标签语义）。
+* 三进程均经既有 IPC + preload 通道暴露，沿用 `ensureIndex` 静默重建契约；无新增索引层字段。
+
+***
+
 ## 6. 技术写作场景专项设计
 
 | 能力          | 实现                                   | 阶段 |

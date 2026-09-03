@@ -13,6 +13,7 @@ import TabBar from './components/TabBar.vue'
 import SnapshotPanel from './components/SnapshotPanel.vue'
 import LinkCheckPanel from './components/LinkCheckPanel.vue'
 import BacklinksPanel from './components/BacklinksPanel.vue'
+import TagPanel from './components/TagPanel.vue'
 import IntegrityPanel from './components/IntegrityPanel.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import ConflictDialog from './components/ConflictDialog.vue'
@@ -617,6 +618,7 @@ const linkCheckOpen = ref(false)
 /** 断链面板实例：一键创建成功后由 App 回调 refresh() 复检 */
 const linkCheckRef = ref<InstanceType<typeof LinkCheckPanel> | null>(null)
 const backlinksOpen = ref(false)
+const tagsOpen = ref(false)
 const integrityOpen = ref(false)
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
@@ -712,6 +714,11 @@ function onBackup(): void {
 /** 打开反链面板（标题栏「更多」入口）：展示有哪些笔记链接到当前文档 */
 function onBacklinks(): void {
   backlinksOpen.value = true
+}
+
+/** 打开标签面板（标题栏「更多」入口）：浏览 #标签 与旗下笔记 */
+function onTags(): void {
+  tagsOpen.value = true
 }
 
 /** 编辑器内点击 [[wikilink]] 芯片：解析目标 → 已存在则跳转，不存在则一键创建该笔记 */
@@ -1177,6 +1184,7 @@ onBeforeUnmount(() => {
       @integrity="onIntegrity"
       @backup="onBackup"
       @backlinks="onBacklinks"
+      @tags="onTags"
       @insert-wikilink="onInsertWikiLink"
       @writing-aids="writingAidsOpen = true"
       @save="saveFile"
@@ -1261,6 +1269,13 @@ onBeforeUnmount(() => {
           :vault-path="vaultPath"
           :active-path="filePath"
           @close="backlinksOpen = false"
+          @open="onOpenResult"
+        />
+
+        <TagPanel
+          v-if="tagsOpen"
+          :vault-path="vaultPath"
+          @close="tagsOpen = false"
           @open="onOpenResult"
         />
 

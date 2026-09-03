@@ -27,6 +27,8 @@ import {
   type BacklinkItem,
   type NoteTitleItem,
   type UnlinkedMention,
+  type TagItem,
+  type TagNoteItem,
 } from '../shared/ipc-channels'
 
 /**
@@ -149,6 +151,14 @@ const api = {
   /** 双链：把未链接提及包裹成 [[链接]] 写回磁盘；原文已变时返回 false */
   wrapMention: (root: string, item: UnlinkedMention): Promise<boolean> =>
     ipcRenderer.invoke(IPC.VAULT_WRAP_MENTION, root, item),
+
+  /** 标签聚合：列出全部标签（含计数 / 层级），由索引派生不存原始图 */
+  listTags: (root: string): Promise<TagItem[]> =>
+    ipcRenderer.invoke(IPC.VAULT_LIST_TAGS, root),
+
+  /** 标签聚合：按标签列出旗下笔记（点击标签面板条目时拉取） */
+  getNotesByTag: (root: string, tag: string): Promise<TagNoteItem[]> =>
+    ipcRenderer.invoke(IPC.VAULT_GET_NOTES_BY_TAG, root, tag),
 
   watchVault: (root: string): Promise<void> => ipcRenderer.invoke(IPC.VAULT_WATCH, root),
 

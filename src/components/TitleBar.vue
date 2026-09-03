@@ -51,6 +51,7 @@ const emit = defineEmits<{
   (e: 'zen-settings'): void
   (e: 'link-check'): void
   (e: 'backlinks'): void
+  (e: 'tags'): void
   (e: 'writing-aids'): void
   (e: 'integrity'): void
   (e: 'backup'): void
@@ -176,6 +177,7 @@ const moreItems = (): MenuEntry[] => [
   { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
   { action: 'link-check', label: L.linkCheck, icon: 'link' },
   { action: 'backlinks', label: L.backlinks, icon: 'backlink' },
+  { action: 'tags', label: L.tags, icon: 'tag' },
   { action: 'insert-wikilink', label: i18n.toolbar.insertWikilink, icon: 'link' },
   { action: 'writing-aids', label: L.writingAids.title, icon: 'writing' },
   { action: 'integrity', label: L.integrity, icon: 'shield' },
@@ -203,6 +205,9 @@ function onMoreSelect(action: string): void {
       break
     case 'backlinks':
       emit('backlinks')
+      break
+    case 'tags':
+      emit('tags')
       break
     case 'insert-wikilink':
       emit('insert-wikilink')

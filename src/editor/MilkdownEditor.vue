@@ -15,6 +15,7 @@ import { renderPreview } from './features/mermaid'
 import { emojiInputRule, emojiDecorationPlugin } from './features/emoji'
 import { htmlInlineSchema, remarkHtmlInline } from './features/htmlInline'
 import { wikiLinkId, wikiLinkSchema, remarkWikilink, wikiLinkInputRule } from './features/wikilink'
+import { tagSchema, remarkTag, tagInputRule } from './features/tag'
 import { createWikiSuggestPlugin, type WikiSuggestTrigger } from './features/wikilinkSuggest'
 import WikiSuggest from '../components/WikiSuggest.vue'
 import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
@@ -499,6 +500,11 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.editor.use(remarkWikilink)
   crepe.editor.use(wikiLinkSchema)
   crepe.editor.use(wikiLinkInputRule)
+  // 内联标签 #标签：remark 改写 mdast + 真节点渲染 + 输入规则（敲空白即转节点），
+  // 序列化由 toMarkdown handler 原样写回 `#标签`，保证 Markdown 往返保真（同 wikilink 红线）
+  crepe.editor.use(remarkTag)
+  crepe.editor.use(tagSchema)
+  crepe.editor.use(tagInputRule)
   // 双向链接：`[[` 自动补全（插件只报触发状态与按键，浮层由 WikiSuggest 渲染在 body 下）
   crepe.editor.use(
     $prose(() => createWikiSuggestPlugin({ onState: onSuggestState, onKey: onSuggestKey })),
