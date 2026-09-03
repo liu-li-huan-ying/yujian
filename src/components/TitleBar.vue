@@ -54,6 +54,7 @@ const emit = defineEmits<{
   (e: 'writing-aids'): void
   (e: 'integrity'): void
   (e: 'backup'): void
+  (e: 'insert-wikilink'): void
   (e: 'save'): void
   (e: 'save-as'): void
   (e: 'help'): void
@@ -87,7 +88,7 @@ const exportItems = (): MenuEntry[] => {
     action,
     label,
     icon: 'file',
-    disabled: !props.canExport
+    disabled: !props.canExport,
   })
   return [
     { separatorTitle: L.exportGroupText },
@@ -109,27 +110,62 @@ const exportItems = (): MenuEntry[] => {
     { action: 'toggle-selection', label: mark(p?.selection) + L.exportMenuSelection },
     { action: 'toggle-preview', label: mark(p?.preview) + L.exportOptPreview },
     { separator: true },
-    { action: 'export-compile', label: L.exportMenuCompile, icon: 'layers', disabled: !props.canExport }
+    {
+      action: 'export-compile',
+      label: L.exportMenuCompile,
+      icon: 'layers',
+      disabled: !props.canExport,
+    },
   ]
 }
 
 function onExportSelect(action: string): void {
   switch (action) {
-    case 'export-md': emit('export-md'); break
-    case 'export-txt': emit('export-txt'); break
-    case 'export-html': emit('export-html'); break
-    case 'export-pdf': emit('export-pdf'); break
-    case 'export-latex': emit('export-latex'); break
-    case 'export-docx': emit('export-docx'); break
-    case 'export-epub': emit('export-epub'); break
-    case 'export-rtf': emit('export-rtf'); break
-    case 'export-odt': emit('export-odt'); break
-    case 'export-compile': emit('export-compile'); break
-    case 'toggle-toc': emit('export-option', 'toc'); break
-    case 'toggle-cover': emit('export-option', 'cover'); break
-    case 'toggle-inline': emit('export-option', 'inline'); break
-    case 'toggle-selection': emit('export-option', 'selection'); break
-    case 'toggle-preview': emit('export-option', 'preview'); break
+    case 'export-md':
+      emit('export-md')
+      break
+    case 'export-txt':
+      emit('export-txt')
+      break
+    case 'export-html':
+      emit('export-html')
+      break
+    case 'export-pdf':
+      emit('export-pdf')
+      break
+    case 'export-latex':
+      emit('export-latex')
+      break
+    case 'export-docx':
+      emit('export-docx')
+      break
+    case 'export-epub':
+      emit('export-epub')
+      break
+    case 'export-rtf':
+      emit('export-rtf')
+      break
+    case 'export-odt':
+      emit('export-odt')
+      break
+    case 'export-compile':
+      emit('export-compile')
+      break
+    case 'toggle-toc':
+      emit('export-option', 'toc')
+      break
+    case 'toggle-cover':
+      emit('export-option', 'cover')
+      break
+    case 'toggle-inline':
+      emit('export-option', 'inline')
+      break
+    case 'toggle-selection':
+      emit('export-option', 'selection')
+      break
+    case 'toggle-preview':
+      emit('export-option', 'preview')
+      break
   }
 }
 
@@ -140,6 +176,7 @@ const moreItems = (): MenuEntry[] => [
   { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
   { action: 'link-check', label: L.linkCheck, icon: 'link' },
   { action: 'backlinks', label: L.backlinks, icon: 'backlink' },
+  { action: 'insert-wikilink', label: i18n.toolbar.insertWikilink, icon: 'link' },
   { action: 'writing-aids', label: L.writingAids.title, icon: 'writing' },
   { action: 'integrity', label: L.integrity, icon: 'shield' },
   { action: 'backup', label: L.backup, icon: 'archive' },
@@ -147,7 +184,7 @@ const moreItems = (): MenuEntry[] => [
   { action: 'save', label: L.save, icon: 'file', hint: 'Ctrl S' },
   { action: 'save-as', label: L.saveAs, icon: 'file' },
   { separator: true },
-  { action: 'about', label: L.about, icon: 'book' }
+  { action: 'about', label: L.about, icon: 'book' },
 ]
 
 function onMoreSelect(action: string): void {
@@ -166,6 +203,9 @@ function onMoreSelect(action: string): void {
       break
     case 'backlinks':
       emit('backlinks')
+      break
+    case 'insert-wikilink':
+      emit('insert-wikilink')
       break
     case 'writing-aids':
       emit('writing-aids')
@@ -247,36 +287,36 @@ onMounted(() => {
         >
           <Icon name="panel-left" />
         </button>
-    <button
-      class="tbtn"
-      type="button"
-      :class="{ 'tbtn--on': outlineVisible }"
-      :title="L.toggleOutlineTitle"
-      @click="emit('toggle-outline')"
-    >
-      <Icon name="panel-right" />
-    </button>
+        <button
+          class="tbtn"
+          type="button"
+          :class="{ 'tbtn--on': outlineVisible }"
+          :title="L.toggleOutlineTitle"
+          @click="emit('toggle-outline')"
+        >
+          <Icon name="panel-right" />
+        </button>
 
-    <!-- 批次二：快照 / 凝神（融合打字机+禅的沉浸模式） -->
-    <button
-      class="tbtn"
-      type="button"
-      :class="{ 'tbtn--on': snapshotActive }"
-      :title="L.snapshots"
-      @click="emit('toggle-snapshot')"
-    >
-      <Icon name="history" />
-    </button>
-    <button
-      class="tbtn"
-      type="button"
-      :class="{ 'tbtn--on': focusActive }"
-      :title="L.focusTitle"
-      @click="emit('toggle-focus')"
-    >
-      <Icon name="moon" />
-    </button>
-  </div>
+        <!-- 批次二：快照 / 凝神（融合打字机+禅的沉浸模式） -->
+        <button
+          class="tbtn"
+          type="button"
+          :class="{ 'tbtn--on': snapshotActive }"
+          :title="L.snapshots"
+          @click="emit('toggle-snapshot')"
+        >
+          <Icon name="history" />
+        </button>
+        <button
+          class="tbtn"
+          type="button"
+          :class="{ 'tbtn--on': focusActive }"
+          :title="L.focusTitle"
+          @click="emit('toggle-focus')"
+        >
+          <Icon name="moon" />
+        </button>
+      </div>
 
       <span class="sep" />
 
@@ -530,7 +570,9 @@ onMounted(() => {
   border-radius: 0;
   background: transparent;
   color: var(--hue-text-2);
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 
 .win__btn:hover {

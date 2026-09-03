@@ -41,9 +41,7 @@ const ready = ref(false)
 /** 两个面板的 DOM 根，交给 ReadingProgress 自动定位真正的滚动容器 */
 const wysiwygPane = ref<HTMLDivElement | null>(null)
 const sourcePane = ref<HTMLDivElement | null>(null)
-const activePane = computed(() =>
-  mode.value === 'wysiwyg' ? wysiwygPane.value : sourcePane.value
-)
+const activePane = computed(() => (mode.value === 'wysiwyg' ? wysiwygPane.value : sourcePane.value))
 
 /** 切换语言/模式时保存并恢复所见即所得滚动位置（避免切走后回顶） */
 const wysiwygScroll = ref(0)
@@ -152,6 +150,19 @@ function insertText(text: string): void {
   const from = v.state.selection.from
   const to = v.state.selection.to
   v.dispatch(v.state.tr.insertText(text, from, to))
+}
+
+/**
+ * 插入双链（B 入口：标题栏「更多 · 插入双链」）。
+ * 所见即所得端唤起 [[ 自动补全浮层（插入字面 [[ 并定位光标，触发 suggest 插件）；
+ * 源码端无联想浮层，退化为直接插入字面 [[ 文本，供手动敲目标。
+ */
+function insertWikiLink(): void {
+  if (mode.value === 'source') {
+    source.value?.insertAtCursor('[[')
+    return
+  }
+  milkdown.value?.insertWikiLinkTrigger()
 }
 
 /* ── 文档大纲 ─────────────────────────────── */
@@ -293,16 +304,16 @@ function switchTo(next: EditorMode): void {
       computeActiveHeading(true)
     })
   } else {
-      // 切回所见即所得：内容在隐藏期保留滚动，重渲染(setMarkdown)会回顶，
-      // 因此先保存、重渲染后再恢复原位
-      captureScroll()
-      startLoading()
-      try {
-        milkdown.value?.setMarkdown(fidelity.currentText.value)
-        milkdown.value?.setReadonly(false)
-        mode.value = 'wysiwyg'
-        // 让进度条至少绘制一帧，并恢复滚动位置
-        requestAnimationFrame(() => {
+    // 切回所见即所得：内容在隐藏期保留滚动，重渲染(setMarkdown)会回顶，
+    // 因此先保存、重渲染后再恢复原位
+    captureScroll()
+    startLoading()
+    try {
+      milkdown.value?.setMarkdown(fidelity.currentText.value)
+      milkdown.value?.setReadonly(false)
+      mode.value = 'wysiwyg'
+      // 让进度条至少绘制一帧，并恢复滚动位置
+      requestAnimationFrame(() => {
         restoreScroll()
         if (loadStatus.value === 'loading') stopLoading()
         // 渲染恢复后重算大纲高亮
@@ -310,13 +321,13 @@ function switchTo(next: EditorMode): void {
         // 面板由隐藏转可见后再补发一次：DOM 可见性切换可能让前一次下发落在不可见树上
         reapplyFindHighlight()
       })
-        // 切回所见即所得后重新下发搜索高亮（setMarkdown 重渲染可能重置插件状态）
-        reapplyFindHighlight()
-      } catch (e) {
-        failLoading(`渲染失败：${errMsg(e)}`)
-        return
-      }
+      // 切回所见即所得后重新下发搜索高亮（setMarkdown 重渲染可能重置插件状态）
+      reapplyFindHighlight()
+    } catch (e) {
+      failLoading(`渲染失败：${errMsg(e)}`)
+      return
     }
+  }
   emit('mode-change', mode.value)
 }
 
@@ -324,7 +335,7 @@ watch(
   () => props.requestedMode,
   (next) => {
     if (next) switchTo(next)
-  }
+  },
 )
 
 /* ── 保存 ─────────────────────────────────── */
@@ -427,9 +438,11 @@ function revealLine(line: number): void {
  * currentLine 标记当前结果行强化显示；传空 query 即两端同时清空。
  * 记录 lastFind，供视图就绪 / 切回所见即所得时重新下发，避免时序导致高亮丢失。
  */
-let lastFind:
-  | { query?: string; opts?: { caseSensitive?: boolean; wholeWord?: boolean }; currentLine?: number }
-  | null = null
+let lastFind: {
+  query?: string
+  opts?: { caseSensitive?: boolean; wholeWord?: boolean }
+  currentLine?: number
+} | null = null
 
 /** 取源码第 N 行文本（1-based）：渲染态行号被压缩，交给所见即所得端精确判定当前结果行 */
 function currentLineTextOf(line?: number): string | undefined {
@@ -442,7 +455,7 @@ function currentLineTextOf(line?: number): string | undefined {
 function setFindHighlight(
   query?: string,
   opts?: { caseSensitive?: boolean; wholeWord?: boolean; regex?: boolean },
-  currentLine?: number
+  currentLine?: number,
 ): void {
   lastFind = query && query.trim() ? { query: query.trim(), opts, currentLine } : null
   source.value?.setFind(query, opts, currentLine)
@@ -453,7 +466,7 @@ function setFindHighlight(
       wholeWord: opts?.wholeWord ?? false,
       regex: opts?.regex ?? false,
       currentLine,
-      currentLineText: currentLineTextOf(currentLine)
+      currentLineText: currentLineTextOf(currentLine),
     })
   } else {
     milkdown.value?.setFind(null)
@@ -589,19 +602,16 @@ defineExpose({
   getMarkdown,
   loadMarkdownExternal,
   insertText,
+  insertWikiLink,
   // ── 选区字数（状态栏展示）──
-  selectionCount
+  selectionCount,
 })
 </script>
 
 <template>
   <div class="editor-host">
     <!-- 加载 / 渲染进度条：两种模式共用，覆盖首次加载、切换文件、重新渲染 -->
-    <LoadingBar
-      :status="loadStatus"
-      :message="loadMessage"
-      @retry="onRetry"
-    />
+    <LoadingBar :status="loadStatus" :message="loadMessage" @retry="onRetry" />
 
     <!-- 两个容器始终挂载，仅切换可见性，避免销毁 Crepe 实例 -->
     <div ref="wysiwygPane" class="pane" :class="{ 'pane--hidden': mode !== 'wysiwyg' }">

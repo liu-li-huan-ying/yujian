@@ -58,6 +58,19 @@ const enUS = {
     hideLabel: 'Hide',
   },
 
+  /* ── Crepe Toolbar (bubble menu on selection) ── */
+  toolbar: {
+    bold: 'Bold',
+    italic: 'Italic',
+    strikethrough: 'Strikethrough',
+    code: 'Inline code',
+    link: 'Link',
+    latex: 'Inline math',
+    ai: 'Ask AI',
+    /** Shared label for the "Insert link" button in the bubble menu / TitleBar "More" */
+    insertWikilink: 'Insert link',
+  },
+
   /* ── App UI ── */
   ui: {
     open: 'Open',

@@ -7,7 +7,7 @@ export type LocaleKey = 'zh-CN' | 'en-US'
 
 const locales: Record<LocaleKey, Locale> = {
   'zh-CN': zhCN,
-  'en-US': enUS
+  'en-US': enUS,
 }
 
 /** 当前激活的语言 key（响应式，供 computed / 模板双向响应） */
@@ -43,6 +43,7 @@ function setLocale(key: LocaleKey): Locale {
   Object.assign(t.placeholder, next.placeholder)
   Object.assign(t.imageBlock, next.imageBlock)
   Object.assign(t.codeMirror, next.codeMirror)
+  Object.assign(t.toolbar, next.toolbar)
   Object.assign(t.ui, next.ui)
   return t
 }
@@ -64,7 +65,7 @@ export function useI18n() {
     /** 切换语言 */
     setLocale,
     /** 获取当前语言 key（非响应式，用于传给非 Vue 上下文） */
-    getLocale
+    getLocale,
   }
 }
 

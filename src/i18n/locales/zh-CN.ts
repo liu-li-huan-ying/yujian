@@ -58,6 +58,19 @@ const zhCN = {
     hideLabel: '隐藏',
   },
 
+  /* ── Crepe Toolbar（选中文字的悬浮浮块）── */
+  toolbar: {
+    bold: '加粗',
+    italic: '斜体',
+    strikethrough: '删除线',
+    code: '行内代码',
+    link: '链接',
+    latex: '行内公式',
+    ai: '问 AI',
+    /** 悬浮浮块 / 标题栏「更多」共用的「插入双链」按钮标签 */
+    insertWikilink: '插入双链',
+  },
+
   /* ── 应用 UI ── */
   ui: {
     open: '打开',

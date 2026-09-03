@@ -142,6 +142,14 @@ Phase 3 新增两条：
   - 断链面板「一键创建」：`LinkCheckPanel` 断链条目新增创建按钮 → `App.onCreateBrokenLink` 按目标写法落位（带路径建在对应子目录、裸名建在来源目录内聚）→ `createDoc` 创建并打开、刷新列表。
 * 重命名不自动更新 `[[引用]]`（沿用原决策；见下方待决策）。
 
+**双链「看得见、点得到」入口 + 浮块中文化（接续批次二）**：
+
+* 此前双链能力（节点 / 补全 / 反链）已齐备，但**入口隐蔽**——只能手敲 `[[`。现补两条显式入口：
+  - **A. 编辑器悬浮工具条（Crepe Toolbar / 选中文字浮块）**：`featureConfigs[Crepe.Feature.Toolbar].buildToolbar` 在 `function` 分组注入「插入双链」项（图标 `WIKI_LINK_ICON`），`onRun` 调 `insertWikiLinkTrigger()`。该方法用 `tr.insertText('[[')` 在光标处插入**字面** `[[` 并定位光标其后——刻意不走 `insertMarkdownAtCursor`（会把 `[[` 解析成节点、不触发联想），由 `wikilinkSuggest` 插件在事务 update 时自动弹出候选浮层，与手敲 `[[` 完全一致。
+  - **B. 标题栏「更多」菜单**：`TitleBar` 新增 `insert-wikilink` 项 + emit；`App.onInsertWikiLink` → `EditorHost.insertWikiLink()`（WYSIWYG 端调 trigger 唤起浮层，源码端退化为插入字面 `[[` 文本）。
+* **i18n 缺陷修复（选中浮块此前只有英文）**：Crepe Toolbar 特性默认英文标签，且 `i18n/index.ts` 的 `setLocale` 漏覆盖 `toolbar` 键。修复：zh-CN / en-US 各新增 `toolbar` 键（bold/italic/strikethrough/code/link/latex/ai/insertWikilink 中文与英文标签）；`featureConfigs[Toolbar]` 注入对应 `*Label`；`setLocale` 补 `Object.assign(t.toolbar, next.toolbar)`。切语言时 `EditorHost` 靠 `:key="langKey"` 重挂编辑器实例，构造读新标签即生效。
+* 列表标记「皎洁月光」亮度（前文 `0a8796c`）：`tokens.css` 新增 `--hue-list-marker`（`color-mix(#fff 70% + tint)` + 柔光晕）并接入 `editor.css` 有序/无序/任务列表标记，暗色近白带玉调、亮色深玉保证可读——该视觉风格已确认用户满意。
+
 > ⚠️ **待决策（重要）**：**重命名 / 移动笔记时是否自动更新所有 `[[引用]]`？**
 > * 做：体验好，但会**批量改写其他文件原文**（触碰红线 1 精神）；若做须先展示将被改写的清单并经用户确认。
 > * 不做：符合「不擅改用户文件」，重命名后会出现一批断链，但断链面板已能报出，可手动修。

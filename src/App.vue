@@ -795,6 +795,11 @@ function onInsertSnippet(text: string): void {
   host.value?.insertText(text)
 }
 
+/** 标题栏「更多 · 插入双链」：唤起 [[ 自动补全浮层（或源码端插入字面 [[） */
+function onInsertWikiLink(): void {
+  host.value?.insertWikiLink()
+}
+
 /** 窄窗软收起：仅影响显示，不改持久偏好，加宽后恢复用户选择 */
 const sidebarShown = computed(() => sidebarVisible.value && windowWidth.value >= 460)
 const outlineShown = computed(() => outlineVisible.value && windowWidth.value >= 720)
@@ -1172,6 +1177,7 @@ onBeforeUnmount(() => {
       @integrity="onIntegrity"
       @backup="onBackup"
       @backlinks="onBacklinks"
+      @insert-wikilink="onInsertWikiLink"
       @writing-aids="writingAidsOpen = true"
       @save="saveFile"
       @save-as="saveFileAs"

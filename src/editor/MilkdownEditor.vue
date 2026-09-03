@@ -14,26 +14,16 @@ import '../styles/editor.css'
 import { renderPreview } from './features/mermaid'
 import { emojiInputRule, emojiDecorationPlugin } from './features/emoji'
 import { htmlInlineSchema, remarkHtmlInline } from './features/htmlInline'
-import {
-  wikiLinkId,
-  wikiLinkSchema,
-  remarkWikilink,
-  wikiLinkInputRule
-} from './features/wikilink'
+import { wikiLinkId, wikiLinkSchema, remarkWikilink, wikiLinkInputRule } from './features/wikilink'
 import { createWikiSuggestPlugin, type WikiSuggestTrigger } from './features/wikilinkSuggest'
 import WikiSuggest from '../components/WikiSuggest.vue'
 import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
-import {
-  highlightSchema,
-  inlineMarkInputRules,
-  subSchema,
-  supSchema
-} from './features/inlineMarks'
+import { highlightSchema, inlineMarkInputRules, subSchema, supSchema } from './features/inlineMarks'
 import { remarkInlineMarks } from './features/inlineMarksSyntax'
 import {
   mathInlineNodeViewPlugin,
   renderMathBlockPreview,
-  resetMathNumbering
+  resetMathNumbering,
 } from './features/mathjax'
 import { codeBlockConfig } from '@milkdown/kit/component/code-block'
 import { i18n } from '../i18n'
@@ -45,8 +35,18 @@ import {
   findPosByText,
   findPosOfLine,
   setFindState,
-  type WysiwygFindState
+  type WysiwygFindState,
 } from './find-wysiwyg'
+
+/**
+ * 悬浮工具条「插入双链」按钮的图标（Crepe 的 Icon 组件以 innerHTML 渲染该 SVG 字符串，
+ * 经 DOMPurify 净化，故给完整 <svg> 即可）。用与工具栏其它图标一致的 24×24 / currentColor。
+ */
+const WIKI_LINK_ICON = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+  </svg>
+`
 
 const props = withDefaults(
   defineProps<{
@@ -57,7 +57,7 @@ const props = withDefaults(
     /** 当前笔记库根：无文档时用于决定落盘位置 */
     vaultPath?: string | null
   }>(),
-  { readonly: false, filePath: null, vaultPath: null }
+  { readonly: false, filePath: null, vaultPath: null },
 )
 
 const emit = defineEmits<{
@@ -193,7 +193,7 @@ watch(
     notes.value = []
     suggest.value = null
     dismissedFrom = null
-  }
+  },
 )
 
 /* ── 图片粘贴落盘 ─────────────────────────────── */
@@ -205,7 +205,7 @@ function readFileAsBase64(file: File): Promise<{ base64: string; ext: string }> 
     reader.onload = () => {
       const dataUrl = String(reader.result ?? '')
       const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl)
-      const base64 = m ? m[2] : dataUrl.split(',')[1] ?? ''
+      const base64 = m ? m[2] : (dataUrl.split(',')[1] ?? '')
       const ext = extFromName(file.name) || extFromType(file.type) || 'png'
       resolve({ base64, ext })
     }
@@ -226,7 +226,7 @@ function extFromType(type: string): string {
     'image/gif': 'gif',
     'image/webp': 'webp',
     'image/bmp': 'bmp',
-    'image/svg+xml': 'svg'
+    'image/svg+xml': 'svg',
   }
   return map[type] ?? ''
 }
@@ -242,7 +242,7 @@ async function uploadToAssets(file: File): Promise<string> {
     docPath: props.filePath,
     vaultPath: props.vaultPath,
     base64,
-    ext
+    ext,
   })
   return saved.relPath
 }
@@ -315,7 +315,7 @@ function setupImageResolver(): void {
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ['src']
+    attributeFilter: ['src'],
   })
 }
 
@@ -361,7 +361,7 @@ function onFootnoteClick(e: MouseEvent): void {
   if (ref) {
     const label = ref.getAttribute('data-label') ?? ''
     const def = host.value?.querySelector(
-      `dl[data-type="footnote_definition"][data-label="${cssAttr(label)}"]`
+      `dl[data-type="footnote_definition"][data-label="${cssAttr(label)}"]`,
     ) as HTMLElement | null
     def?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     return
@@ -372,7 +372,7 @@ function onFootnoteClick(e: MouseEvent): void {
     if (dt && (target === dt || dt.contains(target))) {
       const label = def.getAttribute('data-label') ?? ''
       const back = host.value?.querySelector(
-        `sup[data-type="footnote_reference"][data-label="${cssAttr(label)}"]`
+        `sup[data-type="footnote_reference"][data-label="${cssAttr(label)}"]`,
       ) as HTMLElement | null
       back?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
@@ -406,7 +406,7 @@ async function init(defaultValue?: string): Promise<void> {
       [Crepe.Feature.Table]: true,
       [Crepe.Feature.Latex]: true,
       [Crepe.Feature.TopBar]: false,
-      [Crepe.Feature.AI]: false
+      [Crepe.Feature.AI]: false,
     },
     featureConfigs: {
       [Crepe.Feature.CodeMirror]: {
@@ -422,7 +422,7 @@ async function init(defaultValue?: string): Promise<void> {
         noResultText: L.codeMirror.noResultText,
         copyText: L.codeMirror.copyText,
         previewToggleText: (previewOnly: boolean) =>
-          previewOnly ? L.codeMirror.editLabel : L.codeMirror.hideLabel
+          previewOnly ? L.codeMirror.editLabel : L.codeMirror.hideLabel,
       },
       [Crepe.Feature.ImageBlock]: {
         onUpload: (file: File) => uploadToAssets(file),
@@ -431,17 +431,36 @@ async function init(defaultValue?: string): Promise<void> {
         blockCaptionPlaceholderText: L.imageBlock.blockCaptionPlaceholderText,
         blockUploadPlaceholderText: L.imageBlock.blockUploadPlaceholderText,
         inlineUploadButton: L.imageBlock.inlineUploadButton,
-        inlineUploadPlaceholderText: L.imageBlock.inlineUploadPlaceholderText
+        inlineUploadPlaceholderText: L.imageBlock.inlineUploadPlaceholderText,
       },
       [Crepe.Feature.BlockEdit]: {
         textGroup: L.blockEdit.textGroup,
         listGroup: L.blockEdit.listGroup,
-        advancedGroup: L.blockEdit.advancedGroup
+        advancedGroup: L.blockEdit.advancedGroup,
       },
       [Crepe.Feature.Placeholder]: {
-        text: L.placeholder.text
-      }
-    }
+        text: L.placeholder.text,
+      },
+      [Crepe.Feature.Toolbar]: {
+        // 选中文字浮块中文化：覆盖 Crepe 默认英文标签（i18n 缺陷修复）
+        boldLabel: L.toolbar.bold,
+        italicLabel: L.toolbar.italic,
+        strikethroughLabel: L.toolbar.strikethrough,
+        codeLabel: L.toolbar.code,
+        linkLabel: L.toolbar.link,
+        latexLabel: L.toolbar.latex,
+        aiLabel: L.toolbar.ai,
+        // 在「功能」分组注入「插入双链」：点击即在光标处插入字面 [[ 并唤起候选浮层
+        buildToolbar: (builder) => {
+          builder.getGroup('function').addItem('yj-insert-wikilink', {
+            icon: WIKI_LINK_ICON,
+            label: L.toolbar.insertWikilink,
+            active: () => false,
+            onRun: () => insertWikiLinkTrigger(),
+          })
+        },
+      },
+    },
   })
 
   crepe.on((listener) => {
@@ -482,7 +501,7 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.editor.use(wikiLinkInputRule)
   // 双向链接：`[[` 自动补全（插件只报触发状态与按键，浮层由 WikiSuggest 渲染在 body 下）
   crepe.editor.use(
-    $prose(() => createWikiSuggestPlugin({ onState: onSuggestState, onKey: onSuggestKey }))
+    $prose(() => createWikiSuggestPlugin({ onState: onSuggestState, onKey: onSuggestKey })),
   )
   // 行内数学 $…$ 改由 MathJax 渲染（接管 math_inline 节点显示）
   crepe.editor.use($prose(() => mathInlineNodeViewPlugin()))
@@ -498,7 +517,7 @@ async function init(defaultValue?: string): Promise<void> {
           return renderMathBlockPreview(content, applyPreview)
         }
         return prev.renderPreview(language, content, applyPreview)
-      }
+      },
     }))
   })
 
@@ -726,6 +745,24 @@ function insertMarkdownAtCursor(md: string): boolean {
   }
 }
 
+/**
+ * 在光标处插入字面 `[[` 并唤起 [[ 自动补全浮层（A 入口：编辑器悬浮工具条的「插入双链」）。
+ * 用 tr.insertText 而非 insertMarkdownAtCursor：后者会把 `[[` 解析成 wikilink 真节点，
+ * 既不会触发联想、又把没写完的链接「焊死」成节点。这里只要两个方括号字面量 + 光标定位其后，
+ * 既有插件会在事务 update 时扫描到未闭合的 `[[` 自动弹出候选浮层（与手敲 `[[` 完全一致）。
+ * 选中态下（悬浮工具条出现时选区必非空）在选区起点插入、随后把光标折回 `[[` 之后。
+ */
+function insertWikiLinkTrigger(): void {
+  const view = getEditorView()
+  if (!view) return
+  const at = view.state.selection.from
+  const tr = view.state.tr.insertText('[[', at, at)
+  const caret = Math.min(at + 2, tr.doc.content.size)
+  tr.setSelection(TextSelection.create(tr.doc, caret))
+  view.dispatch(tr)
+  view.focus()
+}
+
 defineExpose({
   setMarkdown,
   getMarkdown,
@@ -734,10 +771,11 @@ defineExpose({
   getSelectionHTML,
   getSelectionMarkdown,
   insertMarkdownAtCursor,
+  insertWikiLinkTrigger,
   setReadonly,
   getEditorView,
   setFind,
-  revealLine
+  revealLine,
 })
 </script>
 
