@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from 'electron'
-import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { atomicWrite } from './atomicWrite'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, extname, join } from 'node:path'
+import { extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import {
@@ -258,12 +259,8 @@ function registerIpc(): void {
   )
 
   ipcMain.handle(IPC.FILE_WRITE, async (_event, filePath: string, content: string) => {
-    // 先写临时文件再改名：写入中途崩溃也不会损坏原文
-    const dir = dirname(filePath)
-    const tmp = join(dir, `.yujian-${randomUUID()}.tmp`)
-    await mkdir(dir, { recursive: true })
-    await writeFile(tmp, content, 'utf-8')
-    await rename(tmp, filePath)
+    // 原子写（临时文件 + rename），并对 Windows 只读 / 同步锁导致的 rename EPERM 做兜底
+    await atomicWrite(filePath, content)
   })
 
   ipcMain.handle(IPC.FILE_CREATE, async (_event, dir: string, name?: string) =>
