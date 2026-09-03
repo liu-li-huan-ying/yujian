@@ -210,9 +210,10 @@
 /* ── 列表 ───────────────────────────────────
    旧：原生 ::marker + 偏灰的 accent，暗色下对比弱、数字细，看着「费眼」。
    改：关掉原生标记，改用自定义 ::before —— 有序列表走 CSS 计数器生成
-   「1. 2. 3.」（嵌套自动从 1 重计），无序列表用实心青瓷圆点；二者都取
-   accent 色 + 加粗，清晰但不抢戏。任务列表（.milkdown-list-item-block）
-   自带复选框，必须排除，否则会凭空多出一个圆点。 */
+   「1. 2. 3.」（嵌套自动从 1 重计），无序列表用实心青玉圆点；二者都取
+   --hue-list-marker（皎洁月光：暗色近白带玉调 + 柔光晕，亮色深玉保证可读）。
+   任务列表（.milkdown-list-item-block）自带复选框，圆点必须排除，
+   否则会凭空多出一个圆点。 */
 .milkdown .ProseMirror ul,
 .milkdown .ProseMirror ol {
   padding-left: 1.6em;
@@ -241,30 +242,33 @@
   left: -1.55em;
   width: 1.35em;
   text-align: right;
-  color: var(--hue-accent);
+  color: var(--hue-list-marker);
   font-weight: 600;
   /* 等宽数字：1→10 进位时编号不左右跳动 */
   font-variant-numeric: tabular-nums;
+  text-shadow: var(--hue-list-glow-text);
 }
 
-/* 无序列表：实心青瓷圆点（避开任务列表） */
+/* 无序列表：实心青玉圆点（避开任务列表），带月华柔光 */
 .milkdown .ProseMirror ul:not(.milkdown-list-item-block) > li::before {
   content: '';
   position: absolute;
   left: -1.05em;
   top: 0.62em;
-  width: 0.42em;
-  height: 0.42em;
+  width: 0.44em;
+  height: 0.44em;
   border-radius: 50%;
-  background: var(--hue-accent);
+  background: var(--hue-list-marker);
+  filter: var(--hue-list-glow-dot);
 }
 
-/* ── 任务列表：复选框统一为青瓷 ────────────── */
+/* ── 任务列表：复选框统一为青玉，勾选态用月光色 ────────────── */
 .milkdown .milkdown-list-item-block li .label-wrapper svg {
   fill: var(--hue-text-3);
 }
 .milkdown .milkdown-list-item-block li .label-wrapper .checked svg {
-  fill: var(--hue-accent);
+  fill: var(--hue-list-marker);
+  filter: var(--hue-list-glow-dot);
 }
 
 /* ── 表格（Crepe 包在 .milkdown-table-block 内，选择器更具体，

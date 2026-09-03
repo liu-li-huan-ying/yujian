@@ -410,3 +410,18 @@
     --dur-slow: 0ms;
   }
 }
+
+/* ── 列表标记「皎洁月光」主题 ───────────────────────────────
+   暗色：近白、带一丝青玉调，像月光透过来的明亮，但不刺眼；
+   亮色：退为深玉色，保证白底上清晰可读（近白在白底会隐形）。
+   各皮肤通过 rgb(var(--hue-tint-1)) 自动取自身色调，统一跟随。 */
+[data-mode='dark'] {
+  --hue-list-marker: color-mix(in srgb, #ffffff 70%, rgb(var(--hue-tint-1)) 30%);
+  --hue-list-glow-text: 0 0 8px rgba(255, 255, 255, 0.22);
+  --hue-list-glow-dot: drop-shadow(0 0 5px rgba(255, 255, 255, 0.35));
+}
+[data-mode='light'] {
+  --hue-list-marker: color-mix(in srgb, rgb(var(--hue-tint-1)) 52%, #16201d 48%);
+  --hue-list-glow-text: none;
+  --hue-list-glow-dot: none;
+}
