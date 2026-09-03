@@ -786,6 +786,50 @@
   color: var(--hue-accent);
 }
 
+/* ── 内联标签芯片 #标签（真节点，features/tag.ts 渲染）──
+   与 wikilink 同族玉质药丸，但为「分类」语义而非「导航」：
+   不用强调色，基底走中性玉色——# 走 --hue-text-3、标签名走 --hue-text-1，
+   一眼可辨「这是元数据」而非「这是个可点的链接」。click 行为留给面板筛选，
+   编辑器内仅给 hover 微高光反馈。 */
+.milkdown .ProseMirror .yj-tag {
+  display: inline;
+  white-space: normal;
+}
+.milkdown .ProseMirror .yj-tag__label {
+  display: inline;
+  font-family: var(--font-ui);
+  font-size: 0.9em;
+  color: var(--hue-text-1);
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-tint-1), 0.14) 0%,
+    rgba(var(--hue-tint-1), 0.06) 100%
+  );
+  border: 1px solid rgba(var(--hue-tint-1), 0.3);
+  border-radius: 5px;
+  padding: 0.1em 0.4em;
+  margin: 0 0.04em;
+  cursor: default;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-image var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.milkdown .ProseMirror .yj-tag__hash {
+  color: var(--hue-text-3);
+  font-weight: 600;
+  margin-right: 0.04em;
+}
+.milkdown .ProseMirror .yj-tag__label:hover {
+  background-image: linear-gradient(
+    180deg,
+    rgba(var(--hue-tint-1), 0.22) 0%,
+    rgba(var(--hue-tint-1), 0.1) 100%
+  );
+  border-color: rgba(var(--hue-tint-1), 0.46);
+}
+
 /* ── 隐藏原生滚动条：交给右侧玉质阅读进度条统一指示，避免双指示破坏美感 ──
    例外：代码块内部 CodeMirror 超长时需独立滚动（max-height:70vh 兜底），
    恢复玉质细滚动条 ── */

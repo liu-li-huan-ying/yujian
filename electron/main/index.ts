@@ -391,6 +391,12 @@ function registerIpc(): void {
     async (_event, root: string, item: UnlinkedMention) =>
       VaultIndex.wrapUnlinkedMention(root, item)
   )
+  // 标签聚合：列出全部标签（含计数 / 层级），由索引派生不存原始图
+  ipcMain.handle(IPC.VAULT_LIST_TAGS, (_event, root: string) => VaultIndex.listTags(root))
+  // 标签聚合：按标签列出旗下笔记（点击标签面板条目时拉取）
+  ipcMain.handle(IPC.VAULT_GET_NOTES_BY_TAG, (_event, root: string, tag: string) =>
+    VaultIndex.getNotesByTag(root, tag),
+  )
 
   // ── 会话持久化（崩溃恢复）──
 

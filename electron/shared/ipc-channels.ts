@@ -54,6 +54,10 @@ export const IPC = {
   VAULT_UNLINKED_MENTIONS: 'vault:unlinkedMentions',
   // 笔记库：把未链接提及的片段包裹成 [[链接]] 并写回磁盘
   VAULT_WRAP_MENTION: 'vault:wrapMention',
+  // 笔记库：标签聚合——列出全部标签（含计数 / 层级，由索引派生不存原始图）
+  VAULT_LIST_TAGS: 'vault:listTags',
+  // 笔记库：按标签列出旗下笔记（点击标签面板条目时拉取，纯索引元数据、不读正文）
+  VAULT_GET_NOTES_BY_TAG: 'vault:getNotesByTag',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -122,6 +126,28 @@ export interface NoteTitleItem {
   /** 显示名：frontmatter title > 文件名（不含扩展名） */
   title: string
   /** 文件名（不含扩展名），用于 `[[` 里最常见的按名匹配 */
+  base: string
+}
+
+/** 标签聚合单条：完整标签名（含 / 嵌套）、命中文件数、父级完整名、层级深度 */
+export interface TagItem {
+  /** 完整标签名，如 `项目/进行中`（小写、去尾部 /） */
+  name: string
+  /** 出现在多少篇笔记中 */
+  count: number
+  /** 直接父级完整名；顶层标签为 null */
+  parent: string | null
+  /** 层级深度（顶层为 0，`父/子` 为 1） */
+  depth: number
+}
+
+/** 某标签下的笔记单条（点击标签面板条目时展示，复用反链条目观感） */
+export interface TagNoteItem {
+  /** 笔记绝对路径 */
+  path: string
+  /** 显示名：frontmatter title > 文件名（不含扩展名） */
+  title: string
+  /** 文件名（不含扩展名） */
   base: string
 }
 

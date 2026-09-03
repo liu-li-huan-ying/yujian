@@ -350,6 +350,18 @@ const enUS = {
     unlinkedDone: 'Wrapped {n} mention(s) as links',
     unlinkedStale: 'Text changed — file untouched, refresh and try again',
     unlinkedFail: 'Failed to wrap',
+    /* ── Tag panel (batch three: #tag inline syntax + frontmatter tags) ── */
+    tags: 'Tags',
+    tagsTitle: 'Tags',
+    tagsClose: 'Close',
+    tagsFilterPlaceholder: 'Filter tags…',
+    tagsLoading: 'Loading tags…',
+    tagsEmpty: 'No tags yet — write #tag in a note, or add them via the properties panel',
+    tagsNotesTitle: 'Notes under tag',
+    tagsNotesEmpty: 'No notes under this tag yet',
+    tagsNotesLoading: 'Loading notes…',
+    tagsAll: 'All tags',
+    tagsHint: 'Click a tag to see its notes; click the arrow to expand child tags',
     /* ── Integrity check (batch one: data security) ── */
     integrity: 'Integrity check',
     integrityRerun: 'Rescan',

@@ -5,7 +5,9 @@ import type {
   SearchOptions,
   BacklinkItem,
   NoteTitleItem,
-  UnlinkedMention
+  UnlinkedMention,
+  TagItem,
+  TagNoteItem
 } from '../shared/ipc-channels'
 
 /**
@@ -150,6 +152,41 @@ function extractWikiTargets(content: string): string[] {
   return targets
 }
 
+/**
+ * 标签名合法字符：与 src/editor/features/tag.ts 的 TAG_BODY 完全一致，
+ * 保证「索引采集到的标签」与「编辑器里渲染的标签」一一对应。
+ */
+const TAG_BODY_RE = '[\\p{L}\\p{N}_][\\p{L}\\p{N}_\\-/]*'
+
+/**
+ * 从正文扫描内联标签 #标签（与 features/tag.ts 的 remark 语义保持一致）。
+ * ⚠️ 索引层是裸文本扫描，必须先把代码块 / 行内代码剥掉——`#` 在代码里极常见
+ * （CSS `#id`、Python `# 注释`），否则会污染标签；而 remark 层天然不会把代码块内容
+ * 解析成 text 节点，故剥除后两边采集结果一致。frontmatter 亦剥除（其中的 tags: 由
+ * parseFrontmatter 单独提取，本函数不负责）。
+ */
+function extractInlineTags(content: string): string[] {
+  let text = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
+  // 1) 剥围栏代码块 ```…``` / ~~~…~~~
+  text = text.replace(/^ {0,3}(?:```|~~~)[\s\S]*?^ {0,3}(?:```|~~~)\s*$/gm, ' ')
+  // 2) 剥行内代码 `code`
+  text = text.replace(/`[^`\n]*`/g, ' ')
+  // 3) 与 tag.ts 的 buildTagRe 完全一致的正则（含负向后顾排除 ## 标题 / abc#x）
+  const re = new RegExp(`(?<![\\w#])#(${TAG_BODY_RE})`, 'gu')
+  const out: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const name = m[1].replace(/[/\-]+$/, '')
+    if (name) out.push(name)
+  }
+  return out
+}
+
+/** 标签归一：去前导 #、去尾部 / 或 -（#父/ 这类不成形写法不产生空层级） */
+function normalizeTag(raw: string): string {
+  return raw.trim().replace(/^#+/, '').replace(/[/\-]+$/, '')
+}
+
 /** 把 wikilink 原始目标归一化为用于查表的 key（去 ./ 前缀、去扩展名） */
 function normalizeTarget(target: string): string {
   return target.replace(/^\.\//, '').replace(/\.(md|markdown)$/i, '')
@@ -167,6 +204,7 @@ export function parseFile(
   byRel: Map<string, string>
 ): IndexEntry {
   const fm = parseFrontmatter(content)
+  const inlineTags = extractInlineTags(content)
   const outRaw = extractWikiTargets(content)
   const outLinks: string[] = []
   for (const raw of outRaw) {
@@ -186,12 +224,22 @@ export function parseFile(
       deduped.push(p)
     }
   }
+  // 标签：frontmatter tags 与正文内联 #标签 合并去重（统一转小写 key，保留原始英文名）
+  const tagSet = new Set<string>()
+  for (const t of fm.tags) {
+    const n = normalizeTag(t)
+    if (n) tagSet.add(n.toLowerCase())
+  }
+  for (const t of inlineTags) {
+    if (t) tagSet.add(t.toLowerCase())
+  }
+  const tags = [...tagSet]
   return {
     mtime,
     title: fm.title || firstH1(content),
     headings: collectHeadings(content),
     outLinks: deduped,
-    tags: fm.tags
+    tags
   }
 }
 
@@ -463,6 +511,51 @@ export async function listNoteTitles(root: string): Promise<NoteTitleItem[]> {
     const base = basename(full, extname(full))
     out.push({ path: full, title: index.files[full].title || base, base })
   }
+  return out
+}
+
+/**
+ * 标签聚合：从索引里收集全部标签（小写 name），统计每枚标签命中的文件数，
+ * 并按 `/` 拆分推导出父级与层级深度，供标签面板渲染嵌套树。
+ * 数据完全由索引的 tags 元数据派生，不读正文、不存原始图。
+ */
+export async function listTags(root: string): Promise<TagItem[]> {
+  const index = await ensureIndex(root)
+  const count = new Map<string, number>()
+  for (const full of Object.keys(index.files)) {
+    for (const t of index.files[full].tags) {
+      count.set(t, (count.get(t) ?? 0) + 1)
+    }
+  }
+  const out: TagItem[] = []
+  for (const [name, c] of count) {
+    const parts = name.split('/')
+    const depth = parts.length - 1
+    const parent = depth > 0 ? parts.slice(0, -1).join('/') : null
+    out.push({ name, count: c, parent, depth })
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name))
+  return out
+}
+
+/**
+ * 按标签列出旗下笔记（点击标签面板条目时拉取）。支持「父标签含全部子标签」语义：
+ * `#项目` 同时命中 `项目`、`项目/进行中`、`项目/完成` 等所有后代。
+ * 纯索引元数据，不读正文。
+ */
+export async function getNotesByTag(root: string, tag: string): Promise<TagNoteItem[]> {
+  const index = await ensureIndex(root)
+  const key = normalizeTag(tag).toLowerCase()
+  if (!key) return []
+  const out: TagNoteItem[] = []
+  for (const full of Object.keys(index.files)) {
+    const entry = index.files[full]
+    if (entry.tags.some((t) => t === key || t.startsWith(key + '/'))) {
+      const base = basename(full, extname(full))
+      out.push({ path: full, title: entry.title || base, base })
+    }
+  }
+  out.sort((a, b) => a.title.localeCompare(b.title))
   return out
 }
 

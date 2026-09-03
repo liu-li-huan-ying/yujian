@@ -349,6 +349,18 @@ const zhCN = {
     unlinkedDone: '已包裹 {n} 处为链接',
     unlinkedStale: '原文已变化，未修改文件，请刷新后重试',
     unlinkedFail: '包裹失败',
+    /* ── 标签面板（批次三：#标签 内联语法 + frontmatter tags）── */
+    tags: '标签',
+    tagsTitle: '标签',
+    tagsClose: '关闭',
+    tagsFilterPlaceholder: '过滤标签…',
+    tagsLoading: '正在加载标签…',
+    tagsEmpty: '暂无标签 —— 在正文写 #标签 即可创建，或从属性面板写入',
+    tagsNotesTitle: '标签下的笔记',
+    tagsNotesEmpty: '该标签下还没有笔记',
+    tagsNotesLoading: '正在加载笔记…',
+    tagsAll: '全部标签',
+    tagsHint: '点击标签查看旗下笔记，点击箭头展开子标签',
     /* ── 完整性自检（批次一：数据安全）── */
     integrity: '完整性自检',
     integrityRerun: '重新扫描',
