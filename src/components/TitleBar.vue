@@ -52,6 +52,7 @@ const emit = defineEmits<{
   (e: 'link-check'): void
   (e: 'backlinks'): void
   (e: 'tags'): void
+  (e: 'moc'): void
   (e: 'writing-aids'): void
   (e: 'integrity'): void
   (e: 'backup'): void
@@ -178,6 +179,7 @@ const moreItems = (): MenuEntry[] => [
   { action: 'link-check', label: L.linkCheck, icon: 'link' },
   { action: 'backlinks', label: L.backlinks, icon: 'backlink' },
   { action: 'tags', label: L.tags, icon: 'tag' },
+  { action: 'moc', label: L.moc, icon: 'map' },
   { action: 'insert-wikilink', label: i18n.toolbar.insertWikilink, icon: 'link' },
   { action: 'writing-aids', label: L.writingAids.title, icon: 'writing' },
   { action: 'integrity', label: L.integrity, icon: 'shield' },
@@ -208,6 +210,9 @@ function onMoreSelect(action: string): void {
       break
     case 'tags':
       emit('tags')
+      break
+    case 'moc':
+      emit('moc')
       break
     case 'insert-wikilink':
       emit('insert-wikilink')

@@ -29,7 +29,8 @@ const form = reactive({
   author: '',
   description: '',
   tags: '',
-  date: ''
+  date: '',
+  moc: false
 })
 
 /** 解析结果缓存：正文与未知字段在 apply 时原样透传 */
@@ -52,6 +53,7 @@ function loadFrom(text: string): void {
     ? d.tags.map((x) => (typeof x === 'string' ? x : String(x))).filter(Boolean)
     : []
   form.tags = tags.join(', ')
+  form.moc = d.moc === true || d.moc === 'true' || d.moc === 'yes' || d.moc === 'on' || d.moc === '1'
   // 日期：YAML 可能解析成 Date 或字符串，统一取 YYYY-MM-DD
   if (d.date != null) {
     const dt = d.date instanceof Date ? d.date : new Date(String(d.date))
@@ -77,6 +79,8 @@ function applyFrontmatter(): void {
   if (tags.length) data.tags = tags
   else delete data.tags
   setOrDelete(data, 'date', form.date)
+  if (form.moc) data.moc = true
+  else delete data.moc
   const next = serializeFrontmatter(data, parsed.content)
   emit('apply', next)
   emit('close')
@@ -156,6 +160,13 @@ function insertSnippet(s: Snippet): void {
         <div class="wa__field">
           <label class="wa__label" for="wa-date">{{ wa.labelDate }}</label>
           <input id="wa-date" v-model="form.date" type="date" class="wa__input" />
+        </div>
+        <div class="wa__field wa__field--check">
+          <label class="wa__check" for="wa-moc">
+            <input id="wa-moc" v-model="form.moc" type="checkbox" class="wa__checkbox" />
+            <span class="wa__check-label">{{ wa.labelMoc }}</span>
+          </label>
+          <span class="wa__hint">{{ wa.mocHint }}</span>
         </div>
       </template>
     </div>
@@ -298,6 +309,31 @@ function insertSnippet(s: Snippet): void {
   outline: none;
   border-color: var(--hue-accent);
   box-shadow: 0 0 0 2px rgba(var(--hue-tint-1), 0.25);
+}
+
+.wa__field--check {
+  gap: 5px;
+}
+
+.wa__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.wa__checkbox {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--hue-accent);
+  cursor: pointer;
+}
+
+.wa__check-label {
+  font-size: 12px;
+  color: var(--hue-text-1);
 }
 
 .wa__nodoc {

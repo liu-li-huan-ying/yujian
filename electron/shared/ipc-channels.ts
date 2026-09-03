@@ -58,6 +58,10 @@ export const IPC = {
   VAULT_LIST_TAGS: 'vault:listTags',
   // 笔记库：按标签列出旗下笔记（点击标签面板条目时拉取，纯索引元数据、不读正文）
   VAULT_GET_NOTES_BY_TAG: 'vault:getNotesByTag',
+  // 笔记库：列出全库内容地图（frontmatter moc: true 的笔记）
+  VAULT_LIST_MOCS: 'vault:listMocs',
+  // 笔记库：某篇 MOC 的下级聚合（按标签 / 出链 / 反链分组，由索引派生）
+  VAULT_GET_MOC_OUTLINE: 'vault:getMocOutline',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -149,6 +153,32 @@ export interface TagNoteItem {
   title: string
   /** 文件名（不含扩展名） */
   base: string
+}
+
+/** MOC（内容地图）单条：全库 `moc: true` 的笔记，供面板列出主题入口 */
+export interface MocItem {
+  /** 笔记绝对路径 */
+  path: string
+  /** 显示名：frontmatter title > 文件名（不含扩展名） */
+  title: string
+  /** 文件名（不含扩展名） */
+  base: string
+  /** 该 MOC 自身携带的标签（面板上显示它聚合的是哪些主题） */
+  tags: string[]
+}
+
+/** MOC 下级聚合的分组来源：按标签 / 出链 / 反链 */
+export type MocGroupKind = 'tag' | 'outlinks' | 'backlinks'
+
+/** MOC 下级聚合的一组 */
+export interface MocGroup {
+  kind: MocGroupKind
+  /** kind='tag' 时为标签完整名；其余为空串（渲染层用 i18n 文案） */
+  tag: string
+  /** 该组下的笔记（已排除 MOC 自身，组内按标题排序） */
+  notes: TagNoteItem[]
+  /** 是否因触及软上限而截断（大库保护，与 searchVault 同源约定） */
+  truncated: boolean
 }
 
 /** 未链接提及单条：某篇笔记以纯文本提到当前笔记名，但未加 `[[ ]]` */

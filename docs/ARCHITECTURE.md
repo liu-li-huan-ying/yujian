@@ -1072,6 +1072,36 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ***
 
+### 5.17 Phase 3 批次三（二·上）：内容地图 MOC（2026-09-03，已落地）
+
+> 对应 `docs/PHASE3-PLAN.md` 批次三。PKM 主题入口——任意笔记标为 MOC（frontmatter `moc: true`）后，打开即按「自身每枚标签 / 本图链出 / 挂到本图」三组自动聚合下级笔记，作为主题枢纽。关系图谱见批次三（二·下）。
+
+**A. 索引标记（`electron/main/vaultIndex.ts`）**
+
+* `parseFrontmatter` 在解析 `title` / `tags` 的同一处新增解析 `moc` 字段（YAML 真值判定：`true`/`yes`/`on`/`1` 及其字符串形态），写入 `IndexEntry.moc: boolean`。
+* `INDEX_VERSION` 由 1 升 2：**v2 语义变更**——`tags` 现包含正文内联 `#标签`（此前仅 frontmatter），且新增 `moc` 标记；旧版缓存（仅 frontmatter tags、无 moc）会被版本门槛强制重建，否则未改动文件的 `tags`/`moc` 永不被采集（潜伏 bug）。
+* 索引仍只存轻量元数据、不缓存正文、不索引全文（守索引铁律）。
+
+**B. 聚合 API（由索引派生，不存原始图）**
+
+* `listMocs(root)`（IPC `vault:listMocs`）：枚举 `entry.moc === true` 的文档，返回 `MocItem { path, title, base, tags }`（全库 MOC 清单，供非 MOC 文档跳转）。
+* `getMocOutline(root, path)`（IPC `vault:getMocOutline`）：以 `path` 自身为锚，产出三组 `MocGroup { kind: 'tag'|'outlinks'|'backlinks', tag, notes, truncated }`：
+  * `tag`：按自身每枚 `entry.tags` 分组建组，父标签含子标签语义（`t === key || t.startsWith(key + '/')`，与 `getNotesByTag` 一致）；
+  * `outlinks`：自身 `outLinks` 指向的文档；
+  * `backlinks`：索引派生 `backLinks[path]` 指向本篇的文档。
+  * 三组均排除自身、去重、按标题排序；单组软上限 `MAX_MOC_GROUP = 200`，超出置 `truncated: true`（前端提示「条目过多，仅显示前 200 条」）。
+
+**C. 内容地图面板（`src/components/MocPanel.vue`）**
+
+* 玻璃浮层，入口：标题栏「更多 ⌄ · 内容地图」（`Icon` 新增 `map` 图标）。
+* 两种状态：
+  * 当前文档是 MOC（`mocs` 清单含 `activePath`）→ 按上述三组分区渲染，每组可折叠（twisty `chevron-right` 旋转 90°）、计数徽标 `min-width` 钉死居中（动态布局铁律 #2）、`truncated` 提示；点击笔记 → `onOpenResult` 打开。
+  * 当前文档不是 MOC → 顶部 `info` 引导「如何把本篇标成 MOC」，下列全库 `MocItem` 清单可跳转。
+* 切换文档时 `watch(activePath)` 静默重聚合；无库 / 未打开文档 / 空 MOC 均有温和空态。
+* 写入开关在写作辅助面板：勾选「设为内容地图」即写 `moc: true` 到 frontmatter（`src/components/WritingAidsPanel.vue`，与 `tags` 同源 `setOrDelete` 逻辑），保存后经 watcher 自动重建索引、MOC 清单即时生效。
+
+***
+
 ## 6. 技术写作场景专项设计
 
 | 能力          | 实现                                   | 阶段 |

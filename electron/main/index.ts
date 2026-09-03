@@ -397,6 +397,12 @@ function registerIpc(): void {
   ipcMain.handle(IPC.VAULT_GET_NOTES_BY_TAG, (_event, root: string, tag: string) =>
     VaultIndex.getNotesByTag(root, tag),
   )
+  // 内容地图：列出全库 moc: true 的笔记（主题入口清单）
+  ipcMain.handle(IPC.VAULT_LIST_MOCS, (_event, root: string) => VaultIndex.listMocs(root))
+  // 内容地图：某篇 MOC 的下级聚合（标签 / 出链 / 反链分组）
+  ipcMain.handle(IPC.VAULT_GET_MOC_OUTLINE, (_event, root: string, path: string) =>
+    VaultIndex.getMocOutline(root, path),
+  )
 
   // ── 会话持久化（崩溃恢复）──
 

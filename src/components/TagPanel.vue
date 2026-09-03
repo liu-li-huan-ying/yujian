@@ -172,7 +172,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="tags glass" role="dialog" aria-label="标签面板">
+  <div class="tags glass" role="dialog" :aria-label="L.tagsTitle">
     <div class="tags__head">
       <Icon name="tag" :size="15" class="tags__icon" />
       <span class="tags__title">{{ L.tagsTitle }}</span>
@@ -203,7 +203,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <p v-else-if="flatTree.length === 0" class="tags__empty">
         <Icon name="tag" :size="16" /> {{ L.tagsEmpty }}
       </p>
-      <ul v-else class="tags__tree" role="tree" aria-label="标签">
+      <ul v-else class="tags__tree" role="tree" :aria-label="L.tagsTitle">
         <li
           v-for="item in flatTree"
           :key="item.node.name"
@@ -218,7 +218,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               type="button"
               class="tags__twist"
               :class="{ 'tags__twist--open': isExpanded(item.node.name) }"
-              :aria-label="isExpanded(item.node.name) ? '折叠' : '展开'"
+              :aria-label="isExpanded(item.node.name) ? L.ariaCollapse : L.ariaExpand"
               @click.stop="toggleExpand(item.node.name)"
             >
               <Icon name="chevron-right" :size="13" />
@@ -235,7 +235,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <!-- notes 视图：面包屑 + 该标签旗下笔记 -->
     <div v-else class="tags__body">
-      <nav class="tags__crumb" aria-label="面包屑">
+      <nav class="tags__crumb" :aria-label="L.ariaBreadcrumb">
         <button type="button" class="tags__crumb-item" @click="onBreadcrumb(0)">
           {{ L.tagsAll }}
         </button>
@@ -471,12 +471,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .tags__twist--spacer {
   cursor: default;
-}
-
-/* 选中态（当前在 notes 视图的标签）：左侧 2px accent 竖条 + 玉色底 */
-.tags__row--sel {
-  background: var(--hue-active);
-  border-left-color: var(--hue-accent);
 }
 
 .tags__hint {
