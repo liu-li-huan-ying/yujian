@@ -14,6 +14,7 @@ import SnapshotPanel from './components/SnapshotPanel.vue'
 import LinkCheckPanel from './components/LinkCheckPanel.vue'
 import BacklinksPanel from './components/BacklinksPanel.vue'
 import TagPanel from './components/TagPanel.vue'
+import MocPanel from './components/MocPanel.vue'
 import IntegrityPanel from './components/IntegrityPanel.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import ConflictDialog from './components/ConflictDialog.vue'
@@ -619,6 +620,7 @@ const linkCheckOpen = ref(false)
 const linkCheckRef = ref<InstanceType<typeof LinkCheckPanel> | null>(null)
 const backlinksOpen = ref(false)
 const tagsOpen = ref(false)
+const mocOpen = ref(false)
 const integrityOpen = ref(false)
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
@@ -719,6 +721,11 @@ function onBacklinks(): void {
 /** 打开标签面板（标题栏「更多」入口）：浏览 #标签 与旗下笔记 */
 function onTags(): void {
   tagsOpen.value = true
+}
+
+/** 打开内容地图面板（标题栏「更多」入口）：聚合标签/双链下的笔记 */
+function onMoc(): void {
+  mocOpen.value = true
 }
 
 /** 编辑器内点击 [[wikilink]] 芯片：解析目标 → 已存在则跳转，不存在则一键创建该笔记 */
@@ -1185,6 +1192,7 @@ onBeforeUnmount(() => {
       @backup="onBackup"
       @backlinks="onBacklinks"
       @tags="onTags"
+      @moc="onMoc"
       @insert-wikilink="onInsertWikiLink"
       @writing-aids="writingAidsOpen = true"
       @save="saveFile"
@@ -1276,6 +1284,14 @@ onBeforeUnmount(() => {
           v-if="tagsOpen"
           :vault-path="vaultPath"
           @close="tagsOpen = false"
+          @open="onOpenResult"
+        />
+
+        <MocPanel
+          v-if="mocOpen"
+          :vault-path="vaultPath"
+          :active-path="filePath"
+          @close="mocOpen = false"
           @open="onOpenResult"
         />
 

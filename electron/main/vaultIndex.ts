@@ -7,7 +7,9 @@ import type {
   NoteTitleItem,
   UnlinkedMention,
   TagItem,
-  TagNoteItem
+  TagNoteItem,
+  MocItem,
+  MocGroup
 } from '../shared/ipc-channels'
 
 /**
@@ -24,7 +26,12 @@ import type {
  */
 
 const MD_EXT = new Set(['.md', '.markdown'])
-export const INDEX_VERSION = 1
+/**
+ * 索引结构版本。**改变 IndexEntry 的字段或语义时必须 +1**，否则磁盘上的旧缓存
+ * （`.mdeditor/vault-index.json`）会被直接复用，未修改的文件永远拿不到新字段。
+ * v2：tags 纳入正文内联 `#标签`（此前只有 frontmatter），并新增 moc 标记。
+ */
+export const INDEX_VERSION = 2
 
 /** 索引内的单个文件记录（轻量元数据） */
 export interface IndexEntry {
@@ -36,8 +43,10 @@ export interface IndexEntry {
   headings: { level: number; text: string }[]
   /** 解析后的出链（已是 vault 内绝对路径，仅含解析成功的目标） */
   outLinks: string[]
-  /** frontmatter tags（归一化为字符串数组） */
+  /** 标签：frontmatter tags 与正文内联 `#标签` 合并去重后的小写 key */
   tags: string[]
+  /** 是否为内容地图（MOC）：frontmatter `moc: true` */
+  moc: boolean
 }
 
 export interface VaultIndex {
@@ -65,11 +74,11 @@ export function isMarkdown(name: string): boolean {
 
 /* ── 元数据解析（不缓存正文） ── */
 
-/** 极简 frontmatter 解析：只取 `title` 与 `tags` 两字段，覆盖绝大多数笔记场景 */
+/** 极简 frontmatter 解析：只取 `title` / `tags` / `moc` 三字段，覆盖绝大多数笔记场景 */
 function parseFrontmatter(
   content: string
-): { title: string; tags: string[] } {
-  const fm = { title: '', tags: [] as string[] }
+): { title: string; tags: string[]; moc: boolean } {
+  const fm = { title: '', tags: [] as string[], moc: false }
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content)
   if (!m) return fm
   const block = m[1]
@@ -94,6 +103,10 @@ function parseFrontmatter(
     const val = kv[2].trim()
     if (key === 'title') {
       fm.title = val.replace(/^["']|["']$/g, '')
+    } else if (key === 'moc') {
+      // YAML 真值的常见写法都认（true/yes/on/1），其余（含缺省）为假
+      const v = val.replace(/^["']|["']$/g, '').toLowerCase()
+      fm.moc = v === 'true' || v === 'yes' || v === 'on' || v === '1'
     } else if (key === 'tags') {
       if (val.startsWith('[')) {
         // 行内数组：[a, b, "c"]
@@ -239,7 +252,8 @@ export function parseFile(
     title: fm.title || firstH1(content),
     headings: collectHeadings(content),
     outLinks: deduped,
-    tags
+    tags,
+    moc: fm.moc
   }
 }
 
@@ -508,8 +522,7 @@ export async function listNoteTitles(root: string): Promise<NoteTitleItem[]> {
   const index = await ensureIndex(root)
   const out: NoteTitleItem[] = []
   for (const full of Object.keys(index.files)) {
-    const base = basename(full, extname(full))
-    out.push({ path: full, title: index.files[full].title || base, base })
+    out.push(toNoteItem(full, index.files[full]))
   }
   return out
 }
@@ -551,12 +564,91 @@ export async function getNotesByTag(root: string, tag: string): Promise<TagNoteI
   for (const full of Object.keys(index.files)) {
     const entry = index.files[full]
     if (entry.tags.some((t) => t === key || t.startsWith(key + '/'))) {
-      const base = basename(full, extname(full))
-      out.push({ path: full, title: entry.title || base, base })
+      out.push(toNoteItem(full, entry))
     }
   }
   out.sort((a, b) => a.title.localeCompare(b.title))
   return out
+}
+
+/** 索引条目 → 笔记条目（标题兜底为基名），供标签 / MOC 等聚合复用 */
+function toNoteItem(full: string, entry: IndexEntry): TagNoteItem {
+  const base = basename(full, extname(full))
+  return { path: full, title: entry.title || base, base }
+}
+
+/**
+ * 列出全库内容地图（frontmatter `moc: true`）。作为主题入口清单，
+ * 当前文档不是 MOC 时面板用它给出可跳转的 MOC 列表。纯索引元数据。
+ */
+export async function listMocs(root: string): Promise<MocItem[]> {
+  const index = await ensureIndex(root)
+  const out: MocItem[] = []
+  for (const full of Object.keys(index.files)) {
+    const entry = index.files[full]
+    if (!entry.moc) continue
+    const item = toNoteItem(full, entry)
+    out.push({ ...item, tags: [...entry.tags].sort() })
+  }
+  out.sort((a, b) => a.title.localeCompare(b.title))
+  return out
+}
+
+/** 单个 MOC 分组的软上限：大库里一枚宽泛标签可能命中上千篇，防面板被刷爆 */
+const MAX_MOC_GROUP = 200
+
+/**
+ * MOC 下级聚合：把「该 MOC 自身的每一枚标签」「它的出链」「指向它的反链」
+ * 各自聚成一组，作为主题入口的下级清单。
+ *
+ * 语义要点：
+ *  - 标签组沿用 getNotesByTag 的「父标签含全部后代」语义（`#项目` 命中 `项目/进行中`）；
+ *  - 三类组彼此独立、不跨组去重——同一篇笔记既被标签命中又反链过来是有意义的双重信息；
+ *  - 组内去重并排除 MOC 自身（否则每个 MOC 都会把自己列进去）；
+ *  - 全程只读索引元数据，不读正文（铁律 2）。
+ */
+export async function getMocOutline(root: string, path: string): Promise<MocGroup[]> {
+  const index = await ensureIndex(root)
+  const self = index.files[path]
+  if (!self) return []
+
+  const groups: MocGroup[] = []
+  /** 把绝对路径集合转成组（排除自身、去重、按标题排序、软上限截断） */
+  const buildGroup = (kind: MocGroup['kind'], tag: string, paths: Iterable<string>): void => {
+    const seen = new Set<string>()
+    const notes: TagNoteItem[] = []
+    let truncated = false
+    for (const full of paths) {
+      if (full === path) continue
+      const entry = index.files[full]
+      if (!entry || seen.has(full)) continue
+      seen.add(full)
+      if (notes.length >= MAX_MOC_GROUP) {
+        truncated = true
+        break
+      }
+      notes.push(toNoteItem(full, entry))
+    }
+    if (notes.length === 0) return
+    notes.sort((a, b) => a.title.localeCompare(b.title))
+    groups.push({ kind, tag, notes, truncated })
+  }
+
+  // 1. 按该 MOC 自身的每一枚标签聚合（含后代标签）
+  for (const tag of [...self.tags].sort()) {
+    const key = tag.toLowerCase()
+    const hit: string[] = []
+    for (const full of Object.keys(index.files)) {
+      const entry = index.files[full]
+      if (entry.tags.some((t) => t === key || t.startsWith(key + '/'))) hit.push(full)
+    }
+    buildGroup('tag', tag, hit)
+  }
+  // 2. 它链出去的笔记（MOC 里手写的 [[...]] 目录）
+  buildGroup('outlinks', '', self.outLinks)
+  // 3. 指向它的笔记（把自己挂到该 MOC 的笔记）
+  buildGroup('backlinks', '', index.backLinks[path] ?? [])
+  return groups
 }
 
 /**

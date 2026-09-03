@@ -29,6 +29,8 @@ import {
   type UnlinkedMention,
   type TagItem,
   type TagNoteItem,
+  type MocItem,
+  type MocGroup,
 } from '../shared/ipc-channels'
 
 /**
@@ -159,6 +161,13 @@ const api = {
   /** 标签聚合：按标签列出旗下笔记（点击标签面板条目时拉取） */
   getNotesByTag: (root: string, tag: string): Promise<TagNoteItem[]> =>
     ipcRenderer.invoke(IPC.VAULT_GET_NOTES_BY_TAG, root, tag),
+
+  /** 内容地图：列出全库 moc: true 的笔记（主题入口清单） */
+  listMocs: (root: string): Promise<MocItem[]> => ipcRenderer.invoke(IPC.VAULT_LIST_MOCS, root),
+
+  /** 内容地图：某篇 MOC 的下级聚合（标签 / 出链 / 反链分组） */
+  getMocOutline: (root: string, path: string): Promise<MocGroup[]> =>
+    ipcRenderer.invoke(IPC.VAULT_GET_MOC_OUTLINE, root, path),
 
   watchVault: (root: string): Promise<void> => ipcRenderer.invoke(IPC.VAULT_WATCH, root),
 
