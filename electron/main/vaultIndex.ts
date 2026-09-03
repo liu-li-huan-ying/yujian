@@ -1,5 +1,6 @@
-import { access, mkdir, readFile, readdir, rename, stat, writeFile, rm } from 'node:fs/promises'
+import { access, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
+import { atomicWrite } from './atomicWrite'
 import type {
   SearchOptions,
   BacklinkItem,
@@ -556,18 +557,7 @@ export async function getUnlinkedMentions(
 
 /** 单文件原子写（temp + rename），与主进程其它落盘路径同源，避免半截内容 */
 async function writeAtomic(path: string, data: string): Promise<void> {
-  const tmp = `${path}.${Date.now()}.tmp`
-  try {
-    await writeFile(tmp, data, 'utf-8')
-    await rename(tmp, path)
-  } catch {
-    try {
-      await rm(tmp, { force: true })
-    } catch {
-      /* ignore */
-    }
-    throw new Error('write failed')
-  }
+  await atomicWrite(path, data)
 }
 
 /**
@@ -612,18 +602,11 @@ export async function loadIndex(root: string): Promise<VaultIndex | null> {
 }
 
 export async function saveIndex(root: string, index: VaultIndex): Promise<void> {
-  await mkdir(indexDir(root), { recursive: true })
-  const tmp = join(indexDir(root), `.vault-index-${Date.now()}.tmp`)
+  // 原子写（对 Windows 只读 / 同步锁 EPERM 做兜底）；索引是缓存，写失败绝不应中断主流程
   try {
-    await writeFile(tmp, JSON.stringify(index), 'utf-8')
-    await rename(tmp, indexPath(root))
+    await atomicWrite(indexPath(root), JSON.stringify(index))
   } catch {
     // 索引是缓存，写失败绝不应中断主流程
-    try {
-      await rm(tmp, { force: true })
-    } catch {
-      /* ignore */
-    }
   }
 }
 

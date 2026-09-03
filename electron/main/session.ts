@@ -1,6 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { app } from 'electron'
+import { atomicWrite } from './atomicWrite'
 import {
   DEFAULT_SESSION,
   DEFAULT_ZEN_PREFS,
@@ -95,11 +96,8 @@ export async function patchSession(patch: Partial<SessionState>): Promise<Sessio
 async function persist(state: SessionState): Promise<void> {
   const target = sessionPath()
   try {
-    await mkdir(dirname(target), { recursive: true })
-    // 原子写：写临时文件再改名，写入中途崩溃不会留下半个 json
-    const tmp = join(dirname(target), `.${FILE_NAME}.${Date.now()}.tmp`)
-    await writeFile(tmp, JSON.stringify(state, null, 2), 'utf-8')
-    await rename(tmp, target)
+    // 原子写（临时文件 + rename），对 Windows 只读 / 同步锁 EPERM 做兜底；写入中途崩溃不会留下半个 json
+    await atomicWrite(target, JSON.stringify(state, null, 2))
   } catch {
     // 会话持久化失败不该干扰编辑，静默即可
   }
