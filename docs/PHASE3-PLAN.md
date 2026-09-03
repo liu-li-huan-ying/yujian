@@ -197,6 +197,8 @@ Phase 3 新增两条：
 * **索引必须增量**：vault 大时全量重建会卡；接 watcher 只重解析变动文件，用 `mtime` 校验一致性。
 * **索引可丢**：`.mdeditor/` 是可删缓存，索引缺失必须静默重建，不能弹错。
 * **图谱性能**：`d3-force` 的 tick 持续重排，大库务必限节点 + 采样，必要时放 Web Worker。
+* **第三方组件（Crepe / Milkdown）样式定制前，先查真实 DOM 与着色选择器，勿对伪元素想当然**：列表标记是 Crepe `listItemBlock` 渲染的**真实元素** `li.list-item > .label-wrapper > Icon.label`（⦿ / 序号 / 复选框），**既非原生 `::marker` 也不存在 `li::before`**；着色链是 Crepe 自带的 `.label-wrapper { color: var(--crepe-color-outline) }` + `.label-wrapper svg { fill: … }`。曾误改 `ol > li::before` / `ul:not(.milkdown-list-item-block) > li::before`（且后者因 ul 本身带该 class 而**永不命中**），等于在改一个不渲染的东西，白改三轮表现为「亮度怎么调看起来都一样」。另注意 class 长在自身还是父级：`.checked` 就长在 svg **自身**上 → 须写 `svg.checked`，写成 `.checked svg`（找 `.checked` 的后代 svg）匹配不到任何元素、勾选态**静默失效**。细化见 `docs/ARCHITECTURE.md` §5.7.1。
+* **改样式后 preview 实测无效，先 clean rebuild 排除构建缓存**：`npm run dev` = `electron-vite preview`，服务静态产物 `out/`、**无 HMR**（改 `src/` 后必须重建 `out/` 并重启应用）。vite 构建缓存还可能复用旧 `tokens.css`（即便源码已改）造成产物陈旧，同样表现为「改了跟没改一样」。故先 `rm -rf out node_modules/.vite` 再 `npm run build` 验证，**确认产物里已是新值**后，再去怀疑选择器 / 特异性。
 
 ***
 

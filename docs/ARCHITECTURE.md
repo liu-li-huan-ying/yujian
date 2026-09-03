@@ -801,6 +801,31 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 编辑器内容区样式与导出模板共用同一套 CSS，保证一致性
 * 跟随系统深色模式
 
+#### 5.7.1 列表标记定制：改 Crepe 渲染的真实元素（2026-09-03）
+
+**亮度基线**：`--hue-list-marker` = `--hue-text-2`（暗 / 亮两模式同值），照搬浮块图标
+「从暗淡改明亮」的经验——浮块图标由 `on-surface-variant`（text-3）提到 text-2，强调态用 `--hue-accent`。
+
+**作用对象**：Crepe `listItemBlock` 为每个列表项渲染**真实标记元素**，内容由
+`defaultListItemBlockConfig.renderLabel` 给出——无序 `'⦿'` / 有序真实序号 / 任务复选框：
+
+```html
+<li class="list-item">
+  <div class="label-wrapper"><Icon class="label bullet|ordered|checked|unchecked" /></div>
+  <div class="children">…</div>
+</li>
+```
+
+故直接覆盖 `.label-wrapper` / `.label` 的 `color` 与 `svg` 的 `fill`（两种渲染形态都覆盖；
+选择器与 Crepe 同特异性、但排在其后故生效），已勾选用 `svg.checked { fill: var(--hue-accent) }`。
+取代 Crepe 默认映射到 `--hue-border-subtle`（极暗）的 `--crepe-color-outline`。
+
+⚠️ **两个必避的坑**（详见 `PHASE3-PLAN.md` §4）：
+1. 标记**既非原生 `::marker`，也不存在 `li::before`**——改 `::before` 是改了个不渲染的东西，
+   表现为「亮度怎么调看起来都一样」。
+2. `.checked` class **就长在 svg 自身上**，须写 `svg.checked`；写成 `.checked svg`
+   匹配不到任何元素，勾选态静默失效。
+
 ### 5.8 启动偏好（Startup preference）
 
 用户可决定每次打开应用时看到什么，配置项位于标题栏「偏好设置」：
