@@ -413,17 +413,11 @@
 
 /* ── 列表标记亮度：照搬浮块图标「从暗淡改明亮」经验 ──────────────
    浮块图标由 on-surface-variant(text-3) 提到 --hue-text-2 提亮、强调态用 --hue-accent；
-   列表标记同法——基底改 --hue-text-2，已勾选任务用 --hue-accent（见 editor.css）。
-   不再用近白+光晕的自创方案；基底随 --hue-text-2 自动跟随各皮肤。 */
+   列表标记同法——基底 --hue-text-2，已勾选 --hue-accent（见 editor.css 列表段）。
+   供给 Crepe 真正渲染的 .label 标记；不再用近白+光晕的自创方案。 */
 [data-mode='dark'] {
-  /* 照搬浮块图标「从暗淡改明亮」的经验：浮块图标由 on-surface-variant(text-3) 提到
-     --hue-text-2 提亮、强调态用 --hue-accent；列表标记同法——基底改 text-2，已勾选用 accent。 */
   --hue-list-marker: var(--hue-text-2);
-  --hue-list-glow-text: none;
-  --hue-list-glow-dot: none;
 }
 [data-mode='light'] {
   --hue-list-marker: var(--hue-text-2);
-  --hue-list-glow-text: none;
-  --hue-list-glow-dot: none;
 }
