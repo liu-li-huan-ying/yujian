@@ -1130,6 +1130,16 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
   * ⚠️ 导出文档正文/代码字体（`docTemplate.ts`/`epub.ts` 用 Noto Sans SC / Sarasa Mono SC）属「跨机器可读性 vs 品牌一致性」取舍，暂维持可读性优先，未强制改 Maple Mono（详见 §5.19 待确认项）。
 * 取舍：全家族 18 款约 370MB，仅打包常用的 6 款（约 123MB）；若需更细字重（Thin/Light/ExtraBold）再补 `@font-face` 与 TTF 即可。
 
+### 5.20 侧栏文件树：以人为本的自然排序（2026-09-04）
+
+* **问题**：原 `scan`（`electron/main/vault.ts`）用 `name.localeCompare(name, 'zh-Hans-CN')` 排序，但 `localeCompare` 默认**不按数值比较**，导致「第10章」排到「第2章」前面、「file10」压在「file9」之上——典型的字典序反人类表现。
+* **方案**：替换比较器为 `Intl.Collator('zh-Hans-CN', { numeric: true, sensitivity: 'base' })`（模块级单例 `humanCollator` + `humanCompare`）。效果与 Windows 资源管理器 / macOS Finder 一致：
+  * 数字按**数值**而非字典序（`2 < 10`，「第2章」<「第10章」）；
+  * 中文按**拼音**、英文按字母；
+  * `sensitivity:'base'` → 忽略大小写与重音（`Apple` = `apple`）；
+  * 仍保持**文件夹优先于文件**（类型不同的短路判断不变）。
+* 排序是主进程 `scan` 的唯一来源；前端 `FileTree.vue` / `Sidebar.vue` 直接渲染已排好序的 `node.children`，无二次排序，改一处全收口。
+
 ***
 
 ## 6. 技术写作场景专项设计
