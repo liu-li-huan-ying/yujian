@@ -1102,6 +1102,20 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ***
 
+### 5.18 安装即自带《使用说明》（欢迎文档播种）
+
+> 对应需求：用户安装软件后，笔记库应默认自带一份详尽的使用说明。
+
+* **规范源文件**：`resources/使用说明.md`（与用户笔记库内的 `使用说明.md` 同源、内容一致），随包发布——`package.json` 的 electron-builder `build.extraResources` 把 `resources/` 复制到安装包的 `resources/` 目录（`process.resourcesPath/resources/使用说明.md`）。
+* **播种时机**：主进程 `electron/main/index.ts` 的 `VAULT_WATCH` 处理器在建立库监听后，**异步**调用 `seedWelcomeDoc(root)`。
+* **播种规则（克制、尊重用户）**：
+  * 仅当库根目录**不存在** `使用说明.md` **且没有任何** `.md`/`.markdown` 笔记（即全新空库）时才写入；
+  * 已有笔记的文件夹（如用户的旧库）**不污染**；用户删掉的《使用说明》**不会被重新塞回**；
+  * 源文件按 `process.resourcesPath/resources/使用说明.md`（生产） → `app.getAppPath()/resources/使用说明.md`（开发预览）顺序探测，缺失则静默跳过。
+* 播种失败（权限/路径异常）整体 `try/catch` 吞掉，**绝不影响正常打开库**。
+
+***
+
 ## 6. 技术写作场景专项设计
 
 | 能力          | 实现                                   | 阶段 |
