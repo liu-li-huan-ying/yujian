@@ -37,7 +37,10 @@ async function ensureMermaid(): Promise<MermaidApi> {
       startOnLoad: false,
       // 严格模式：净化渲染输出，防止不可信 markdown 里的脚本被执行
       securityLevel: 'strict',
-      theme
+      theme,
+      // 图表文字统一用品牌等宽字体（与编辑器其余特殊格式保持一致）；
+      // 末尾 mono 兜底，万一 Maple Mono 未加载也不至于变成默认无衬线。
+      fontFamily: "'Maple Mono', ui-monospace, 'Sarasa Mono SC', Consolas, monospace"
     })
     appliedTheme = theme
   }

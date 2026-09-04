@@ -295,7 +295,7 @@ export function buildExportHtml(bodyHtml: string, title: string, opts: ExportOpt
       pre.parentNode.replaceChild(div, pre);
     });
     if (window.mermaid) {
-      mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+      mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', fontFamily: "'Maple Mono', ui-monospace, 'Sarasa Mono SC', Consolas, monospace" });
       mermaid.run();
     }
   });
