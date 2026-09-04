@@ -13,6 +13,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Icon from './Icon.vue'
+import TagChip from './TagChip.vue'
 import { useI18n } from '../i18n'
 import type { MocGroup, MocItem, TagNoteItem } from '../../electron/shared/ipc-channels'
 
@@ -236,9 +237,10 @@ onBeforeUnmount(() => {
               @click="openNote(m)"
             >
               <span class="row__top"><span class="row__file">{{ m.title || m.base }}</span></span>
-              <span class="row__dir">
-                {{ m.tags.length ? m.tags.map((x) => '#' + x).join(' ') : fileDir(m.path) }}
+              <span v-if="m.tags.length" class="row__tags">
+                <TagChip v-for="tg in m.tags" :key="tg" :name="tg" />
               </span>
+              <span v-else class="row__dir">{{ fileDir(m.path) }}</span>
             </button>
           </li>
         </ul>
@@ -568,6 +570,13 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 有标签时：玉质芯片 flex-wrap 平铺（替换原先裸写的 #标签 串） */
+.row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
 }
 .moc__spin {
   animation: moc-spin 0.9s linear infinite;

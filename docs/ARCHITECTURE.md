@@ -1062,7 +1062,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 * 玻璃浮层，入口：标题栏「更多 ⌄ · 标签」（`Icon` 新增 `tag` 书签图标 + `chevron-right` 箭头）。
 * 两视图：`browse`（标签树，按 `/` 嵌套、可展开/折叠、可过滤）→ 点击标签名钻入 `notes`（面包屑 `全部标签 / 父 / 子` + 该标签及全部子标签旗下笔记列表，点击打开）。
-* 设计令牌（见 `docs/PHASE3-UI-DESIGN.md` §4.2）：标签项 28px、# 走 `--hue-text-3`、标签名走 `--hue-text-1`；嵌套缩进每级 14px；选中态 `--hue-active` 底 + 左侧 2px accent 竖条；计数徽标 `min-width:20px` 钉死居中；`role=tree/treeitem` + `aria-expanded`。
+* 设计令牌（见 `docs/PHASE3-UI-DESIGN.md` §4.2）：标签项 28px，标签名渲染为玉质药丸芯片 `TagChip`（中性玉色渐变 + 1px 玉色描边 + 5px 圆角，`#` 走 `--hue-text-3`、标签名走 `--hue-text-1`，与编辑器内联 `.yj-tag__label` 同族）；嵌套缩进每级 14px；选中态 `--hue-active` 底 + 左侧 2px accent 竖条；计数徽标 `min-width:20px` 钉死居中并推至右缘对齐；`role=tree/treeitem` + `aria-expanded`。
 * **实时刷新（2026-09-04 修复）**：面板挂载时订阅 `window.api.onVaultChange`（preload 现返回取消订阅句柄，卸载时清理避免泄漏）；库内任意改动（正文加 `#标签`、重命名等）经 250ms 防抖后自动重拉 `listTags`，杜绝「明明加了标签面板却没动」的割裂感。
 * **重建索引兜底**：底部「重建索引」按钮（`window.api.rebuildIndex`，IPC `vault:indexRebuild`）走统一索引层 `buildIndex` + `saveIndex`，完成后自刷新并通知 App 弹 toast；防陈旧缓存兜底。
 
