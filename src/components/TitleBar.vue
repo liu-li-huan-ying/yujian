@@ -65,6 +65,7 @@ const emit = defineEmits<{
   (e: 'toggle-outline'): void
   (e: 'toggle-snapshot'): void
   (e: 'toggle-focus'): void
+  (e: 'language'): void
 }>()
 
 const L = i18n.ui
@@ -171,23 +172,26 @@ function onExportSelect(action: string): void {
   }
 }
 
-/* ── 更多下拉（设置 / 文件）── */
+/* ── 更多下拉（按「知识 / 工具 / 设置 / 文件」分组，消除长列表观感）── */
 const moreItems = (): MenuEntry[] => [
-  { action: 'img-host', label: L.imgHost, icon: 'image' },
-  { action: 'preferences', label: L.preferences, icon: 'sliders' },
-  { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
-  { action: 'link-check', label: L.linkCheck, icon: 'link' },
+  { separatorTitle: L.menuGroupKnowledge },
   { action: 'backlinks', label: L.backlinks, icon: 'backlink' },
   { action: 'tags', label: L.tags, icon: 'tag' },
   { action: 'moc', label: L.moc, icon: 'map' },
+  { separatorTitle: L.menuGroupTools },
+  { action: 'link-check', label: L.linkCheck, icon: 'link' },
   { action: 'insert-wikilink', label: i18n.toolbar.insertWikilink, icon: 'link' },
   { action: 'writing-aids', label: L.writingAids.title, icon: 'writing' },
   { action: 'integrity', label: L.integrity, icon: 'shield' },
   { action: 'backup', label: L.backup, icon: 'archive' },
-  { separator: true },
+  { action: 'img-host', label: L.imgHost, icon: 'image' },
+  { separatorTitle: L.menuGroupSettings },
+  { action: 'language', label: L.language, icon: 'globe' },
+  { action: 'preferences', label: L.preferences, icon: 'sliders' },
+  { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
+  { separatorTitle: L.menuGroupFile },
   { action: 'save', label: L.save, icon: 'file', hint: 'Ctrl S' },
   { action: 'save-as', label: L.saveAs, icon: 'file' },
-  { separator: true },
   { action: 'about', label: L.about, icon: 'book' },
 ]
 
@@ -225,6 +229,9 @@ function onMoreSelect(action: string): void {
       break
     case 'backup':
       emit('backup')
+      break
+    case 'language':
+      emit('language')
       break
     case 'save':
       emit('save')

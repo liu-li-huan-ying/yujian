@@ -892,7 +892,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * **段落级 cherry-pick（Phase C，UI 已打磨）**：diff 预览按「变更段」聚合成 hunk（相邻变更合并 + ±1 行上下文 + 边界不重叠），每个 hunk 头部标「新增/删除/修改」kind 标签（配 plus/minus/writing 图标）+ GitHub 风格行号范围 `@@ -o,s +n,s @@` + 「摘取」按钮（`snapshotPick`）；diff 头部标注**摘取来源**（快照备注或 B 侧），并提供**统一 / 并排**切换（并排即 GitHub split：左旧右新、del+add 配对、ctx 两侧对齐，面板加宽至 580px）。内联着色沿用 Google Docs 风格（add 绿底+`+` 槽、del 红底+`−` 槽、ctx 灰底+`·` 槽），摘取后整块短暂高亮 + 「已摘取」微态。摘取把该段**对比方（旧版/B）侧**内容经 `App.vue→EditorHost.insertText→MilkdownEditor.insertMarkdownAtCursor` 插入当前文档光标处；所见即所得下用 `parserCtx` 解析为 ProseMirror 节点再 `tr.insert`（语法正确渲染），失败兜底整篇重灌追加。`SnapshotPanel` 经 `@pick` 向 `App.vue` 发文本，`onSnapshotPick` 调 `host.insertText` + toast。
 * **分支 UI（Phase B）**：分支 chips（分支名 + 份数）+「+ 另起草稿」内联输入，以**当前正文** Fork 出独立时间轴；同名分支只切换不重建；保存快照写入当前分支；标签筛选作用域 = 当前分支；草稿分支下「恢复」语义变为**「采纳到主稿」**（载入编辑器成为正文并自动切回主线），右键菜单同步；切分支清掉不在该分支的选中项；A↔B 对比**允许跨分支**。未做「删除整个分支」——删净分支内快照即自然消失，规避批量删除。
 * IPC：通道 `snapshot:list` / `snapshot:create` / `snapshot:restore` / `snapshot:delete` / `snapshot:setTags`（Phase A 新增）在 `electron/shared/ipc-channels.ts` 集中定义；preload 暴露 `window.api.snapshotList/Create/Restore/Delete/SetTags`（类型自动派生）；`main/index.ts` 注册对应 handler。**Phase B 未新增通道**——分支清单由列表派生；同时修正 preload 与 main handler 此前会**丢弃 `tags`** 的缺陷，现 `note/tags/branch` 三参全链路透传。
-* 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**；`setTags`；Phase B 增 `activeBranch` / `branches`（派生，主线恒排最前）/ `branchList`，`refresh` 兜底回落主线）；玻璃 `SnapshotPanel.vue`（锚定 `.editor` 右上）：视图切换、分支 chips、备注输入 + 保存、标签筛选 chips、A↔B 任意两点对比、标签 chips 内联增删、左侧时间 + 备注 + 字数差 `deltaChars`、选中→`snapshotRestore` 只读返回→行级 diff 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
+* 前端：`src/store/snapshots.ts`（Pinia，**只缓存当前文档的快照列表，不持有内容**；`setTags`；Phase B 增 `activeBranch` / `branches`（派生，主线恒排最前）/ `branchList`，`refresh` 兜底回落主线）；玻璃 `SnapshotPanel.vue`（现已中和浮层样式、停靠进**右栏视图 tab「快照」**：`App.vue` 切到该 tab 即渲染进右栏，并由 `watch([rightTab,filePath,outlineVisible])` 在切到快照 tab 时触发 `snapshots.refresh` 拉取）：视图切换、分支 chips、备注输入 + 保存、标签筛选 chips、A↔B 任意两点对比、标签 chips 内联增删、左侧时间 + 备注 + 字数差 `deltaChars`、选中→`snapshotRestore` 只读返回→行级 diff 预览、右下恢复/删除 + 右键 `ContextMenu`（restore/delete danger）、空态文案。恢复走 `EditorHost.loadMarkdownExternal`（灌入 + 标 dirty + 自动保存），**不立即覆盖磁盘原文**（守 §5.2 保真红线）。
 * 行级 diff 库选型修正：原计划写 `jsdiff`，但 `jsdiff@1.1.1` 实为「JSON 对象 diff」库（装配错误）；正确库是 `diff@^7.0.0`（`diffLines`），已在 `package.json` 落地，`jsdiff` 已卸载；无类型的 `diff@7` 在 `src/types/diff.d.ts` 补了环境声明。
 * 自动快照策略（防抖保存 + 定时）已留接口；批次二先落地「手动留档 + 行级 diff 预览 + 回滚」闭环，自动策略在后续打磨中接入同一 `snapshotCreate`。
 * ✅ **状态：已于 2026-08-30 由用户运行期验证可用**（基础留档/看 diff/恢复/删除），**git 化 Phase A（标签/任意两点对比/哈希去重/index 元数据/向后兼容迁移）、Phase B（时间轴血缘视图/轻量草稿分支）、Phase C（段落级 cherry-pick）均于 2026-08-31 落地**（typecheck + build 通过，待用户运行期验收）。原「⚠ 实现但未测试」标注已从 `SnapshotPanel.vue` 代码注释、面板 UI 横幅与本小节移除。
@@ -1027,7 +1027,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **C. 反链面板（`src/components/BacklinksPanel.vue`）**
 
-* 玻璃浮层，入口：标题栏「更多 ⌄ · 反链」（`Icon` 新增 `backlink` 三节点图标）。
+* **停靠面板**（由 `RailView` 中和浮层样式为轨道公民），入口：右栏视图 tab「反链」（`Icon` 新增 `backlink` 三节点图标；`App.vue` 切到该 tab 即渲染进右栏）。
 * 消费索引已派生的 `backLinks`，经 `getBacklinksWithContext(root, absPath)`（IPC `vault:getBacklinks`）抽出每条来源笔记的**引用行 + 上下文片段**（`BacklinkItem { path, line, snippet }`）。
 * 列表行展示来源文件名 / 行号 / 引用片段，点击 → `onOpenResult`（复用搜索跳转，打开并 `revealLine`）。
 * 切文档 / 重命名 / 删除后随 watcher 刷新索引，面板 `watch(activePath)` 静默刷新；无库 / 无打开文档 / 空反链均有温和空态。
@@ -1060,7 +1060,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **C. 标签面板（`src/components/TagPanel.vue`）**
 
-* 玻璃浮层，入口：标题栏「更多 ⌄ · 标签」（`Icon` 新增 `tag` 书签图标 + `chevron-right` 箭头）。
+* **停靠面板**，入口：左栏视图 tab「标签」（`Icon` 新增 `tag` 书签图标 + `chevron-right` 箭头；`App.vue` 切到该 tab 即渲染进左栏）。
 * 两视图：`browse`（标签树，按 `/` 嵌套、可展开/折叠、可过滤）→ 点击标签名钻入 `notes`（面包屑 `全部标签 / 父 / 子` + 该标签及全部子标签旗下笔记列表，点击打开）。
 * 设计令牌（见 `docs/PHASE3-UI-DESIGN.md` §4.2）：标签项 28px，标签名渲染为玉质药丸芯片 `TagChip`（中性玉色渐变 + 1px 玉色描边 + 5px 圆角，`#` 走 `--hue-text-3`、标签名走 `--hue-text-1`，与编辑器内联 `.yj-tag__label` 同族）；嵌套缩进每级 14px；选中态 `--hue-active` 底 + 左侧 2px accent 竖条；计数徽标 `min-width:20px` 钉死居中并推至右缘对齐；`role=tree/treeitem` + `aria-expanded`。
 * **实时刷新（2026-09-04 修复）**：面板挂载时订阅 `window.api.onVaultChange`（preload 现返回取消订阅句柄，卸载时清理避免泄漏）；库内任意改动（正文加 `#标签`、重命名等）经 250ms 防抖后自动重拉 `listTags`，杜绝「明明加了标签面板却没动」的割裂感。
@@ -1096,7 +1096,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **C. 内容地图面板（`src/components/MocPanel.vue`）**
 
-* 玻璃浮层，入口：标题栏「更多 ⌄ · 内容地图」（`Icon` 新增 `map` 图标）。
+* **停靠面板**，入口：左栏视图 tab「内容地图(MOC)」（`Icon` 新增 `map` 图标；`App.vue` 切到该 tab 即渲染进左栏）。
 * **一键标记 / 取消标记（2026-09-04 修复，关键可用性）**：面板头部常驻「标记为内容地图 / 取消标记」按钮（`emit('toggle-moc')` → `App.onToggleMoc` 读 `host.getMarkdown()` → `parseFrontmatter` 切 `data.moc` → `serializeFrontmatter` 回写 → `host.loadMarkdownExternal` 落盘）。此前「把笔记变成 MOC」的入口深埋在写作辅助 · 属性面板底部复选框，用户根本发现不了，导致库内 `moc: true` 长期为 0、MOC 面板永远空。现在在 MOC 面板内即可就地操作。
 * 两种状态：
   * 当前文档是 MOC（`mocs` 清单含 `activePath`）→ 按上述三组分区渲染，每组可折叠（twisty `chevron-right` 旋转 90°）、计数徽标 `min-width` 钉死居中（动态布局铁律 #2）、`truncated` 提示；点击笔记 → `onOpenResult` 打开。
