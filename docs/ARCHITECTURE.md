@@ -1122,7 +1122,8 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 字体族名取自 TTF 内部 `family_name`：`Maple Mono`（文件名为 `MapleMono-NF-CN-*.ttf`，含中文与 Nerd Font 符号）。
 * 引入方式：`src/styles/fonts.css` 以 `@font-face` 声明核心 6 款字重（Regular/Medium/SemiBold/Bold + Italic/BoldItalic），经 `main.ts` 在最前 import；Vite 把 TTF 打进 `out/renderer/assets`。
 * **特殊效果字体分级策略**（2026-09-04 细化）：改默认字体后，对「特殊格式」按「能否改用 Maple Mono」做了分级——
-  * ✅ 自动继承：代码块/行内代码（`--font-mono`）、表格/引用/标题/标注/frontmatter（`--font-ui`）——两个根令牌带头 Maple Mono 后已自动生效，无需额外改动。
+  * ✅ 自动继承：代码块/行内代码（`--font-mono`）、表格/引用/正文/标注/frontmatter（`--font-ui`）——两个根令牌带头 Maple Mono 后已自动生效，无需额外改动。
+  * ✅ **标题（H1–H6）改用 Maple Mono**：踩坑点——Crepe 用独立令牌 `--crepe-font-title`（各主题默认 `Georgia` 衬线）渲染标题，绕过了我们的 `--font-ui`；我们原本只在 `.milkdown .ProseMirror` 显式设了 body 字体，标题无声明 → 落到 Crepe 衬线默认（即用户目测「H1 往下仍是旧字体」的根因）。已在 `src/styles/editor.css` 的 `.milkdown` 块把 `--crepe-font-title` / `--crepe-font-default` / `--crepe-font-code` 一并重映射为 `--font-ui` / `--font-mono`，与旁边 `--crepe-color-*` 重映射同套路，一处收口；构建产物已含 `--crepe-font-title: var(--font-ui)`。
   * ✅ 已改为 Maple Mono：**Mermaid 图**。其文字由 mermaid 库按 `fontFamily` 配置渲染，原先用默认 `trebuchet ms`；现于三处 `mermaid.initialize` 统一设 `fontFamily: "'Maple Mono', ui-monospace, 'Sarasa Mono SC', Consolas, monospace"`（Editor 预览 `features/mermaid.ts`、离线导出 SVG `export/mermaidSvg.ts`、HTML 导出 CDN `export/docTemplate.ts`），与编辑器其余特殊格式观感一致。
   * ❌ 保持原样：**数学公式（MathJax）**——渲染为自包含 SVG 字形路径，字体是 MathJax 内部字形，与 CSS 字体无关，强行换会破坏公式；**图标**——`Icon.vue` 内联 SVG 路径（Lucide），非文字字体。二者均不动。
   * ⚠️ 导出文档正文/代码字体（`docTemplate.ts`/`epub.ts` 用 Noto Sans SC / Sarasa Mono SC）属「跨机器可读性 vs 品牌一致性」取舍，暂维持可读性优先，未强制改 Maple Mono（详见 §5.19 待确认项）。

@@ -36,6 +36,13 @@
   --crepe-color-inline-area: var(--hue-code);
   --crepe-shadow-1: var(--hue-shadow-1);
   --crepe-shadow-2: var(--hue-shadow-2);
+  /* ── 字体令牌重映射：让 Crepe 的标题/正文/代码统一走我们的默认字体 ──
+     若不接，标题会落到 Crepe 主题的 --crepe-font-title（默认 Georgia 衬线，
+     即用户目测到的「H1 往下仍是旧字体」），正文/代码也会各用 Crepe 默认栈。
+     这里全收口到 --font-ui / --font-mono（二者首位均为 Maple Mono）。 */
+  --crepe-font-default: var(--font-ui);
+  --crepe-font-title: var(--font-ui);
+  --crepe-font-code: var(--font-mono);
 }
 
 /* ── 编辑区画布：纯净实色，内容列宽 720 居中 ──
