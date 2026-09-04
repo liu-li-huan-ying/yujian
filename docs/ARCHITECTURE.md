@@ -1132,12 +1132,14 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ### 5.20 侧栏文件树：以人为本的自然排序（2026-09-04）
 
-* **问题**：原 `scan`（`electron/main/vault.ts`）用 `name.localeCompare(name, 'zh-Hans-CN')` 排序，但 `localeCompare` 默认**不按数值比较**，导致「第10章」排到「第2章」前面、「file10」压在「file9」之上——典型的字典序反人类表现。
-* **方案**：替换比较器为 `Intl.Collator('zh-Hans-CN', { numeric: true, sensitivity: 'base' })`（模块级单例 `humanCollator` + `humanCompare`）。效果与 Windows 资源管理器 / macOS Finder 一致：
-  * 数字按**数值**而非字典序（`2 < 10`，「第2章」<「第10章」）；
-  * 中文按**拼音**、英文按字母；
-  * `sensitivity:'base'` → 忽略大小写与重音（`Apple` = `apple`）；
-  * 仍保持**文件夹优先于文件**（类型不同的短路判断不变）。
+* **问题（两轮迭代）**：原 `scan`（`electron/main/vault.ts`）用 `name.localeCompare(name, 'zh-Hans-CN')` 排序，但 `localeCompare` 默认**不按数值比较**，导致「第10章」排到「第2章」前、「file10」压「file9」之上（字典序反人类）。第一轮修成 `Intl.Collator(numeric:true)` 后，阿拉伯数字已正确，但用户实测发现**中文数字词「第一章/第五章/第七章」仍按拼音排**（七 qī、五 wǔ、一 yī），因为 `numeric:true` 只认阿拉伯数字串、对中文数字词无感。
+* **方案（中文章节感知的自然排序）**：`humanCompare` 改为「token 化 + 中文数字解析」——把字符串拆成片段，数值段（阿拉伯数字串 **与** 中文数字词「一/五/七/十/百/千/万/亿…」）按数值比较，文字段按语种（`Intl.Collator('zh-Hans-CN', { sensitivity:'base' })`）比较。配套的 `parseCnNumber` 用数位累乘解析中文数字（覆盖「一十」「二十」「一千二百三十四」「一亿二千万」等）。效果与系统文件管理器一致且补齐中文数字短板：
+  * 阿拉伯数字按**数值**：「第2章」<「第10章」、`file9` < `file10`；
+  * 中文数字词按**数值**：「第一章」<「第五章」<「第七章」<「第十章」<「第十一章」<「第二十章」；
+  * 二者混排可互比（「第1章」与「第一章」同值并列，稳定）；
+  * 文字段按拼音 / 字母、忽略大小写（`Apple` = `apple`）；
+  * 仍保持**文件夹优先于文件**（类型短路判断不变）。
+* 设计依据（网络调研）：MDN 与多篇博客、开源库 `chinese_number_to_digits` 一致指出 `Intl.Collator` 的 `numeric` 仅处理阿拉伯数字，中文章节排序需先把中文数字转阿拉伯数值再自然排序。
 * 排序是主进程 `scan` 的唯一来源；前端 `FileTree.vue` / `Sidebar.vue` 直接渲染已排好序的 `node.children`，无二次排序，改一处全收口。
 
 ***
