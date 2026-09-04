@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, shell } from 'electron'
-import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { readFile, stat, unlink, writeFile, readdir, copyFile } from 'node:fs/promises'
 import { atomicWrite } from './atomicWrite'
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
@@ -308,12 +308,36 @@ function registerIpc(): void {
 
   // ── 笔记库 ──
 
+  /**
+   * 空库欢迎文档：全新空库首次打开时，自动放入随包发布的《使用说明》。
+   * 仅当库根不存在「使用说明.md」且没有任何 .md 笔记时播种，
+   * 既保证「安装即自带」，又绝不污染已有笔记文件夹、也尊重用户的删除。
+   */
+  async function seedWelcomeDoc(root: string): Promise<void> {
+    try {
+      const target = join(root, '使用说明.md')
+      if (existsSync(target)) return
+      const entries = await readdir(root)
+      if (entries.some((n) => /\.(md|markdown)$/i.test(n))) return
+      const candidates = [
+        join(process.resourcesPath, 'resources', '使用说明.md'),
+        join(app.getAppPath(), 'resources', '使用说明.md')
+      ]
+      const src = candidates.find((p) => existsSync(p))
+      if (!src) return
+      await copyFile(src, target)
+    } catch {
+      // 播种失败静默忽略，绝不影响正常使用
+    }
+  }
+
   ipcMain.handle(IPC.VAULT_LIST, async (_event, root: string) => listTree(root))
 
   ipcMain.handle(IPC.VAULT_WATCH, (_event, root: string) => {
     watchVault(root, (change: VaultChange) => {
       mainWindow?.webContents.send(IPC.VAULT_CHANGE, change)
     })
+    void seedWelcomeDoc(root)
   })
 
   ipcMain.handle(IPC.VAULT_UNWATCH, () => stopWatching())

@@ -88,6 +88,12 @@
       "build/icon.ico",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
     "win": {
       "icon": "build/icon.ico",
       "target": [
