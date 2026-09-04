@@ -28,12 +28,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'open', payload: { path: string; line: number }): void
+  /** 请求 App 把当前文档标记 / 取消标记为内容地图（写回 frontmatter，触发重索引） */
+  (e: 'toggle-moc'): void
+  /** 索引重建完成（App 据此弹 toast） */
+  (e: 'rebuilt'): void
 }>()
 
 const groups = ref<MocGroup[]>([])
 const mocs = ref<MocItem[]>([])
 const loading = ref(false)
+const rebuilding = ref(false)
 const error = ref<string | null>(null)
+/** 取消订阅 onVaultChange 的句柄（卸载时清理，避免泄漏） */
+let unsubscribeVaultChange: (() => void) | null = null
 /** 折叠状态：key = 组的稳定标识；默认全部展开 */
 const collapsed = ref<Set<string>>(new Set())
 
@@ -97,13 +104,47 @@ function fileDir(p: string): string {
 function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape') emit('close')
 }
+
+/** 把当前笔记标记为 / 取消标记为内容地图（实际写回交给 App，避免面板触碰保真层） */
+function toggleMoc(): void {
+  emit('toggle-moc')
+}
+
+/** 重建统一索引（兜底陈旧缓存），完成后自刷新并通知 App 弹 toast */
+async function onRebuild(): Promise<void> {
+  if (!props.vaultPath || rebuilding.value) return
+  rebuilding.value = true
+  try {
+    await window.api.rebuildIndex(props.vaultPath)
+    await load()
+    emit('rebuilt')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    rebuilding.value = false
+  }
+}
+
+// 实时刷新：库内任意改动（正文加 #标签、勾选「内容地图」经 App 写回并触发 vault change）
+// 都让本面板重新聚合，避免出现「明明改了但面板没动」的割裂感。
+let changeTimer: ReturnType<typeof setTimeout> | null = null
+function onVaultChange(): void {
+  if (changeTimer) clearTimeout(changeTimer)
+  changeTimer = setTimeout(() => void load(), 250)
+}
+
 // 切换文档时重新聚合（面板常开着切笔记）
 watch(() => props.activePath, () => void load())
 onMounted(() => {
   void load()
   window.addEventListener('keydown', onKey)
+  unsubscribeVaultChange = window.api.onVaultChange(onVaultChange)
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  unsubscribeVaultChange?.()
+  if (changeTimer) clearTimeout(changeTimer)
+})
 </script>
 
 <template>
@@ -112,6 +153,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <Icon name="map" :size="15" class="moc__icon" />
       <span class="moc__title">{{ L.mocTitle }}</span>
       <span v-if="isMoc && totalNotes > 0" class="moc__count">{{ totalNotes }}</span>
+      <button
+        v-if="props.activePath"
+        class="moc__act"
+        type="button"
+        :class="{ 'moc__act--active': isMoc }"
+        :title="isMoc ? L.mocUnmark : L.mocMark"
+        @click="toggleMoc"
+      >
+        <Icon :name="isMoc ? 'check' : 'star'" :size="14" />
+        <span>{{ isMoc ? L.mocUnmark : L.mocMark }}</span>
+      </button>
       <button class="moc__x" type="button" :title="L.mocClose" @click="emit('close')">
         <Icon name="x" :size="14" />
       </button>
@@ -192,6 +244,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </ul>
       </template>
     </div>
+
+    <div class="moc__foot">
+      <button
+        class="moc__rebuild"
+        type="button"
+        :disabled="rebuilding || !props.vaultPath"
+        :title="L.mocRebuild"
+        @click="onRebuild"
+      >
+        <Icon name="loader" :size="13" :class="{ 'moc__spin': rebuilding }" />
+        <span>{{ rebuilding ? L.mocRebuilding : L.mocRebuild }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -262,6 +327,75 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .moc__x:hover {
   background: var(--hue-active);
   color: var(--hue-text-1);
+}
+
+/* 标记 / 取消标记当前笔记为内容地图 */
+.moc__act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.moc__act:hover {
+  background: var(--hue-active);
+  color: var(--hue-text-1);
+  border-color: var(--hue-accent);
+}
+.moc__act--active {
+  color: var(--hue-on-accent);
+  background: var(--hue-accent);
+  border-color: var(--hue-accent);
+}
+.moc__act--active:hover {
+  filter: brightness(0.94);
+  color: var(--hue-on-accent);
+}
+
+/* 底部重建索引导航 */
+.moc__foot {
+  display: flex;
+  padding-top: 8px;
+  border-top: 1px solid var(--hue-border-subtle);
+}
+.moc__rebuild {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.moc__rebuild:hover:not(:disabled) {
+  background: var(--hue-active);
+  color: var(--hue-text-1);
+  border-color: var(--hue-accent);
+}
+.moc__rebuild:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .moc__body {

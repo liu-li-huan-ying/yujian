@@ -532,11 +532,11 @@ export async function listNoteTitles(root: string): Promise<NoteTitleItem[]> {
  * 并按 `/` 拆分推导出父级与层级深度，供标签面板渲染嵌套树。
  * 数据完全由索引的 tags 元数据派生，不读正文、不存原始图。
  */
-export async function listTags(root: string): Promise<TagItem[]> {
-  const index = await ensureIndex(root)
+export async function listTags(root: string, liveIndex?: VaultIndex): Promise<TagItem[]> {
+  const idx = liveIndex ?? (await ensureIndex(root))
   const count = new Map<string, number>()
-  for (const full of Object.keys(index.files)) {
-    for (const t of index.files[full].tags) {
+  for (const full of Object.keys(idx.files)) {
+    for (const t of idx.files[full].tags) {
       count.set(t, (count.get(t) ?? 0) + 1)
     }
   }
@@ -556,13 +556,17 @@ export async function listTags(root: string): Promise<TagItem[]> {
  * `#项目` 同时命中 `项目`、`项目/进行中`、`项目/完成` 等所有后代。
  * 纯索引元数据，不读正文。
  */
-export async function getNotesByTag(root: string, tag: string): Promise<TagNoteItem[]> {
-  const index = await ensureIndex(root)
+export async function getNotesByTag(
+  root: string,
+  tag: string,
+  liveIndex?: VaultIndex,
+): Promise<TagNoteItem[]> {
+  const idx = liveIndex ?? (await ensureIndex(root))
   const key = normalizeTag(tag).toLowerCase()
   if (!key) return []
   const out: TagNoteItem[] = []
-  for (const full of Object.keys(index.files)) {
-    const entry = index.files[full]
+  for (const full of Object.keys(idx.files)) {
+    const entry = idx.files[full]
     if (entry.tags.some((t) => t === key || t.startsWith(key + '/'))) {
       out.push(toNoteItem(full, entry))
     }
@@ -581,11 +585,11 @@ function toNoteItem(full: string, entry: IndexEntry): TagNoteItem {
  * 列出全库内容地图（frontmatter `moc: true`）。作为主题入口清单，
  * 当前文档不是 MOC 时面板用它给出可跳转的 MOC 列表。纯索引元数据。
  */
-export async function listMocs(root: string): Promise<MocItem[]> {
-  const index = await ensureIndex(root)
+export async function listMocs(root: string, liveIndex?: VaultIndex): Promise<MocItem[]> {
+  const idx = liveIndex ?? (await ensureIndex(root))
   const out: MocItem[] = []
-  for (const full of Object.keys(index.files)) {
-    const entry = index.files[full]
+  for (const full of Object.keys(idx.files)) {
+    const entry = idx.files[full]
     if (!entry.moc) continue
     const item = toNoteItem(full, entry)
     out.push({ ...item, tags: [...entry.tags].sort() })
@@ -607,9 +611,13 @@ const MAX_MOC_GROUP = 200
  *  - 组内去重并排除 MOC 自身（否则每个 MOC 都会把自己列进去）；
  *  - 全程只读索引元数据，不读正文（铁律 2）。
  */
-export async function getMocOutline(root: string, path: string): Promise<MocGroup[]> {
-  const index = await ensureIndex(root)
-  const self = index.files[path]
+export async function getMocOutline(
+  root: string,
+  path: string,
+  liveIndex?: VaultIndex,
+): Promise<MocGroup[]> {
+  const idx = liveIndex ?? (await ensureIndex(root))
+  const self = idx.files[path]
   if (!self) return []
 
   const groups: MocGroup[] = []
@@ -620,7 +628,7 @@ export async function getMocOutline(root: string, path: string): Promise<MocGrou
     let truncated = false
     for (const full of paths) {
       if (full === path) continue
-      const entry = index.files[full]
+      const entry = idx.files[full]
       if (!entry || seen.has(full)) continue
       seen.add(full)
       if (notes.length >= MAX_MOC_GROUP) {
@@ -638,8 +646,8 @@ export async function getMocOutline(root: string, path: string): Promise<MocGrou
   for (const tag of [...self.tags].sort()) {
     const key = tag.toLowerCase()
     const hit: string[] = []
-    for (const full of Object.keys(index.files)) {
-      const entry = index.files[full]
+    for (const full of Object.keys(idx.files)) {
+      const entry = idx.files[full]
       if (entry.tags.some((t) => t === key || t.startsWith(key + '/'))) hit.push(full)
     }
     buildGroup('tag', tag, hit)
@@ -647,7 +655,7 @@ export async function getMocOutline(root: string, path: string): Promise<MocGrou
   // 2. 它链出去的笔记（MOC 里手写的 [[...]] 目录）
   buildGroup('outlinks', '', self.outLinks)
   // 3. 指向它的笔记（把自己挂到该 MOC 的笔记）
-  buildGroup('backlinks', '', index.backLinks[path] ?? [])
+  buildGroup('backlinks', '', idx.backLinks[path] ?? [])
   return groups
 }
 

@@ -38,7 +38,7 @@ import type {
   IntegrityReport,
 } from '../electron/shared/ipc-channels'
 import { inlineImages } from './export/imageInline'
-import { parseFrontmatter } from './editor/frontmatter'
+import { parseFrontmatter, serializeFrontmatter } from './editor/frontmatter'
 import { type ExportKind } from './export/types'
 import {
   buildExportContent,
@@ -728,6 +728,24 @@ function onMoc(): void {
   mocOpen.value = true
 }
 
+/** 把当前文档标记为 / 取消标记为内容地图（切换 frontmatter 的 moc 字段，正文逐字保留）。
+   写回后编辑器保存会触发 vault 变更 → 面板经 onVaultChange 实时重聚合。 */
+function onToggleMoc(): void {
+  if (!filePath.value) return
+  const md = host.value?.getMarkdown?.() ?? ''
+  const { data, content } = parseFrontmatter(md)
+  if (data.moc) delete data.moc
+  else data.moc = true
+  const text = serializeFrontmatter(data, content)
+  host.value?.loadMarkdownExternal(text)
+  showToast(data.moc ? U.mocMarked : U.mocUnmarked, 'ok')
+}
+
+/** 索引重建完成（标签 / 内容地图面板触发）：弹 toast 告知 */
+function onIndexRebuilt(kind: 'tags' | 'moc'): void {
+  showToast(kind === 'tags' ? U.tagsRebuilt : U.mocRebuilt, 'ok')
+}
+
 /** 编辑器内点击 [[wikilink]] 芯片：解析目标 → 已存在则跳转，不存在则一键创建该笔记 */
 async function onWikilink(payload: { target: string; anchor?: string | null }): Promise<void> {
   if (!vaultPath.value) {
@@ -1285,6 +1303,7 @@ onBeforeUnmount(() => {
           :vault-path="vaultPath"
           @close="tagsOpen = false"
           @open="onOpenResult"
+          @rebuilt="onIndexRebuilt('tags')"
         />
 
         <MocPanel
@@ -1293,6 +1312,8 @@ onBeforeUnmount(() => {
           :active-path="filePath"
           @close="mocOpen = false"
           @open="onOpenResult"
+          @toggle-moc="onToggleMoc"
+          @rebuilt="onIndexRebuilt('moc')"
         />
 
         <IntegrityPanel

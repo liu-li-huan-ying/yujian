@@ -29,6 +29,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'open', payload: { path: string; line: number }): void
+  /** 索引重建完成（App 据此弹 toast） */
+  (e: 'rebuilt'): void
 }>()
 
 interface TagNode extends TagItem {
@@ -38,6 +40,7 @@ interface TagNode extends TagItem {
 
 const all = ref<TagItem[]>([])
 const loading = ref(false)
+const rebuilding = ref(false)
 const error = ref<string | null>(null)
 const filterQuery = ref('')
 const expanded = ref<Set<string>>(new Set())
@@ -164,11 +167,40 @@ function fileDir(p: string): string {
 function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape') emit('close')
 }
+
+/** 重建统一索引（兜底陈旧缓存），完成后自刷新并通知 App 弹 toast */
+async function onRebuild(): Promise<void> {
+  if (!props.vaultPath || rebuilding.value) return
+  rebuilding.value = true
+  try {
+    await window.api.rebuildIndex(props.vaultPath)
+    await loadTags()
+    emit('rebuilt')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    rebuilding.value = false
+  }
+}
+
+// 实时刷新：库内任意改动（正文加 #标签）都让标签树重算，避免「明明加了标签但面板没动」。
+let changeTimer: ReturnType<typeof setTimeout> | null = null
+let unsubscribeVaultChange: (() => void) | null = null
+function onVaultChange(): void {
+  if (changeTimer) clearTimeout(changeTimer)
+  changeTimer = setTimeout(() => void loadTags(), 250)
+}
+
 onMounted(() => {
   void loadTags()
   window.addEventListener('keydown', onKey)
+  unsubscribeVaultChange = window.api.onVaultChange(onVaultChange)
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  unsubscribeVaultChange?.()
+  if (changeTimer) clearTimeout(changeTimer)
+})
 </script>
 
 <template>
@@ -271,6 +303,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           </button>
         </li>
       </ul>
+      <div class="tags__foot">
+        <button
+          class="tags__rebuild"
+          type="button"
+          :disabled="rebuilding || !props.vaultPath"
+          :title="L.tagsRebuild"
+          @click="onRebuild"
+        >
+          <Icon name="loader" :size="13" :class="{ 'tags__spin': rebuilding }" />
+          <span>{{ rebuilding ? L.tagsRebuilding : L.tagsRebuild }}</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -582,5 +626,39 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   to {
     transform: rotate(360deg);
   }
+}
+
+/* 底部重建索引导航 */
+.tags__foot {
+  display: flex;
+  padding-top: 8px;
+  border-top: 1px solid var(--hue-border-subtle);
+}
+.tags__rebuild {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.tags__rebuild:hover:not(:disabled) {
+  background: var(--hue-active);
+  color: var(--hue-text-1);
+  border-color: var(--hue-accent);
+}
+.tags__rebuild:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 </style>

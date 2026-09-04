@@ -169,13 +169,20 @@ const api = {
   getMocOutline: (root: string, path: string): Promise<MocGroup[]> =>
     ipcRenderer.invoke(IPC.VAULT_GET_MOC_OUTLINE, root, path),
 
+  /** 索引是「可重建缓存」：手动重建（面板自愈 / 用户触发），返回重建后的文件数 */
+  rebuildIndex: (root: string): Promise<{ ok: boolean; files: number }> =>
+    ipcRenderer.invoke(IPC.VAULT_INDEX_REBUILD, root),
+
   watchVault: (root: string): Promise<void> => ipcRenderer.invoke(IPC.VAULT_WATCH, root),
 
   unwatchVault: (): Promise<void> => ipcRenderer.invoke(IPC.VAULT_UNWATCH),
 
-  /** 磁盘上的外部改动持续推来（别的编辑器保存、Git 切分支、资源管理器改名） */
-  onVaultChange: (callback: (change: VaultChange) => void): void => {
-    ipcRenderer.on(IPC.VAULT_CHANGE, (_event, change: VaultChange) => callback(change))
+  /** 磁盘上的外部改动持续推来（别的编辑器保存、Git 切分支、资源管理器改名）。
+     返回取消订阅函数，供短生命周期的浮层面板在卸载时清理监听，避免泄漏。 */
+  onVaultChange: (callback: (change: VaultChange) => void): (() => void) => {
+    const listener = (_event: unknown, change: VaultChange) => callback(change)
+    ipcRenderer.on(IPC.VAULT_CHANGE, listener)
+    return () => ipcRenderer.removeListener(IPC.VAULT_CHANGE, listener)
   },
 
   // ── 会话持久化（崩溃恢复）──

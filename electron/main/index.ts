@@ -24,7 +24,7 @@ import {
   type FileStat,
   type UnlinkedMention
 } from '../shared/ipc-channels'
-import { createDoc, createFolder, deleteItem, listTree, renameItem, moveItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks } from './vault'
+import { createDoc, createFolder, deleteItem, listTree, renameItem, moveItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks, getLiveIndex } from './vault'
 import * as VaultIndex from './vaultIndex'
 import * as VaultIntegrity from './vaultIntegrity'
 import * as VaultBackup from './vaultBackup'
@@ -415,17 +415,22 @@ function registerIpc(): void {
     async (_event, root: string, item: UnlinkedMention) =>
       VaultIndex.wrapUnlinkedMention(root, item)
   )
-  // 标签聚合：列出全部标签（含计数 / 层级），由索引派生不存原始图
-  ipcMain.handle(IPC.VAULT_LIST_TAGS, (_event, root: string) => VaultIndex.listTags(root))
+  // 标签聚合：列出全部标签（含计数 / 层级），由实时索引派生不存原始图。
+  // 走 watcher 维护的内存索引（getLiveIndex），避免回读有 800ms 延迟的磁盘快照。
+  ipcMain.handle(IPC.VAULT_LIST_TAGS, async (_event, root: string) =>
+    VaultIndex.listTags(root, await getLiveIndex(root)),
+  )
   // 标签聚合：按标签列出旗下笔记（点击标签面板条目时拉取）
-  ipcMain.handle(IPC.VAULT_GET_NOTES_BY_TAG, (_event, root: string, tag: string) =>
-    VaultIndex.getNotesByTag(root, tag),
+  ipcMain.handle(IPC.VAULT_GET_NOTES_BY_TAG, async (_event, root: string, tag: string) =>
+    VaultIndex.getNotesByTag(root, tag, await getLiveIndex(root)),
   )
   // 内容地图：列出全库 moc: true 的笔记（主题入口清单）
-  ipcMain.handle(IPC.VAULT_LIST_MOCS, (_event, root: string) => VaultIndex.listMocs(root))
+  ipcMain.handle(IPC.VAULT_LIST_MOCS, async (_event, root: string) =>
+    VaultIndex.listMocs(root, await getLiveIndex(root)),
+  )
   // 内容地图：某篇 MOC 的下级聚合（标签 / 出链 / 反链分组）
-  ipcMain.handle(IPC.VAULT_GET_MOC_OUTLINE, (_event, root: string, path: string) =>
-    VaultIndex.getMocOutline(root, path),
+  ipcMain.handle(IPC.VAULT_GET_MOC_OUTLINE, async (_event, root: string, path: string) =>
+    VaultIndex.getMocOutline(root, path, await getLiveIndex(root)),
   )
 
   // ── 会话持久化（崩溃恢复）──
