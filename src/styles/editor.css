@@ -207,6 +207,18 @@
   background: transparent;
   border-right: none;
 }
+/* ── 代码字体：强制 Maple Mono ───────────────
+   CodeMirror 基础主题（@codemirror/view）会给 .cm-content 注入
+   `font-family: monospace`，特异性压过我们对 .cm-editor 的继承，
+   导致代码块 / 源码模式的代码被钉成系统等宽、Maple Mono 不生效。
+   这里用更高特异性（.milkdown .milkdown-code-block .cm-content）
+   把代码文本收口到 --font-mono；源码模式的 .cm-content 一并覆盖。 */
+.milkdown .milkdown-code-block .cm-content,
+.milkdown .milkdown-code-block .cm-line,
+.source-host .cm-editor .cm-content,
+.source-host .cm-editor .cm-line {
+  font-family: var(--font-mono);
+}
 /* 源码预览标签（Mermaid 等）弱化，不再抢眼 */
 .milkdown .milkdown-code-block .preview-panel .preview-label {
   color: var(--hue-text-3);
