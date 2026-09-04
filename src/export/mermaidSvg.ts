@@ -21,7 +21,13 @@ export async function renderMermaidSvg(code: string): Promise<string | null> {
   if (!text) return null
   try {
     const mermaid = await loadMermaid()
-    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' })
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+      // 与编辑器预览保持一致：图表文字用品牌等宽字体；末尾 mono 兜底。
+      fontFamily: "'Maple Mono', ui-monospace, 'Sarasa Mono SC', Consolas, monospace"
+    })
     // id 必须唯一：mermaid 渲染期间会往文档临时挂节点，重名会互相干扰
     const { svg } = await mermaid.render(`yujian-mmd-${Date.now()}-${counter++}`, text)
     return svg ?? null
