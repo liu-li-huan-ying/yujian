@@ -1,0 +1,51 @@
+/* ============================================================
+   玉笺编辑器 · 默认字体 Maple Mono（NF / CN 变体）
+   - 族名取自字体内部 family_name："Maple Mono"
+   - 仅打包核心 6 款字重（Regular/Medium/SemiBold/Bold + Italic/BoldItalic）
+   - 数学公式（KaTeX/MathJax）、Mermaid 图、图标字体等「特殊效果」
+     由各自库独立加载，不受此处影响，保持原样。
+   - url 相对本文件（src/styles/）→ src/assets/fonts/maple-mono/
+   ============================================================ */
+
+@font-face {
+  font-family: 'Maple Mono';
+  src: url('../assets/fonts/maple-mono/MapleMono-NF-CN-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Maple Mono';
+  src: url('../assets/fonts/maple-mono/MapleMono-NF-CN-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Maple Mono';
+  src: url('../assets/fonts/maple-mono/MapleMono-NF-CN-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Maple Mono';
+  src: url('../assets/fonts/maple-mono/MapleMono-NF-CN-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Maple Mono';
+  src: url('../assets/fonts/maple-mono/MapleMono-NF-CN-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Maple Mono';
+  src: url('../assets/fonts/maple-mono/MapleMono-NF-CN-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}

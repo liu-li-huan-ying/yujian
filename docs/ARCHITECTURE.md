@@ -1116,6 +1116,16 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 ***
 
+### 5.19 默认字体：Maple Mono（2026-09-04）
+
+* 软件默认字体由 CSS 变量 `--font-ui` / `--font-mono`（`src/styles/tokens.css`）控制；二者首位均改为 `'Maple Mono'`，回退链保留原系统字体与 `Sarasa Mono SC`（中文缩进兜底）。
+* 字体族名取自 TTF 内部 `family_name`：`Maple Mono`（文件名为 `MapleMono-NF-CN-*.ttf`，含中文与 Nerd Font 符号）。
+* 引入方式：`src/styles/fonts.css` 以 `@font-face` 声明核心 6 款字重（Regular/Medium/SemiBold/Bold + Italic/BoldItalic），经 `main.ts` 在最前 import；Vite 把 TTF 打进 `out/renderer/assets`。
+* **特殊效果字体保持原样**：数学公式（KaTeX/MathJax）、Mermaid 图、图标字体均由其各自库独立加载，不依赖 `--font-ui`/`--font-mono`，故改动不影响它们。
+* 取舍：全家族 18 款约 370MB，仅打包常用的 6 款（约 123MB）；若需更细字重（Thin/Light/ExtraBold）再补 `@font-face` 与 TTF 即可。
+
+***
+
 ## 6. 技术写作场景专项设计
 
 | 能力          | 实现                                   | 阶段 |
