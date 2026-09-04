@@ -5,10 +5,11 @@
 
 :root {
   /* ── 结构层：排版 ───────────────────────────── */
+  /* 默认字体改为 Maple Mono（含中文与 Nerd Font 符号）；原系统字体与 Sarasa 仅作回退 */
   --font-ui:
-    -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif;
-  /* Sarasa Mono SC 不可省：技术写作含大量中文注释，缺失会导致缩进错乱 */
-  --font-mono: 'JetBrains Mono', 'Sarasa Mono SC', 'Cascadia Code', Menlo, Consolas, monospace;
+    'Maple Mono', -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif;
+  /* Sarasa Mono SC 保留为回退：技术写作含大量中文注释，缺失会导致缩进错乱 */
+  --font-mono: 'Maple Mono', 'Sarasa Mono SC', 'Cascadia Code', Menlo, Consolas, monospace;
 
   /* ── 结构层：尺寸 ───────────────────────────── */
   --h-titlebar: 38px;
