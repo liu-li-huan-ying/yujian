@@ -127,7 +127,19 @@ function isPermError(e: unknown): boolean {
   return code === 'EPERM' || code === 'EACCES'
 }
 
-/** 递归扫描，产出「目录在前、名称升序」的树；空目录也会保留（否则新建文件夹后侧栏看不到） */
+/**
+ * 以人为本的自然排序比较器：
+ * - numeric:true → 数字按数值而非字典序（「第2章」<「第10章」，而非反过来）；
+ * - 中文按拼音、英文按字母；sensitivity:'base' → 忽略大小写与重音；
+ * 与 Windows 资源管理器 / macOS Finder 的默认排序一致，符合人的正常认知。
+ * 模块级单例，避免每次比较都重建 Collator。
+ */
+const humanCollator = new Intl.Collator('zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+function humanCompare(a: string, b: string): number {
+  return humanCollator.compare(a, b)
+}
+
+/** 递归扫描，产出「目录在前、自然排序」的树；空目录也会保留（否则新建文件夹后侧栏看不到） */
 async function scan(dir: string): Promise<FileNode[]> {
   let entries
   try {
@@ -154,7 +166,7 @@ async function scan(dir: string): Promise<FileNode[]> {
 
   return out.sort((a, b) => {
     if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
-    return a.name.localeCompare(b.name, 'zh-Hans-CN')
+    return humanCompare(a.name, b.name)
   })
 }
 
