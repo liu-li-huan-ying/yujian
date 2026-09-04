@@ -1063,12 +1063,15 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 玻璃浮层，入口：标题栏「更多 ⌄ · 标签」（`Icon` 新增 `tag` 书签图标 + `chevron-right` 箭头）。
 * 两视图：`browse`（标签树，按 `/` 嵌套、可展开/折叠、可过滤）→ 点击标签名钻入 `notes`（面包屑 `全部标签 / 父 / 子` + 该标签及全部子标签旗下笔记列表，点击打开）。
 * 设计令牌（见 `docs/PHASE3-UI-DESIGN.md` §4.2）：标签项 28px、# 走 `--hue-text-3`、标签名走 `--hue-text-1`；嵌套缩进每级 14px；选中态 `--hue-active` 底 + 左侧 2px accent 竖条；计数徽标 `min-width:20px` 钉死居中；`role=tree/treeitem` + `aria-expanded`。
+* **实时刷新（2026-09-04 修复）**：面板挂载时订阅 `window.api.onVaultChange`（preload 现返回取消订阅句柄，卸载时清理避免泄漏）；库内任意改动（正文加 `#标签`、重命名等）经 250ms 防抖后自动重拉 `listTags`，杜绝「明明加了标签面板却没动」的割裂感。
+* **重建索引兜底**：底部「重建索引」按钮（`window.api.rebuildIndex`，IPC `vault:indexRebuild`）走统一索引层 `buildIndex` + `saveIndex`，完成后自刷新并通知 App 弹 toast；防陈旧缓存兜底。
 
 **D. 聚合 API（由索引派生，不存原始图）**
 
 * `listTags(root)`（IPC `vault:listTags`）：统计每枚标签命中文件数，按 `/` 推导父级与深度，返回 `TagItem { name, count, parent, depth }`（前端据此在面板构建嵌套树）。
 * `getNotesByTag(root, tag)`（IPC `vault:getNotesByTag`）：返回该标签及全部子标签旗下笔记 `TagNoteItem { path, title, base }`（父标签含子标签语义）。
-* 三进程均经既有 IPC + preload 通道暴露，沿用 `ensureIndex` 静默重建契约；无新增索引层字段。
+* **聚合一律走 watcher 维护的实时内存索引**（`vault.ts` 的 `getLiveIndex`，IPC 处理器改为 `VaultIndex.<fn>(root, await getLiveIndex(root))`）：此前四函数内部 `ensureIndex` 每次回读磁盘 JSON，而磁盘快照有 800ms 防抖落盘延迟，会导致面板读到陈旧数据、看似不刷新。改为消费内存索引后，编辑保存（watcher 即时 `indexFile` 增量更新）与面板读取零延迟同步。四函数保留 `liveIndex?` 可选参数，未传时仍走 `ensureIndex` 兜底（向后兼容）。
+* 三进程均经既有 IPC + preload 通道暴露；无新增索引层字段。
 
 ***
 
@@ -1094,11 +1097,14 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 **C. 内容地图面板（`src/components/MocPanel.vue`）**
 
 * 玻璃浮层，入口：标题栏「更多 ⌄ · 内容地图」（`Icon` 新增 `map` 图标）。
+* **一键标记 / 取消标记（2026-09-04 修复，关键可用性）**：面板头部常驻「标记为内容地图 / 取消标记」按钮（`emit('toggle-moc')` → `App.onToggleMoc` 读 `host.getMarkdown()` → `parseFrontmatter` 切 `data.moc` → `serializeFrontmatter` 回写 → `host.loadMarkdownExternal` 落盘）。此前「把笔记变成 MOC」的入口深埋在写作辅助 · 属性面板底部复选框，用户根本发现不了，导致库内 `moc: true` 长期为 0、MOC 面板永远空。现在在 MOC 面板内即可就地操作。
 * 两种状态：
   * 当前文档是 MOC（`mocs` 清单含 `activePath`）→ 按上述三组分区渲染，每组可折叠（twisty `chevron-right` 旋转 90°）、计数徽标 `min-width` 钉死居中（动态布局铁律 #2）、`truncated` 提示；点击笔记 → `onOpenResult` 打开。
-  * 当前文档不是 MOC → 顶部 `info` 引导「如何把本篇标成 MOC」，下列全库 `MocItem` 清单可跳转。
-* 切换文档时 `watch(activePath)` 静默重聚合；无库 / 未打开文档 / 空 MOC 均有温和空态。
-* 写入开关在写作辅助面板：勾选「设为内容地图」即写 `moc: true` 到 frontmatter（`src/components/WritingAidsPanel.vue`，与 `tags` 同源 `setOrDelete` 逻辑），保存后经 watcher 自动重建索引、MOC 清单即时生效。
+  * 当前文档不是 MOC → 顶部 `info` 引导「点击下方按钮把本篇标成 MOC」，下列全库 `MocItem` 清单可跳转。
+* **实时刷新（2026-09-04 修复）**：挂载时订阅 `onVaultChange`（250ms 防抖）重拉 `listMocs` + `getMocOutline`，正文加 `#标签` 或切 MOC 标记后即时重聚合；切换文档 `watch(activePath)` 同样重聚合。
+* **重建索引兜底**：底部「重建索引」按钮（`window.api.rebuildIndex`）走统一索引层，完成后自刷新 + App toast。
+* 无库 / 未打开文档 / 空 MOC 均有温和空态。
+* （保留）写作辅助面板仍提供 `moc` 复选框（`src/components/WritingAidsPanel.vue`，与 `tags` 同源）作为另一入口；两条路径等价，均经 watcher 自动重建索引。
 
 ***
 

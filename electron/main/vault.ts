@@ -683,6 +683,15 @@ async function ensureIndex(root: string): Promise<Idx.VaultIndex> {
   return idx
 }
 
+/**
+ * 暴露给标签 / 内容地图等聚合面板的「实时索引」：直接返回 watcher 维护的内存索引，
+ * 避免每次回读磁盘快照（后者有 800ms 防抖落盘延迟，会导致面板读到陈旧数据、看似不刷新）。
+ * 该索引由 watchVault 的增量维护保持最新，与双链 / 搜索同源。
+ */
+export async function getLiveIndex(root: string): Promise<Idx.VaultIndex> {
+  return ensureIndex(root)
+}
+
 /** 单文件内容变动（add / change）：读正文 + mtime，增量重解析并修正反向链接 */
 async function reindexFile(root: string, absPath: string): Promise<void> {
   if (!idx || idxRoot !== root || !isMarkdown(basename(absPath))) return
