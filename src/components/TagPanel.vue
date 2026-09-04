@@ -16,6 +16,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
+import TagChip from './TagChip.vue'
 import { useI18n } from '../i18n'
 import type { TagItem, TagNoteItem } from '../../electron/shared/ipc-channels'
 
@@ -256,8 +257,7 @@ onBeforeUnmount(() => {
               <Icon name="chevron-right" :size="13" />
             </button>
             <span v-else class="tags__twist tags__twist--spacer" aria-hidden="true" />
-            <span class="tags__hash">#</span>
-            <span class="tags__name">{{ item.node.name }}</span>
+            <TagChip class="tags__chip" :name="item.node.name" />
             <span class="tags__badge">{{ item.node.count }}</span>
           </div>
         </li>
@@ -465,23 +465,11 @@ onBeforeUnmount(() => {
 .tags__row:hover {
   background: var(--hue-active);
 }
-.tags__hash {
-  color: var(--hue-text-3);
-  font-weight: 600;
-  flex-shrink: 0;
-}
-.tags__name {
-  color: var(--hue-text-1);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-/* 计数徽标：min-width 钉死居中，位数变化不抖动（动态布局铁律 #2） */
+/* 计数徽标：min-width 钉死居中，位数变化不抖动（动态布局铁律 #2）；
+   左侧 auto 把徽标推到右缘，使所有行计数对齐、长标签名在芯片内截断 */
 .tags__badge {
   flex-shrink: 0;
+  margin-left: auto;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--hue-text-3);
