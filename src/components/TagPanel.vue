@@ -320,10 +320,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 库级面板：锚编辑区左上，紧邻左缘活动栏的触发按钮与其同组的文件树，
+   避免「点最左、弹最右」。文档级面板（反链 / 快照）仍锚右上，贴近大纲。 */
 .tags {
   position: absolute;
   top: 10px;
-  right: 16px;
+  left: 16px;
   z-index: 30;
   width: 320px;
   max-width: calc(100% - 32px);
