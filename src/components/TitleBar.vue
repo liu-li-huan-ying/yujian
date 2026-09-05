@@ -11,12 +11,6 @@ const props = defineProps<{
   dirty: boolean
   /** 是否已有打开的文档，决定是否允许导出 */
   canExport: boolean
-  /** 左侧笔记库面板是否可见（控制开关按钮激活态） */
-  sidebarVisible: boolean
-  /** 右侧大纲面板是否可见（控制开关按钮激活态） */
-  outlineVisible: boolean
-  /** 快照面板是否打开（控制开关按钮激活态） */
-  snapshotActive: boolean
   /** 凝神模式是否开启（控制开关按钮激活态） */
   focusActive: boolean
   /** 导出选项当前状态（决定导出菜单里各开关项的勾选态） */
@@ -50,9 +44,6 @@ const emit = defineEmits<{
   (e: 'preferences'): void
   (e: 'zen-settings'): void
   (e: 'link-check'): void
-  (e: 'backlinks'): void
-  (e: 'tags'): void
-  (e: 'moc'): void
   (e: 'writing-aids'): void
   (e: 'integrity'): void
   (e: 'backup'): void
@@ -61,11 +52,7 @@ const emit = defineEmits<{
   (e: 'save-as'): void
   (e: 'help'): void
   (e: 'about'): void
-  (e: 'toggle-sidebar'): void
-  (e: 'toggle-outline'): void
-  (e: 'toggle-snapshot'): void
   (e: 'toggle-focus'): void
-  (e: 'language'): void
 }>()
 
 const L = i18n.ui
@@ -172,66 +159,27 @@ function onExportSelect(action: string): void {
   }
 }
 
-/* ── 更多下拉（按「知识 / 工具 / 设置 / 文件」分组，消除长列表观感）── */
+/* ── 更多下拉（仅设置 / 文件）──
+   面板（标签 / 内容地图 / 反链 / 快照 / 大纲 / 文件树）已拆到左缘活动栏，
+   工具（插入双链 / 链接检查 / 写作辅助 / 完整性 / 备份 / 图床）已拆为常驻按钮，
+   故「更多」只保留真正的设置项与文件操作，避免再次膨胀成十几项的扁平长列表。 */
 const moreItems = (): MenuEntry[] => [
-  { separatorTitle: L.menuGroupKnowledge },
-  { action: 'backlinks', label: L.backlinks, icon: 'backlink' },
-  { action: 'tags', label: L.tags, icon: 'tag' },
-  { action: 'moc', label: L.moc, icon: 'map' },
-  { separatorTitle: L.menuGroupTools },
-  { action: 'link-check', label: L.linkCheck, icon: 'link' },
-  { action: 'insert-wikilink', label: i18n.toolbar.insertWikilink, icon: 'link' },
-  { action: 'writing-aids', label: L.writingAids.title, icon: 'writing' },
-  { action: 'integrity', label: L.integrity, icon: 'shield' },
-  { action: 'backup', label: L.backup, icon: 'archive' },
-  { action: 'img-host', label: L.imgHost, icon: 'image' },
-  { separatorTitle: L.menuGroupSettings },
-  { action: 'language', label: L.language, icon: 'globe' },
   { action: 'preferences', label: L.preferences, icon: 'sliders' },
   { action: 'zen-settings', label: L.zenSettings, icon: 'moon' },
-  { separatorTitle: L.menuGroupFile },
+  { separator: true },
   { action: 'save', label: L.save, icon: 'file', hint: 'Ctrl S' },
   { action: 'save-as', label: L.saveAs, icon: 'file' },
+  { separator: true },
   { action: 'about', label: L.about, icon: 'book' },
 ]
 
 function onMoreSelect(action: string): void {
   switch (action) {
-    case 'img-host':
-      emit('img-host')
-      break
     case 'preferences':
       emit('preferences')
       break
     case 'zen-settings':
       emit('zen-settings')
-      break
-    case 'link-check':
-      emit('link-check')
-      break
-    case 'backlinks':
-      emit('backlinks')
-      break
-    case 'tags':
-      emit('tags')
-      break
-    case 'moc':
-      emit('moc')
-      break
-    case 'insert-wikilink':
-      emit('insert-wikilink')
-      break
-    case 'writing-aids':
-      emit('writing-aids')
-      break
-    case 'integrity':
-      emit('integrity')
-      break
-    case 'backup':
-      emit('backup')
-      break
-    case 'language':
-      emit('language')
       break
     case 'save':
       emit('save')
@@ -275,7 +223,7 @@ onMounted(() => {
 
       <span class="sep" />
 
-      <!-- 视图 / 布局 -->
+      <!-- 模式 / 凝神（面板开关已移至左缘活动栏，此处不再重复） -->
       <div class="grp">
         <div class="seg">
           <button
@@ -298,35 +246,6 @@ onMounted(() => {
         <button
           class="tbtn"
           type="button"
-          :class="{ 'tbtn--on': sidebarVisible }"
-          :title="L.toggleSidebarTitle"
-          @click="emit('toggle-sidebar')"
-        >
-          <Icon name="panel-left" />
-        </button>
-        <button
-          class="tbtn"
-          type="button"
-          :class="{ 'tbtn--on': outlineVisible }"
-          :title="L.toggleOutlineTitle"
-          @click="emit('toggle-outline')"
-        >
-          <Icon name="panel-right" />
-        </button>
-
-        <!-- 批次二：快照 / 凝神（融合打字机+禅的沉浸模式） -->
-        <button
-          class="tbtn"
-          type="button"
-          :class="{ 'tbtn--on': snapshotActive }"
-          :title="L.snapshots"
-          @click="emit('toggle-snapshot')"
-        >
-          <Icon name="history" />
-        </button>
-        <button
-          class="tbtn"
-          type="button"
           :class="{ 'tbtn--on': focusActive }"
           :title="L.focusTitle"
           @click="emit('toggle-focus')"
@@ -337,7 +256,41 @@ onMounted(() => {
 
       <span class="sep" />
 
-      <!-- 分享 / 工具 -->
+      <!-- 工具（原「更多」里的条目拆出为常驻按钮，一眼可达，不必下钻菜单） -->
+      <div class="grp">
+        <button
+          class="tbtn"
+          type="button"
+          :title="i18n.toolbar.insertWikilink"
+          @click="emit('insert-wikilink')"
+        >
+          <Icon name="link" />
+        </button>
+        <button class="tbtn" type="button" :title="L.linkCheck" @click="emit('link-check')">
+          <Icon name="unlink" />
+        </button>
+        <button
+          class="tbtn"
+          type="button"
+          :title="L.writingAids.title"
+          @click="emit('writing-aids')"
+        >
+          <Icon name="writing" />
+        </button>
+        <button class="tbtn" type="button" :title="L.integrity" @click="emit('integrity')">
+          <Icon name="shield" />
+        </button>
+        <button class="tbtn" type="button" :title="L.backup" @click="emit('backup')">
+          <Icon name="archive" />
+        </button>
+        <button class="tbtn" type="button" :title="L.imgHost" @click="emit('img-host')">
+          <Icon name="image" />
+        </button>
+      </div>
+
+      <span class="sep" />
+
+      <!-- 分享 / 更多 / 帮助 -->
       <div class="grp">
         <TitleMenu :items="exportItems()" align="right" @select="onExportSelect">
           <template #default="{ open, toggle }">

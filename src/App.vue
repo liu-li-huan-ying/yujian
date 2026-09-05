@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Icon from './components/Icon.vue'
 import Sidebar from './components/Sidebar.vue'
-import RailView from './components/RailView.vue'
+import ActivityBar, { type ViewKey } from './components/ActivityBar.vue'
 import EditorHost from './editor/EditorHost.vue'
 import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
@@ -615,30 +615,14 @@ const outlineVisible = ref(true)
 /* ── 批次二：快照面板 / 凝神模式 / 写作统计 ── */
 
 const snapshots = useSnapshotsStore()
+const snapshotOpen = ref(false)
 const linkCheckOpen = ref(false)
 /** 断链面板实例：一键创建成功后由 App 回调 refresh() 复检 */
 const linkCheckRef = ref<InstanceType<typeof LinkCheckPanel> | null>(null)
+const backlinksOpen = ref(false)
+const tagsOpen = ref(false)
+const mocOpen = ref(false)
 const integrityOpen = ref(false)
-
-/* ── 轨道视图状态（落实 §3：左右双栏多视图切换）──
-   左栏：文件 / 标签 / 内容地图；右栏：大纲 / 反链 / 快照。
-   面板随 tab 切换以 v-if 挂载（各面板 onMounted 自取数据），无需额外保活。 */
-const leftTab = ref<string>('files')
-const rightTab = ref<string>('outline')
-const rightWidth = ref(280)
-
-/** 轨道 tab 定义（随语言切换刷新文案） */
-type RailTabDef = { key: string; label: string; icon: string }
-const leftTabs = computed<RailTabDef[]>(() => [
-  { key: 'files', label: U.files, icon: 'folder' },
-  { key: 'tags', label: U.tags, icon: 'tag' },
-  { key: 'moc', label: U.moc, icon: 'map' },
-])
-const rightTabs = computed<RailTabDef[]>(() => [
-  { key: 'outline', label: U.outline, icon: 'file-text' },
-  { key: 'backlinks', label: U.backlinks, icon: 'backlink' },
-  { key: 'snapshots', label: U.snapshots, icon: 'history' },
-])
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
 const lastIntegrityReport = ref<IntegrityReport | null>(null)
@@ -654,14 +638,41 @@ const stats = computed<TextStats>(
   () => host.value?.stats ?? { han: 0, words: 0, chars: 0, charsNoSpace: 0, readingMinutes: 0 },
 )
 
-/** 打开/关闭快照：进右栏「快照」tab（由 watch 触发列表刷新）；再次点击收起右栏 */
-function onToggleSnapshot(): void {
-  if (outlineVisible.value && rightTab.value === 'snapshots') {
-    outlineVisible.value = false
-  } else {
-    rightTab.value = 'snapshots'
-    outlineVisible.value = true
+/* ── 浮层视图互斥（左缘活动栏驱动）── */
+
+/** 四个浮层视图：任一时刻只显示一个。多浮层并发叠在编辑区会互相压盖，
+    正是此前轨道视图「面板切换失灵」的根因，故在此统一收口互斥。 */
+type PanelKey = 'tags' | 'moc' | 'backlinks' | 'snapshot'
+
+/** 切换浮层视图：点同一个即收起，点另一个则替换（其余全部关闭） */
+function togglePanel(key: PanelKey): void {
+  const wasOpen =
+    key === 'tags'
+      ? tagsOpen.value
+      : key === 'moc'
+        ? mocOpen.value
+        : key === 'backlinks'
+          ? backlinksOpen.value
+          : snapshotOpen.value
+  tagsOpen.value = false
+  mocOpen.value = false
+  backlinksOpen.value = false
+  snapshotOpen.value = false
+  if (wasOpen) return
+  if (key === 'tags') tagsOpen.value = true
+  else if (key === 'moc') mocOpen.value = true
+  else if (key === 'backlinks') backlinksOpen.value = true
+  else {
+    snapshotOpen.value = true
+    void snapshots.refresh(vaultPath.value, filePath.value)
   }
+}
+
+/** 左缘活动栏点击：库级视图直接切栏可见性，文档级浮层走互斥 togglePanel */
+function onViewToggle(key: ViewKey): void {
+  if (key === 'files') onToggleSidebar()
+  else if (key === 'outline') onToggleOutline()
+  else togglePanel(key)
 }
 
 /** 切换凝神模式：同步编辑器 + 持久化；含「自动全屏」偏好（进入转全屏、退出还原） */
@@ -734,29 +745,6 @@ function onBackup(): void {
   backupOpen.value = true
 }
 
-/** 反链 → 右栏「反链」tab（知识类视图，升为一等公民） */
-function onBacklinks(): void {
-  rightTab.value = 'backlinks'
-  outlineVisible.value = true
-}
-
-/** 标签 → 左栏「标签」tab */
-function onTags(): void {
-  leftTab.value = 'tags'
-  sidebarVisible.value = true
-}
-
-/** 内容地图 → 左栏「内容地图」tab */
-function onMoc(): void {
-  leftTab.value = 'moc'
-  sidebarVisible.value = true
-}
-
-/** 语言切换（从「更多」设置组触发，移出状态栏） */
-function onLanguage(): void {
-  toggleLocale()
-}
-
 /** 把当前文档标记为 / 取消标记为内容地图（切换 frontmatter 的 moc 字段，正文逐字保留）。
    写回后编辑器保存会触发 vault 变更 → 面板经 onVaultChange 实时重聚合。 */
 function onToggleMoc(): void {
@@ -817,7 +805,7 @@ async function onSnapshotRestore(id: string): Promise<void> {
   } catch {
     showToast(U.snapshotReadFail, 'err')
   } finally {
-    rightTab.value = 'outline'
+    snapshotOpen.value = false
   }
 }
 
@@ -840,18 +828,10 @@ function onGoalChange(value: number): void {
   void window.api.patchSession({ writingGoal: value })
 }
 
-/**
- * 快照列表随文档/视图变化刷新：快照面板自身不在挂载时拉取，故在其 tab 处于激活且右栏可见时，
- * 由 App 统一触发 store 刷新（切文档 / 切到快照 tab / 收起后再展开都覆盖到）。
- */
-watch(
-  () => [rightTab.value, filePath.value, outlineVisible.value] as const,
-  () => {
-    if (rightTab.value === 'snapshots' && outlineVisible.value) {
-      void snapshots.refresh(vaultPath.value, filePath.value)
-    }
-  },
-)
+/** 切换文档时若面板开着则刷新列表 */
+watch(filePath, () => {
+  if (snapshotOpen.value) void snapshots.refresh(vaultPath.value, filePath.value)
+})
 
 /** 写作辅助·属性面板：应用 frontmatter 改动（正文逐字保留，仅改写顶部 YAML 块） */
 function onApplyFrontmatter(text: string): void {
@@ -1136,6 +1116,8 @@ async function onCompile(payload: {
 
 const langVer = ref(0)
 
+const localeLabel = computed(() => (getLocale() === 'zh-CN' ? '中' : 'EN'))
+
 function toggleLocale(): void {
   const next: LocaleKey = getLocale() === 'zh-CN' ? 'en-US' : 'zh-CN'
   // 语言切换会重挂编辑器实例（:key），先保存当前滚动位置，重挂后由 onReady 恢复
@@ -1243,23 +1225,13 @@ onBeforeUnmount(() => {
       @link-check="linkCheckOpen = true"
       @integrity="onIntegrity"
       @backup="onBackup"
-      @backlinks="onBacklinks"
-      @tags="onTags"
-      @moc="onMoc"
       @insert-wikilink="onInsertWikiLink"
       @writing-aids="writingAidsOpen = true"
       @save="saveFile"
       @save-as="saveFileAs"
       @help="onHelp('shortcuts')"
       @about="onHelp('guide')"
-      @language="onLanguage"
-      :sidebar-visible="sidebarVisible"
-      :outline-visible="outlineVisible"
-      :snapshot-active="outlineVisible && rightTab === 'snapshots'"
       :focus-active="focusMode"
-      @toggle-sidebar="onToggleSidebar"
-      @toggle-outline="onToggleOutline"
-      @toggle-snapshot="onToggleSnapshot"
       @toggle-focus="onToggleFocus"
     />
 
@@ -1273,53 +1245,37 @@ onBeforeUnmount(() => {
     />
 
     <div class="body">
-      <RailView
-        v-show="sidebarShown && !focusMode"
-        side="left"
+      <ActivityBar
+        v-if="!focusMode"
+        :files-active="sidebarVisible"
+        :tags-active="tagsOpen"
+        :moc-active="mocOpen"
+        :outline-active="outlineVisible"
+        :backlinks-active="backlinksOpen"
+        :snapshot-active="snapshotOpen"
+        @toggle="onViewToggle"
+      />
+
+      <Sidebar
+        ref="sidebarRef"
+        :vault-path="vaultPath"
+        :nodes="tree"
+        :active-path="filePath"
         :width="sidebarWidth"
-        :tabs="leftTabs"
-        :active="leftTab"
-        @update:active="leftTab = $event"
-      >
-        <Sidebar
-          ref="sidebarRef"
-          :vault-path="vaultPath"
-          :nodes="tree"
-          :active-path="filePath"
-          :width="sidebarWidth"
-          :visible="true"
-          :refresh-tree="refreshTree"
-          :open-doc="openPath"
-          @select="onSelect"
-          @open-vault="openVault"
-          @new-doc="newDoc"
-          @update:width="sidebarWidth = $event"
-          @renamed="onRenamed"
-          @delete-node="onDeleteNode"
-          @moved="onMoved"
-          @open-result="onOpenResult"
-          @replaced="onSearchReplaced"
-          @find-highlight="onFindHighlight"
-        />
-
-        <TagPanel
-          v-if="leftTab === 'tags'"
-          :vault-path="vaultPath"
-          @close="leftTab = 'files'"
-          @open="onOpenResult"
-          @rebuilt="onIndexRebuilt('tags')"
-        />
-
-        <MocPanel
-          v-if="leftTab === 'moc'"
-          :vault-path="vaultPath"
-          :active-path="filePath"
-          @close="leftTab = 'files'"
-          @open="onOpenResult"
-          @toggle-moc="onToggleMoc"
-          @rebuilt="onIndexRebuilt('moc')"
-        />
-      </RailView>
+        :visible="sidebarShown && !focusMode"
+        :refresh-tree="refreshTree"
+        :open-doc="openPath"
+        @select="onSelect"
+        @open-vault="openVault"
+        @new-doc="newDoc"
+        @update:width="sidebarWidth = $event"
+        @renamed="onRenamed"
+        @delete-node="onDeleteNode"
+        @moved="onMoved"
+        @open-result="onOpenResult"
+        @replaced="onSearchReplaced"
+        @find-highlight="onFindHighlight"
+      />
 
       <main class="editor" @click.capture="onEditorClick">
         <EditorHost
@@ -1333,6 +1289,17 @@ onBeforeUnmount(() => {
           @wikilink="onWikilink"
         />
 
+        <SnapshotPanel
+          v-if="snapshotOpen"
+          :file-path="filePath"
+          :vault-path="vaultPath"
+          :current-text="host?.getMarkdown() ?? ''"
+          @restore="onSnapshotRestore"
+          @delete="onSnapshotDelete"
+          @pick="onSnapshotPick"
+          @close="snapshotOpen = false"
+        />
+
         <LinkCheckPanel
           v-if="linkCheckOpen"
           ref="linkCheckRef"
@@ -1340,6 +1307,32 @@ onBeforeUnmount(() => {
           @close="linkCheckOpen = false"
           @open="onOpenBrokenLink"
           @create="onCreateBrokenLink"
+        />
+
+        <BacklinksPanel
+          v-if="backlinksOpen"
+          :vault-path="vaultPath"
+          :active-path="filePath"
+          @close="backlinksOpen = false"
+          @open="onOpenResult"
+        />
+
+        <TagPanel
+          v-if="tagsOpen"
+          :vault-path="vaultPath"
+          @close="tagsOpen = false"
+          @open="onOpenResult"
+          @rebuilt="onIndexRebuilt('tags')"
+        />
+
+        <MocPanel
+          v-if="mocOpen"
+          :vault-path="vaultPath"
+          :active-path="filePath"
+          @close="mocOpen = false"
+          @open="onOpenResult"
+          @toggle-moc="onToggleMoc"
+          @rebuilt="onIndexRebuilt('moc')"
         />
 
         <IntegrityPanel
@@ -1387,44 +1380,12 @@ onBeforeUnmount(() => {
         />
       </main>
 
-      <RailView
-        v-show="outlineShown && !focusMode"
-        side="right"
-        :width="rightWidth"
-        :tabs="rightTabs"
-        :active="rightTab"
-        :resizable="true"
-        :min="220"
-        :max="560"
-        @update:active="rightTab = $event"
-        @update:width="rightWidth = $event"
-      >
-        <Outline
-          :visible="true"
-          :items="host?.outline ?? []"
-          :active-index="host?.activeHeadingIndex ?? -1"
-          @select="onOutlineSelect"
-        />
-
-        <BacklinksPanel
-          v-if="rightTab === 'backlinks'"
-          :vault-path="vaultPath"
-          :active-path="filePath"
-          @close="rightTab = 'outline'"
-          @open="onOpenResult"
-        />
-
-        <SnapshotPanel
-          v-if="rightTab === 'snapshots'"
-          :file-path="filePath"
-          :vault-path="vaultPath"
-          :current-text="host?.getMarkdown() ?? ''"
-          @restore="onSnapshotRestore"
-          @delete="onSnapshotDelete"
-          @pick="onSnapshotPick"
-          @close="rightTab = 'outline'"
-        />
-      </RailView>
+      <Outline
+        :visible="outlineShown && !focusMode"
+        :items="host?.outline ?? []"
+        :active-index="host?.activeHeadingIndex ?? -1"
+        @select="onOutlineSelect"
+      />
     </div>
 
     <footer class="statusbar jade">
@@ -1456,6 +1417,9 @@ onBeforeUnmount(() => {
           >
             <Icon name="alert" :size="12" />
             {{ lastIntegrityReport.total }}
+          </button>
+          <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
+            {{ localeLabel }}
           </button>
         </div>
       </div>
@@ -1653,6 +1617,25 @@ onBeforeUnmount(() => {
 
 .dot--dirty {
   background: var(--hue-accent);
+}
+
+.lang-btn {
+  border: 1px solid var(--hue-border-subtle);
+  background: rgba(var(--hue-tint-1), 0.12);
+  color: var(--hue-text-2);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+.lang-btn:hover {
+  color: var(--hue-accent);
+  border-color: var(--hue-accent);
+  background: rgba(var(--hue-tint-1), 0.22);
 }
 
 /* ── 导出结果轻提示（玻璃浮层）── */
