@@ -615,13 +615,15 @@ const outlineVisible = ref(true)
 /* ── 批次二：快照面板 / 凝神模式 / 写作统计 ── */
 
 const snapshots = useSnapshotsStore()
-const snapshotOpen = ref(false)
 const linkCheckOpen = ref(false)
 /** 断链面板实例：一键创建成功后由 App 回调 refresh() 复检 */
 const linkCheckRef = ref<InstanceType<typeof LinkCheckPanel> | null>(null)
-const backlinksOpen = ref(false)
-const tagsOpen = ref(false)
-const mocOpen = ref(false)
+/** 左列底部停靠面板：库级（标签 / 内容地图），与目录上下并列；与右列独立，可同时开 */
+const leftBottom = ref<'none' | 'tags' | 'moc'>('none')
+/** 右列底部停靠面板：文档级（反链 / 快照），与大纲上下并列；与左列独立，可同时开 */
+const rightBottom = ref<'none' | 'backlinks' | 'snapshot'>('none')
+/** 停靠列宽度（顶部视图收起、仅显示底部面板时使用） */
+const DOCK_W = 300
 const integrityOpen = ref(false)
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
@@ -638,41 +640,26 @@ const stats = computed<TextStats>(
   () => host.value?.stats ?? { han: 0, words: 0, chars: 0, charsNoSpace: 0, readingMinutes: 0 },
 )
 
-/* ── 浮层视图互斥（左缘活动栏驱动）── */
+/* ── 左缘活动栏 → 双栏 2×2 停靠布局（库级在左 / 文档级在右，各列上下两块）── */
 
-/** 四个浮层视图：任一时刻只显示一个。多浮层并发叠在编辑区会互相压盖，
-    正是此前轨道视图「面板切换失灵」的根因，故在此统一收口互斥。 */
-type PanelKey = 'tags' | 'moc' | 'backlinks' | 'snapshot'
-
-/** 切换浮层视图：点同一个即收起，点另一个则替换（其余全部关闭） */
-function togglePanel(key: PanelKey): void {
-  const wasOpen =
-    key === 'tags'
-      ? tagsOpen.value
-      : key === 'moc'
-        ? mocOpen.value
-        : key === 'backlinks'
-          ? backlinksOpen.value
-          : snapshotOpen.value
-  tagsOpen.value = false
-  mocOpen.value = false
-  backlinksOpen.value = false
-  snapshotOpen.value = false
-  if (wasOpen) return
-  if (key === 'tags') tagsOpen.value = true
-  else if (key === 'moc') mocOpen.value = true
-  else if (key === 'backlinks') backlinksOpen.value = true
-  else {
-    snapshotOpen.value = true
-    void snapshots.refresh(vaultPath.value, filePath.value)
-  }
-}
-
-/** 左缘活动栏点击：库级视图直接切栏可见性，文档级浮层走互斥 togglePanel */
+/** 左缘活动栏点击：上块=目录/大纲（切栏可见性），下块=库级/文档级面板
+    （左右两列各自独立、可同时开，互不互斥——满足「同屏看标签+反链」）。 */
 function onViewToggle(key: ViewKey): void {
-  if (key === 'files') onToggleSidebar()
-  else if (key === 'outline') onToggleOutline()
-  else togglePanel(key)
+  if (key === 'files') {
+    onToggleSidebar()
+  } else if (key === 'outline') {
+    onToggleOutline()
+  } else if (key === 'tags') {
+    leftBottom.value = leftBottom.value === 'tags' ? 'none' : 'tags'
+  } else if (key === 'moc') {
+    leftBottom.value = leftBottom.value === 'moc' ? 'none' : 'moc'
+  } else if (key === 'backlinks') {
+    rightBottom.value = rightBottom.value === 'backlinks' ? 'none' : 'backlinks'
+  } else if (key === 'snapshot') {
+    const next = rightBottom.value === 'snapshot' ? 'none' : 'snapshot'
+    rightBottom.value = next
+    if (next === 'snapshot') void snapshots.refresh(vaultPath.value, filePath.value)
+  }
 }
 
 /** 切换凝神模式：同步编辑器 + 持久化；含「自动全屏」偏好（进入转全屏、退出还原） */
@@ -805,7 +792,7 @@ async function onSnapshotRestore(id: string): Promise<void> {
   } catch {
     showToast(U.snapshotReadFail, 'err')
   } finally {
-    snapshotOpen.value = false
+    rightBottom.value = 'none'
   }
 }
 
@@ -828,9 +815,9 @@ function onGoalChange(value: number): void {
   void window.api.patchSession({ writingGoal: value })
 }
 
-/** 切换文档时若面板开着则刷新列表 */
+/** 切换文档时若快照面板开着则刷新列表 */
 watch(filePath, () => {
-  if (snapshotOpen.value) void snapshots.refresh(vaultPath.value, filePath.value)
+  if (rightBottom.value === 'snapshot') void snapshots.refresh(vaultPath.value, filePath.value)
 })
 
 /** 写作辅助·属性面板：应用 frontmatter 改动（正文逐字保留，仅改写顶部 YAML 块） */
@@ -1248,34 +1235,60 @@ onBeforeUnmount(() => {
       <ActivityBar
         v-if="!focusMode"
         :files-active="sidebarVisible"
-        :tags-active="tagsOpen"
-        :moc-active="mocOpen"
+        :tags-active="leftBottom === 'tags'"
+        :moc-active="leftBottom === 'moc'"
         :outline-active="outlineVisible"
-        :backlinks-active="backlinksOpen"
-        :snapshot-active="snapshotOpen"
+        :backlinks-active="rightBottom === 'backlinks'"
+        :snapshot-active="rightBottom === 'snapshot'"
         @toggle="onViewToggle"
       />
 
-      <Sidebar
-        ref="sidebarRef"
-        :vault-path="vaultPath"
-        :nodes="tree"
-        :active-path="filePath"
-        :width="sidebarWidth"
-        :visible="sidebarShown && !focusMode"
-        :refresh-tree="refreshTree"
-        :open-doc="openPath"
-        @select="onSelect"
-        @open-vault="openVault"
-        @new-doc="newDoc"
-        @update:width="sidebarWidth = $event"
-        @renamed="onRenamed"
-        @delete-node="onDeleteNode"
-        @moved="onMoved"
-        @open-result="onOpenResult"
-        @replaced="onSearchReplaced"
-        @find-highlight="onFindHighlight"
-      />
+      <!-- 左列：上=目录，下=库级面板（标签 / 内容地图） -->
+      <div
+        v-if="!focusMode && (sidebarShown || leftBottom !== 'none')"
+        class="dock-col dock-col--left"
+        :style="{ width: sidebarShown && !focusMode ? sidebarWidth + 'px' : DOCK_W + 'px' }"
+      >
+        <Sidebar
+          v-if="sidebarShown && !focusMode"
+          ref="sidebarRef"
+          :vault-path="vaultPath"
+          :nodes="tree"
+          :active-path="filePath"
+          :width="sidebarShown && !focusMode ? sidebarWidth : DOCK_W"
+          :visible="true"
+          :refresh-tree="refreshTree"
+          :open-doc="openPath"
+          @select="onSelect"
+          @open-vault="openVault"
+          @new-doc="newDoc"
+          @update:width="sidebarWidth = $event"
+          @renamed="onRenamed"
+          @delete-node="onDeleteNode"
+          @moved="onMoved"
+          @open-result="onOpenResult"
+          @replaced="onSearchReplaced"
+          @find-highlight="onFindHighlight"
+        />
+        <div v-if="leftBottom !== 'none'" class="dock-slot dock-slot--left">
+          <TagPanel
+            v-if="leftBottom === 'tags'"
+            :vault-path="vaultPath"
+            @close="leftBottom = 'none'"
+            @open="onOpenResult"
+            @rebuilt="onIndexRebuilt('tags')"
+          />
+          <MocPanel
+            v-if="leftBottom === 'moc'"
+            :vault-path="vaultPath"
+            :active-path="filePath"
+            @close="leftBottom = 'none'"
+            @open="onOpenResult"
+            @toggle-moc="onToggleMoc"
+            @rebuilt="onIndexRebuilt('moc')"
+          />
+        </div>
+      </div>
 
       <main class="editor" @click.capture="onEditorClick">
         <EditorHost
@@ -1289,17 +1302,6 @@ onBeforeUnmount(() => {
           @wikilink="onWikilink"
         />
 
-        <SnapshotPanel
-          v-if="snapshotOpen"
-          :file-path="filePath"
-          :vault-path="vaultPath"
-          :current-text="host?.getMarkdown() ?? ''"
-          @restore="onSnapshotRestore"
-          @delete="onSnapshotDelete"
-          @pick="onSnapshotPick"
-          @close="snapshotOpen = false"
-        />
-
         <LinkCheckPanel
           v-if="linkCheckOpen"
           ref="linkCheckRef"
@@ -1307,32 +1309,6 @@ onBeforeUnmount(() => {
           @close="linkCheckOpen = false"
           @open="onOpenBrokenLink"
           @create="onCreateBrokenLink"
-        />
-
-        <BacklinksPanel
-          v-if="backlinksOpen"
-          :vault-path="vaultPath"
-          :active-path="filePath"
-          @close="backlinksOpen = false"
-          @open="onOpenResult"
-        />
-
-        <TagPanel
-          v-if="tagsOpen"
-          :vault-path="vaultPath"
-          @close="tagsOpen = false"
-          @open="onOpenResult"
-          @rebuilt="onIndexRebuilt('tags')"
-        />
-
-        <MocPanel
-          v-if="mocOpen"
-          :vault-path="vaultPath"
-          :active-path="filePath"
-          @close="mocOpen = false"
-          @open="onOpenResult"
-          @toggle-moc="onToggleMoc"
-          @rebuilt="onIndexRebuilt('moc')"
         />
 
         <IntegrityPanel
@@ -1380,12 +1356,39 @@ onBeforeUnmount(() => {
         />
       </main>
 
-      <Outline
-        :visible="outlineShown && !focusMode"
-        :items="host?.outline ?? []"
-        :active-index="host?.activeHeadingIndex ?? -1"
-        @select="onOutlineSelect"
-      />
+      <!-- 右列：上=大纲，下=文档级面板（反链 / 快照） -->
+      <div
+        v-if="!focusMode && (outlineShown || rightBottom !== 'none')"
+        class="dock-col dock-col--right"
+        :style="{ width: DOCK_W + 'px' }"
+      >
+        <Outline
+          v-if="outlineShown && !focusMode"
+          :visible="true"
+          :items="host?.outline ?? []"
+          :active-index="host?.activeHeadingIndex ?? -1"
+          @select="onOutlineSelect"
+        />
+        <div v-if="rightBottom !== 'none'" class="dock-slot dock-slot--right">
+          <BacklinksPanel
+            v-if="rightBottom === 'backlinks'"
+            :vault-path="vaultPath"
+            :active-path="filePath"
+            @close="rightBottom = 'none'"
+            @open="onOpenResult"
+          />
+          <SnapshotPanel
+            v-if="rightBottom === 'snapshot'"
+            :file-path="filePath"
+            :vault-path="vaultPath"
+            :current-text="host?.getMarkdown() ?? ''"
+            @restore="onSnapshotRestore"
+            @delete="onSnapshotDelete"
+            @pick="onSnapshotPick"
+            @close="rightBottom = 'none'"
+          />
+        </div>
+      </div>
     </div>
 
     <footer class="statusbar jade">
@@ -1518,6 +1521,59 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: flex;
   background: var(--hue-editor);
+}
+
+/* ── 双栏 2×2 停靠列：左列[目录/库级] · 右列[大纲/文档级]，每列上下两块 ── */
+.dock-col {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  transition: width var(--dur-base) var(--ease);
+}
+.dock-col--left {
+  border-right: 1px solid var(--hue-border-subtle);
+}
+.dock-col--right {
+  border-left: 1px solid var(--hue-border-subtle);
+}
+.dock-col > .sidebar,
+.dock-col > .outline,
+.dock-col > .dock-slot {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.dock-slot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+/* 右列大纲填满停靠列宽（覆盖其自身 var(--w-outline) 固定宽） */
+.dock-col--right :deep(.outline) {
+  width: 100% !important;
+}
+/* 中和玻璃浮层面板的绝对定位，使其作为停靠列内的填满块 */
+.dock-slot :deep(.tags),
+.dock-slot :deep(.moc),
+.dock-slot :deep(.bl),
+.dock-slot :deep(.snap) {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+  z-index: auto !important;
+  animation: none !important;
 }
 
 .statusbar {
