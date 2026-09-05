@@ -263,10 +263,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 库级面板：锚编辑区左上（同 TagPanel），紧邻左缘活动栏触发点与文件树 */
 .moc {
   position: absolute;
   top: 10px;
-  right: 16px;
+  left: 16px;
   z-index: 30;
   width: 340px;
   max-width: calc(100% - 32px);
