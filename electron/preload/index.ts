@@ -31,6 +31,7 @@ import {
   type TagNoteItem,
   type MocItem,
   type MocGroup,
+  type MoveResult,
 } from '../shared/ipc-channels'
 
 /**
@@ -69,16 +70,17 @@ const api = {
   createFolder: (parentDir: string, name?: string): Promise<string> =>
     ipcRenderer.invoke(IPC.VAULT_CREATE_DIR, parentDir, name),
 
-  /** 重命名文件或文件夹（含同名 .assets 同步），返回新路径 */
-  renameItem: (oldPath: string, newName: string): Promise<string> =>
+  /** 重命名文件或文件夹（含同名 .assets 同步），返回新路径与自动同步的引用统计 */
+  renameItem: (oldPath: string, newName: string): Promise<MoveResult> =>
     ipcRenderer.invoke(IPC.VAULT_RENAME, oldPath, newName),
 
   /** 删除文件或文件夹（递归删除，含同名 .assets 清理） */
   deleteItem: (targetPath: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_DELETE, targetPath),
 
-  /** 移动文件或文件夹到目标目录（跨卷自动复制+删源，含同名 .assets 同步） */
-  moveItem: (oldPath: string, destDir: string, newName?: string): Promise<string> =>
+  /** 移动文件或文件夹到目标目录（跨卷自动复制+删源，含同名 .assets 同步），
+      返回新路径与自动同步的引用统计 */
+  moveItem: (oldPath: string, destDir: string, newName?: string): Promise<MoveResult> =>
     ipcRenderer.invoke(IPC.VAULT_MOVE, oldPath, destDir, newName),
 
   openFileDialog: (): Promise<string | null> => ipcRenderer.invoke(IPC.DIALOG_OPEN_FILE),

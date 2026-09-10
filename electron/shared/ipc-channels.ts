@@ -10,7 +10,6 @@ export const IPC = {
   FILE_READ_BASE64: 'file:readBase64',
   /** 取文件元信息（mtime / 字节数），冲突检测用于展示「磁盘修改时间」 */
   FILE_STAT: 'file:stat',
-  FILE_LIST_DIR: 'file:listDir',
   FILE_CREATE: 'file:create',
   DIALOG_OPEN_FILE: 'dialog:openFile',
   DIALOG_SAVE_FILE: 'dialog:saveFile',
@@ -268,6 +267,16 @@ export interface ReplaceResult {
   files: number
   /** 被改写的文件路径列表（供前端判断是否需要重载当前文档） */
   paths: string[]
+}
+
+/** 重命名 / 移动的结果：新路径 + 自动同步 `[[引用]]` 的统计 */
+export interface MoveResult {
+  /** 迁移后的新绝对路径（目标重名时可能带序号后缀） */
+  path: string
+  /** 被改动的来源文件数 */
+  filesUpdated: number
+  /** 被改写的 `[[引用]]` 条数（>0 时前端提示「已同步更新 N 处引用」） */
+  linksUpdated: number
 }
 
 /**

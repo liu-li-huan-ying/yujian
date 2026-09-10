@@ -743,7 +743,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 > ⚠️ 历史说明：早期架构稿曾设想用 MiniSearch 做全文倒排索引，但 `minisearch` 自引入后**代码中零引用（死依赖）**，实际搜索一直是 `vault.ts` 的暴力递归扫描（单文件 20 命中、全库 80 文件上限）。批次零已移除该死依赖，并建成真正的统一索引层 `electron/main/vaultIndex.ts`。
 
 * 索引层：`electron/main/vaultIndex.ts`，**纯 Node `fs`，无第三方搜索库**，便于在 Node 环境跑往返单测。
-* 索引字段（轻量元数据，不缓存正文、不索引全文）：`mtime` / `title`（frontmatter title > 首个 H1）/ `headings`（≤50）/ `outLinks`（已解析的 wikilink 目标绝对路径）/ `tags`（frontmatter）。反向链接由 `outLinks` 派生。
+* 索引字段（轻量元数据，不缓存正文、不索引全文）：`mtime` / `title`（frontmatter title > 首个 H1）/ `headings`（≤50）/ `outLinks`（已解析的 wikilink 目标绝对路径）/ `tags`（frontmatter `tags` + 正文内联 `#标签`，v2 起）/ `moc`（frontmatter `moc: true`）。反向链接由 `outLinks` 派生，并被搜索、反链面板、标签 / MOC 聚合与**重命名 / 移动的引用自动改写**（§5.21）共同消费。
 * 持久化：`vault/.mdeditor/vault-index.json`，沿用项目「写临时文件 + rename」原子写；是**可重建缓存**，丢失/损坏/版本不符时静默全量重建，绝不弹错。
 * 增量维护（严格增量，禁任何全库周期重算）：chokidar 捕获 `add`/`change` → 只重解析该文件（复用缓存的路径映射，O(1)）；`unlink` → 移除该条并清理反向条目；`addDir`/`unlinkDir` → 防抖全量对齐（仅重解析 mtime 变化者）。
 * 全文搜索：仍按正文逐行匹配（按设计不建全文索引，避免 Obsidian 式内存膨胀），但经索引枚举文件（免目录递归），并解除原 80 文件 / 20 命中硬上限，改为软上限（每文件 500 命中、1000 文件）配合 `truncated` 标志提示用户收窄查询。
@@ -1016,7 +1016,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 **A. 编辑器内真节点（`src/editor/features/wikilink.ts`）**
 
 * `remarkWikilink`（$remark）：递归改写正文文本里的 `[[...]]` 为自定义 mdast 节点 `wikiLink`（拆 `目标` / `别名|` / `#锚点`）。
-* `wikiLinkSchema`（$nodeSchema）：行内原子节点 → `toDOM` 渲染 `.yj-wikilink > .yj-wikilink__label`（玉质药丸芯片，`src/styles/editor.css`）；`toMarkdown` handler **原样输出** `[[target]]` / `[[target|alias]]`（守 §5.2 往返保真红线 4/6，绝不用装饰 + 导出后处理）。
+* `wikiLinkSchema`（$nodeSchema）：行内原子节点 → `toDOM` 渲染 `.yj-wikilink > .yj-wikilink__label`（玉质药丸芯片，`src/styles/editor.css`）；`toMarkdown` handler **原样输出** `[[target]]` / `[[target|alias]]` / `[[target#anchor]]` / `[[target#anchor|alias]]`（守 §5.2 往返保真红线 4/6，绝不用装饰 + 导出后处理；锚点曾在此被丢弃，2026-09-10 修复并由 `npm test` D 段守护）。
 * `wikiLinkInputRule`（$inputRule）：敲完 `]]` 即刻把 `[[目标]]` 转成节点（否则当下敲了没反应）。
 * `MilkdownEditor` 注册三者，并在宿主 click 上侦测 `span[data-type="wiki_link"]`，`preventDefault` 后 `emit('wikilink', { target, anchor })`；`EditorHost` 透传至 `App`。
 
@@ -1147,6 +1147,53 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
   * 仍保持**文件夹优先于文件**（类型短路判断不变）。
 * 设计依据（网络调研）：MDN 与多篇博客、开源库 `chinese_number_to_digits` 一致指出 `Intl.Collator` 的 `numeric` 仅处理阿拉伯数字，中文章节排序需先把中文数字转阿拉伯数值再自然排序。
 * 排序是主进程 `scan` 的唯一来源；前端 `FileTree.vue` / `Sidebar.vue` 直接渲染已排好序的 `node.children`，无二次排序，改一处全收口。
+
+***
+
+### 5.21 重命名 / 移动自动更新 `[[引用]]`（2026-09-10）
+
+> 对应 `docs/PHASE3-PLAN.md` 批次二「已决策」。此前默认立场是「不自动改写、只报断链」，现按用户决策改为**自动更新**——PKM 里改名 / 搬家若留下一地断链，双链网络会迅速失效。
+
+**A. 纯逻辑（`vaultIndex.ts`，可在 Node 单测）**
+
+* `rewriteWikiLinksInText(content, resolve, newTargetOf)`：逐条 `[[...]]` 拆 `target` / `#锚点` / `|别名`，**只替换 target 片段**，锚点与别名原样保留；断链（`resolve` 返回 `null`）一律不动；新写法与旧写法相同时不计数、不改动；其余正文逐字节保留（含 CRLF）。
+* `rewriteLinksForMoves(root, index, moves)`：fs 层编排。受影响来源直接取索引已派生的 `backLinks`（**零额外全库扫描**），只读命中文件；单文件写失败不影响其余（与 `replaceInVault` 同款容错）。返回 `{ sources, files, links }`，`sources` 已按新位置计算。
+* 形态保持：原目标含 `/` 视为路径式 → 写新相对路径；否则写新基名。`./` 前缀与 `.md` / `.markdown` 后缀写法一并保留。
+* 路径映射复用：新增 `resolveTargetWithMaps(maps, target)`（与 `resolveTarget` 同语义但**不重建映射**），并删掉一份与 `buildPathMaps` 重复的 `buildIndexPathMaps`。
+
+**B. 收口与顺序铁律（`vault.ts`）**
+
+* `rewriteLinksThenRefreshIndex(moves)`：先改写、再刷新索引，**顺序不可换**——改写必须在「磁盘已迁移、索引仍是旧路径」的窗口内进行，否则 `[[旧基名]]` 已解析不到旧绝对路径。
+* `refreshIndexAfterMove(root, moves, sources)`：移除旧条目 → 用「含新路径」的映射登记新条目 → 重解析被改写的来源；只动受影响条目，**不触发全库 reconcile**。
+* 接入点：`renameItem`（文件 / 文件夹）与 `moveItem`（跨目录）；同目录移动降级为 `renameItem` 从而天然覆盖。目录移动展开为「逐篇文档」的 `MovePair`，来源自身也在移动之列时按新路径读写。
+* IPC 返回类型由 `string` 改为 `MoveResult { path, filesUpdated, linksUpdated }`；渲染层在 `linksUpdated > 0` 时提示「已同步更新 N 处引用」（移动成功另复用 `moveDone` 提示）。
+
+**C. 顺带修复**
+
+* `reindexFile` / `deindexFile` 现在会在**文件集变化**时使路径映射失效——此前外部改名后 `byBase` 映射陈旧，新笔记名解析不到、反链会漏。
+* `wikilink.ts` 的 `toMarkdown` 此前**丢弃 `#锚点`**（`[[A#小节]]` 存盘退化成 `[[A]]`，属不可逆数据丢失），已修复并由 `npm test` D 段守护。
+
+***
+
+### 5.22 自动化测试与门禁（2026-09-10）
+
+> 背景：项目长期只有 `typecheck` + `lint` 两道德性门禁与一个 `verify:md` 脚本，**没有任何测试套件**；`scripts/stress-table.mjs` 写好却从未接入 npm script。索引 / 引用改写 / 编辑器语法这类「出错是静默的」代码一旦回归，UI 上看不出来。
+
+**测试套件（零新依赖）**
+
+* `npm test` → `scripts/test-core.mjs`。沿用既有「esbuild 把 TS 打成 mjs、在 Node 里直接断言」的做法，**不启动 Electron、不引入测试框架**。
+* A / C / C2 / C3：`rewriteWikiLinksInText` 纯函数 + 临时库端到端（文件改名、目录移动、来源自迁移、零命中不写盘、幂等、CRLF 保真）。
+* B：索引纯函数（`parseFile` / `deriveBackLinks` / `indexFile` 增量 / `removeFileFromIndex` / 解析映射同源）。
+* D：wikilink 语法往返（目标 / 别名 / 锚点一个不丢）——上线首日即抓出 `#锚点` 被丢弃的数据丢失缺陷。
+* E：i18n 双语键集合与插值变量逐条对齐。
+* F：IPC 契约——每个通道都既有主进程接线又有 preload 暴露（抓出并清理了零引用的 `FILE_LIST_DIR`）。
+* `npm run stress:table` → 表格往返压测（原 `scripts/stress-table.mjs`，此前未接线）。
+
+**门禁**
+
+* `npm run check` = `typecheck` + `lint` + `test`。
+* `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（29 条）。
+* `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `test` / `verify:md` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
 
 ***
 

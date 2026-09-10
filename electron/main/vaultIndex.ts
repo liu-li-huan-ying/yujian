@@ -2,7 +2,6 @@ import { access, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
 import { atomicWrite } from './atomicWrite'
 import type {
-  SearchOptions,
   BacklinkItem,
   NoteTitleItem,
   UnlinkedMention,
@@ -200,8 +199,8 @@ function normalizeTag(raw: string): string {
   return raw.trim().replace(/^#+/, '').replace(/[/\-]+$/, '')
 }
 
-/** 把 wikilink 原始目标归一化为用于查表的 key（去 ./ 前缀、去扩展名） */
-function normalizeTarget(target: string): string {
+/** 把 wikilink 原始目标归一化为查表 key（去 `./` 前缀、去扩展名）——目标解析的唯一入口，勿另起实现 */
+function targetKey(target: string): string {
   return target.replace(/^\.\//, '').replace(/\.(md|markdown)$/i, '')
 }
 
@@ -221,7 +220,7 @@ export function parseFile(
   const outRaw = extractWikiTargets(content)
   const outLinks: string[] = []
   for (const raw of outRaw) {
-    const key = normalizeTarget(raw)
+    const key = targetKey(raw)
     const resolved = key.includes('/')
       ? byRel.get(key.toLowerCase())
       : byBase.get(basename(key).toLowerCase())
@@ -259,10 +258,13 @@ export function parseFile(
 
 /* ── 映射构建（与 checkLinks 同源逻辑） ── */
 
-export function buildPathMaps(filePaths: string[], root: string): {
+/** 「基名 / 相对库路径 → 绝对路径」映射（wikilink 目标解析的唯一依据） */
+export interface PathMaps {
   byBase: Map<string, string>
   byRel: Map<string, string>
-} {
+}
+
+export function buildPathMaps(filePaths: string[], root: string): PathMaps {
   const byBase = new Map<string, string>()
   const byRel = new Map<string, string>()
   for (const full of filePaths) {
@@ -429,33 +431,21 @@ export function removeFileFromIndex(index: VaultIndex, absPath: string): void {
 
 /* ── 双链查询（批次二） ── */
 
-/** 由索引的 files 键（绝对路径）构建「基名/相对路径 → 绝对路径」映射，用于解析 wikilink 目标 */
-function buildIndexPathMaps(
-  index: VaultIndex,
-  root: string
-): { byBase: Map<string, string>; byRel: Map<string, string> } {
-  const byBase = new Map<string, string>()
-  const byRel = new Map<string, string>()
-  for (const full of Object.keys(index.files)) {
-    const base = basename(full, extname(full)).toLowerCase()
-    if (!byBase.has(base)) byBase.set(base, full)
-    const rel = relative(root, full)
-      .replace(/\.(md|markdown)$/i, '')
-      .split(/[\\/]/)
-      .join('/')
-      .toLowerCase()
-    if (!byRel.has(rel)) byRel.set(rel, full)
-  }
-  return { byBase, byRel }
+/**
+ * 用现成映射解析 wikilink 目标为 vault 内绝对路径；找不到返回 null。
+ * 与 `resolveTarget` 同语义，但**不重建映射**——供批量解析的热路径复用（避免每次 O(n) 重建）。
+ */
+export function resolveTargetWithMaps(maps: PathMaps, target: string): string | null {
+  const key = targetKey(target)
+  if (!key) return null
+  if (key.includes('/')) return maps.byRel.get(key.toLowerCase()) ?? null
+  return maps.byBase.get(basename(key).toLowerCase()) ?? null
 }
 
 /** 把 wikilink 原始目标解析为 vault 内绝对路径；找不到返回 null */
 export function resolveTarget(index: VaultIndex, root: string, target: string): string | null {
-  const key = target.replace(/^\.\//, '').replace(/\.(md|markdown)$/i, '')
-  if (!key) return null
-  const { byBase, byRel } = buildIndexPathMaps(index, root)
-  if (key.includes('/')) return byRel.get(key.toLowerCase()) ?? null
-  return byBase.get(basename(key).toLowerCase()) ?? null
+  // 复用 buildPathMaps（与 parseFile / checkLinks 同源），不再自建一份映射
+  return resolveTargetWithMaps(buildPathMaps(Object.keys(index.files), root), target)
 }
 
 /** 加载索引；缺失或损坏则静默全量重建（索引是缓存，绝不应因此弹错） */
@@ -773,6 +763,143 @@ export async function wrapUnlinkedMention(root: string, item: UnlinkedMention): 
   return true
 }
 
+/* ── 引用维护：重命名 / 移动时自动改写 [[wikilink]]（需求确认 2026-09-10） ── */
+
+/** 一次移动的「旧绝对路径 → 新绝对路径」；目录移动由调用方展开为「逐篇文档」 */
+export interface MovePair {
+  from: string
+  to: string
+}
+
+export interface LinkRewriteSummary {
+  /** 被改写的源文件绝对路径（已按新位置计算），供调用方立即刷新索引 */
+  sources: string[]
+  /** 被改写的来源文件数 */
+  files: number
+  /** 被改写的链接条数 */
+  links: number
+}
+
+/**
+ * 纯函数：把正文里所有「解析结果属于被移动集合」的 `[[wikilink]]` 目标改写为新写法。
+ *
+ * 设计要点：
+ *  - 逐链接拆分 `target` / `#锚点` / `|别名`，**只替换 target 片段**，锚点与别名原样保留；
+ *  - 新写法沿用原链接「形态」：原目标含 `/` 视为路径式 → 用新相对路径；否则用新基名；
+ *  - 保留原目标的 `./` 前缀与 `.md` / `.markdown` 扩展名写法，尊重用户书写习惯；
+ *  - 新写法与旧写法相同时不计入 changed、也不改动（避免无谓写盘与 Git 全量 diff）；
+ *  - 断链（resolve 返回 null）一律不动——改名不该把断掉的链接「猜」到别处；
+ *  - 非链接文本逐字节保留（含 CRLF），改写后除目标片段外原文不变。
+ *
+ * @param content 正文
+ * @param resolve 目标 → 绝对路径（**必须用重命名前的映射**，否则解析不到旧目标）
+ * @param newTargetOf (解析出的旧绝对路径, 原目标写法) → 新目标写法；返回 null 表示不属于本次移动
+ */
+export function rewriteWikiLinksInText(
+  content: string,
+  resolve: (target: string) => string | null,
+  newTargetOf: (resolvedAbs: string, originalTarget: string) => string | null
+): { text: string; changed: number } {
+  let changed = 0
+  const text = content.replace(/\[\[([^\]\n]+?)\]\]/g, (full: string, inner: string) => {
+    const pipe = inner.indexOf('|')
+    const targetPart = pipe === -1 ? inner : inner.slice(0, pipe)
+    const rest = pipe === -1 ? '' : inner.slice(pipe) // 含 '|别名'
+    const hash = targetPart.indexOf('#')
+    const rawTarget = (hash === -1 ? targetPart : targetPart.slice(0, hash)).trim()
+    const anchor = hash === -1 ? '' : targetPart.slice(hash) // 含 '#锚点'
+    if (!rawTarget) return full
+    const resolved = resolve(rawTarget)
+    if (!resolved) return full
+    const next = newTargetOf(resolved, rawTarget)
+    if (!next || next === rawTarget) return full
+    changed++
+    return `[[${next}${anchor}${rest}]]`
+  })
+  return { text, changed }
+}
+
+/** 依据移动清单生成「新目标写法」推导器：沿用原链接形态，保留 `./` 前缀与扩展名写法 */
+function makeNewTargetOf(
+  root: string,
+  toNew: Map<string, string>
+): (resolvedAbs: string, originalTarget: string) => string | null {
+  return (resolvedAbs, originalTarget) => {
+    const to = toNew.get(resolvedAbs.toLowerCase())
+    if (!to) return null
+    const raw = originalTarget.trim()
+    const extMatch = /\.(md|markdown)$/i.exec(raw)
+    const ext = extMatch ? raw.slice(-extMatch[0].length) : ''
+    const body = raw.replace(/^\.\//, '').replace(/\.(md|markdown)$/i, '')
+    const next = body.includes('/')
+      ? relative(root, to)
+          .replace(/\.(md|markdown)$/i, '')
+          .split(/[\\/]/)
+          .join('/')
+      : basename(to, extname(to))
+    return (raw.startsWith('./') ? './' : '') + next + ext
+  }
+}
+
+/**
+ * 重命名 / 移动后，改写全库指向旧路径的 `[[wikilink]]`（fs 层编排）。
+ *
+ * ⚠️ 调用时机不可换：必须在「文件系统已迁移完成、但 `index` 仍是旧路径」的窗口内调用。
+ * 此时索引里还留着旧条目，才能把 `[[旧基名]]` 解析回旧绝对路径；一旦索引同步过，
+ * 旧条目消失，解析就无从下手。本函数**不修改索引**，索引刷新由调用方接着做。
+ *
+ * 受影响来源直接取索引已派生的 `backLinks`（零额外全库扫描，只读命中文件）；
+ * 只改写「能解析到被移动文档」的链接，断链不动。单文件写失败不影响其余（与 replaceInVault 同款容错）。
+ */
+export async function rewriteLinksForMoves(
+  root: string,
+  index: VaultIndex,
+  moves: MovePair[]
+): Promise<LinkRewriteSummary> {
+  const summary: LinkRewriteSummary = { sources: [], files: 0, links: 0 }
+  if (moves.length === 0) return summary
+
+  const toNew = new Map<string, string>()
+  for (const m of moves) toNew.set(m.from.toLowerCase(), m.to)
+  /** 来源文件自身可能也在移动之列（目录移动）→ 落到新位置；否则原地不动 */
+  const newPathOf = (p: string): string => toNew.get(p.toLowerCase()) ?? p
+
+  // 反链键大小写可能与路径不一致（Windows 大小写不敏感文件系统的常见坑），统一小写建表再查
+  const backLower = new Map<string, string[]>()
+  for (const [k, v] of Object.entries(index.backLinks)) backLower.set(k.toLowerCase(), v)
+  const sources = new Set<string>()
+  for (const m of moves) {
+    for (const src of backLower.get(m.from.toLowerCase()) ?? []) sources.add(src)
+  }
+  if (sources.size === 0) return summary
+
+  // 用「重命名前」的映射解析，才能把链接目标指回旧绝对路径
+  const maps = buildPathMaps(Object.keys(index.files), root)
+  const resolve = (t: string): string | null => resolveTargetWithMaps(maps, t)
+  const newTargetOf = makeNewTargetOf(root, toNew)
+
+  for (const src of sources) {
+    const target = newPathOf(src)
+    let raw: string
+    try {
+      raw = await readFile(target, 'utf-8')
+    } catch {
+      continue
+    }
+    const { text, changed } = rewriteWikiLinksInText(raw, resolve, newTargetOf)
+    if (changed === 0) continue
+    try {
+      await writeAtomic(target, text)
+      summary.files++
+      summary.links += changed
+      summary.sources.push(target)
+    } catch {
+      // 单文件写失败不影响其余文件（如只读文件）
+    }
+  }
+  return summary
+}
+
 /* ── 持久化（原子写，沿用项目 temp+rename 优势，避免多文件非原子写） ── */
 
 function indexDir(root: string): string {
@@ -812,51 +939,3 @@ export async function indexExists(root: string): Promise<boolean> {
   }
 }
 
-/* ── 检索辅助（供 searchVault 消费，解除 80 文件 / 20 命中上限） ── */
-
-export interface MetadataHit {
-  path: string
-  /** 命中字段：filename / title / tag / heading */
-  field: 'filename' | 'title' | 'tag' | 'heading'
-}
-
-/**
- * 在索引的轻量元数据上做匹配（瞬时，不读正文）。
- * 返回命中文件及命中的字段；用于搜索的「快路径」。
- */
-export function matchMetadata(
-  index: VaultIndex,
-  query: string,
-  opts?: SearchOptions
-): MetadataHit[] {
-  const q = query.trim().toLowerCase()
-  if (!q) return []
-  const hits: MetadataHit[] = []
-  const seen = new Set<string>()
-  const push = (path: string, field: MetadataHit['field']) => {
-    const key = `${path}#${field}`
-    if (seen.has(key)) return
-    seen.add(key)
-    hits.push({ path, field })
-  }
-  const matchText = (text: string): boolean => {
-    if (!text) return false
-    const t = text.toLowerCase()
-    if (opts?.wholeWord) {
-      // 全词匹配：标题/标签/文件名按词边界
-      return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRe(q)}([^\\p{L}\\p{N}]|$)`, 'u').test(t)
-    }
-    return t.includes(q)
-  }
-  for (const [path, entry] of Object.entries(index.files)) {
-    if (matchText(basename(path))) push(path, 'filename')
-    if (matchText(entry.title)) push(path, 'title')
-    for (const tag of entry.tags) if (matchText(tag)) push(path, 'tag')
-    for (const h of entry.headings) if (matchText(h.text)) push(path, 'heading')
-  }
-  return hits
-}
-
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}

@@ -9,6 +9,7 @@ import {
 } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
 import { markProgrammatic, assetsPathOf } from '../refreshGuard'
+import { baseName } from '../utils/path'
 import FileTree from './FileTree.vue'
 import MoveDialog from './MoveDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
@@ -500,7 +501,10 @@ async function doRename(path: string, value: string): Promise<void> {
   const wasActive = path === props.activePath
   let newPath = path
   try {
-    newPath = await window.api.renameItem(path, value)
+    const res = await window.api.renameItem(path, value)
+    newPath = res.path
+    // 自动同步了其它文档里的 [[引用]] → 明确告知，避免用户以为只有文件名变了
+    if (res.linksUpdated > 0) showToast(L.linksUpdated.replace('{n}', String(res.linksUpdated)))
     // 重命名目录后，把展开状态迁移到新路径，避免折叠
     if (node?.type === 'dir' && expanded.value.has(path)) {
       const next = new Set(expanded.value)
@@ -565,8 +569,11 @@ async function doMove(srcPath: string, destDir: string): Promise<void> {
   }
 
   let newPath = ''
+  let linksUpdated = 0
   try {
-    newPath = await window.api.moveItem(srcPath, destDir)
+    const res = await window.api.moveItem(srcPath, destDir)
+    newPath = res.path
+    linksUpdated = res.linksUpdated
   } catch (e) {
     showToast(L.moveFail.replace('{m}', errMsg(e)))
     return
@@ -584,6 +591,11 @@ async function doMove(srcPath: string, destDir: string): Promise<void> {
   if (props.activePath && srcPath === props.activePath) {
     selectedPath.value = newPath
   }
+
+  // 成功提示（顺带报告自动同步的引用数）
+  let doneMsg = L.moveDone.replace('{n}', baseName(newPath))
+  if (linksUpdated > 0) doneMsg += ` · ${L.linksUpdated.replace('{n}', String(linksUpdated))}`
+  showToast(doneMsg)
 
   // 交给 App：同步标签路径 + 抑制 watcher 回声 + 刷新文件树（单一刷新源）
   emit('moved', srcPath, newPath)

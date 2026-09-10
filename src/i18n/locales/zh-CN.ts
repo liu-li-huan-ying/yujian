@@ -513,6 +513,7 @@ const zhCN = {
     ctxMove: '移动到…',
     ctxDelete: '删除',
     renameFail: '重命名失败：{m}',
+    linksUpdated: '已同步更新 {n} 处引用',
     deleteFail: '删除失败：{m}',
     moveTitle: '移动到…',
     moveToRoot: '库根目录',

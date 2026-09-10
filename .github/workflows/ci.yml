@@ -1,0 +1,48 @@
+name: CI
+
+# 为什么加这一层：release.yml 只在打 tag 时跑（且只做打包），
+# 日常提交没有任何自动门禁——typecheck / lint / 测试全靠人手跑，
+# 一旦忘记就是「静默回归」。这个 workflow 把门禁钉在 PR 与 main 上。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # CI 使用官方镜像源，不受仓库内 .npmrc 的 npmmirror 影响
+          npm_config_registry: https://registry.npmjs.org/
+          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test (core logic)
+        run: npm test
+
+      - name: Verify markdown round-trip
+        run: npm run verify:md
+
+      - name: Build (main / preload / renderer)
+        run: npm run build

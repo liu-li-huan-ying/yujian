@@ -24,6 +24,7 @@ import type {
   BrokenLinkReport,
   SearchOptions,
   SearchResult,
+  MoveResult,
 } from '../shared/ipc-channels'
 import * as Idx from './vaultIndex'
 import * as Snap from './snapshots'
@@ -317,8 +318,11 @@ async function mkdirRobust(target: string, parent: string): Promise<void> {
   }
 }
 
-/** 重命名文件或文件夹。会顺带搬运同名的 `.assets` 资源目录（文档图片存储约定） */
-export async function renameItem(oldPath: string, newName: string): Promise<string> {
+/**
+ * 重命名文件或文件夹。会顺带搬运同名的 `.assets` 资源目录（文档图片存储约定），
+ * 并**自动更新全库指向旧路径的 `[[引用]]`**（文件名/路径变化时）。
+ */
+export async function renameItem(oldPath: string, newName: string): Promise<MoveResult> {
   const name = (newName ?? '').trim()
   if (!name) throw new Error('名称不能为空')
   // 不允许用路径分隔符伪造多级目录
@@ -327,7 +331,7 @@ export async function renameItem(oldPath: string, newName: string): Promise<stri
 
   const parent = dirname(oldPath)
   const newPath = join(parent, name)
-  if (newPath === oldPath) return oldPath
+  if (newPath === oldPath) return { path: oldPath, filesUpdated: 0, linksUpdated: 0 }
   if (await exists(newPath)) throw new Error(`已存在同名项目：${name}`)
 
   markProgrammaticChange()
@@ -381,7 +385,15 @@ export async function renameItem(oldPath: string, newName: string): Promise<stri
     // .assets 同步失败不应让主流程报错
   }
 
-  return newPath
+  // 自动更新全库指向旧路径的 [[引用]]（需求确认 2026-09-10），并即时维护索引
+  const movePairs = oldIsDir
+    ? oldMdRels.map((rel) => ({ from: join(oldPath, rel), to: join(newPath, rel) }))
+    : isMarkdown(basename(newPath))
+      ? [{ from: oldPath, to: newPath }]
+      : []
+  const { files, links } = await rewriteLinksThenRefreshIndex(movePairs)
+
+  return { path: newPath, filesUpdated: files, linksUpdated: links }
 }
 
 /** 删除文件或文件夹（递归）。删除文档时一并清理同名的 `.assets` 资源目录 */
@@ -463,7 +475,7 @@ export async function moveItem(
   oldPath: string,
   destDir: string,
   newName?: string,
-): Promise<string> {
+): Promise<MoveResult> {
   const name = (newName ?? '').trim() || basename(oldPath)
   if (/[\\/]/.test(name)) throw new Error('名称不能包含路径分隔符')
   if (name === '.' || name === '..') throw new Error('名称无效')
@@ -588,35 +600,67 @@ export async function moveItem(
     // 资源目录同步失败不应让主流程报错
   }
 
-  // 即时维护统一索引层，避免依赖 watcher 的延迟窗口
-  syncIndexForMove(normOld, target)
+  // 自动更新全库指向旧路径的 [[引用]]，并即时维护索引（避免 watcher 延迟窗口）
+  const movePairs = oldIsDir
+    ? oldMdRels.map((rel) => ({ from: join(oldPath, rel), to: join(target, rel) }))
+    : isMarkdown(basename(target))
+      ? [{ from: normOld, to: target }]
+      : []
+  const { files, links } = await rewriteLinksThenRefreshIndex(movePairs)
 
-  return target
+  return { path: target, filesUpdated: files, linksUpdated: links }
 }
 
-/** 移动后即时维护索引：文件精确移除+登记；目录触发防抖全量 reconcile */
-function syncIndexForMove(oldPath: string, newPath: string): void {
-  if (!idx || idxRoot === null) return
+/**
+ * 「重命名 / 移动」收口：先改写全库 `[[引用]]`，再刷新索引（**顺序不可换**）。
+ *
+ * 顺序依据：改写必须在索引仍是旧路径时进行，否则 `[[旧基名]]` 已解析不到旧绝对路径。
+ * 返回被改写的链接 / 文件数，供渲染层提示「已同步更新 N 处引用」。
+ */
+async function rewriteLinksThenRefreshIndex(
+  moves: { from: string; to: string }[],
+): Promise<{ files: number; links: number }> {
+  if (!idx || idxRoot === null || moves.length === 0) return { files: 0, links: 0 }
   const root = idxRoot
-  if (isMarkdown(basename(newPath))) {
-    Idx.removeFileFromIndex(idx, oldPath)
-    // 登记新位置（异步读取正文，不阻塞 move 返回）
-    void (async () => {
-      try {
-        const content = await readFile(newPath, 'utf-8')
-        const mtime = (await stat(newPath)).mtimeMs
-        Idx.indexFile(idx!, root, newPath, content, mtime, getMaps(root))
-      } catch {
-        // 读不到则等 watcher 兜底
-      }
-      invalidateMaps()
-      scheduleSave(root)
-    })()
-  } else {
-    // 目录：旧路径条目随 reconcile 被纠正；先让路径映射失效并立即排一次全量对齐
-    invalidateMaps()
-    scheduleReconcile(root)
+  const summary = await Idx.rewriteLinksForMoves(root, idx, moves).catch(() => null)
+  await refreshIndexAfterMove(root, moves, summary?.sources ?? [])
+  return { files: summary?.files ?? 0, links: summary?.links ?? 0 }
+}
+
+/**
+ * 迁移后的索引同步：移除旧条目 → 用「含新路径」的映射登记新条目 → 重解析被改写的来源。
+ * 只动受影响的少数条目，不触发全库 reconcile（大库无感，延续批次零铁律①）。
+ */
+async function refreshIndexAfterMove(
+  root: string,
+  moves: { from: string; to: string }[],
+  rewrittenSources: string[],
+): Promise<void> {
+  if (!idx || idxRoot !== root) return
+  for (const m of moves) Idx.removeFileFromIndex(idx, m.from)
+  invalidateMaps()
+  // 映射需同时含「新路径」与「未移动的既有文件」，被改写的来源才能解析到新目标
+  const maps = Idx.buildPathMaps([...Object.keys(idx.files), ...moves.map((m) => m.to)], root)
+  for (const m of moves) {
+    try {
+      const content = await readFile(m.to, 'utf-8')
+      const mtime = (await stat(m.to)).mtimeMs
+      Idx.indexFile(idx, root, m.to, content, mtime, maps)
+    } catch {
+      // 读不到则交给 watcher 兜底
+    }
   }
+  for (const src of rewrittenSources) {
+    try {
+      const content = await readFile(src, 'utf-8')
+      const mtime = (await stat(src)).mtimeMs
+      Idx.indexFile(idx, root, src, content, mtime, maps)
+    } catch {
+      // 忽略：watcher 会兜底
+    }
+  }
+  invalidateMaps()
+  scheduleSave(root)
 }
 
 /* ── 统一 vault 索引层（批次零地基，供搜索 / 双链 / 标签 / 图谱消费） ── */

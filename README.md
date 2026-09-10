@@ -220,6 +220,12 @@ npm run dev
 # 类型检查
 npm run typecheck
 
+# 核心逻辑测试（索引 / 引用自动改写 / wikilink 往返 / i18n 双语对齐 / IPC 契约）
+npm test
+
+# 一键门禁：typecheck + lint + test
+npm run check
+
 # 构建产物到 out/
 npm run build
 

@@ -208,6 +208,12 @@ npm run dev
 # type check
 npm run typecheck
 
+# core-logic tests (index / auto link rewrite / wikilink round-trip / i18n parity / IPC contract)
+npm test
+
+# full gate: typecheck + lint + test
+npm run check
+
 # build to out/
 npm run build
 

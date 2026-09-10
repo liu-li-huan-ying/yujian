@@ -124,8 +124,10 @@ export const wikiLinkSchema = $nodeSchema(wikiLinkId, () => ({
   toMarkdown: {
     match: (node: any) => node.type.name === wikiLinkId,
     runner: (state: any, node: any) => {
-      const { target, alias } = node.attrs
-      const text = alias ? `[[${target}|${alias}]]` : `[[${target}]]`
+      const { target, alias, anchor } = node.attrs
+      // 锚点必须写回，否则 `[[目标#小节]]` 一存盘就退化成 `[[目标]]`（往返保真红线）
+      const hash = anchor ? `#${anchor}` : ''
+      const text = alias ? `[[${target}${hash}|${alias}]]` : `[[${target}${hash}]]`
       // 以纯文本节点写回，保证 `[[`/`]]` 定界符原样保留，Markdown 往返保真
       state.addNode('text', undefined, text)
     }
