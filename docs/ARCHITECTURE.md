@@ -1207,6 +1207,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
   * 判读铁律：本仓库 CJK 在部分终端 / 日志管道里会被**二次编码**，肉眼看到的乱码未必是文件问题。判断一律以**码点或字节**为准（`scripts/check-encoding.mjs` 的报告刻意只输出 ASCII）。
 * `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（29 条）。
 * `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `perf:index` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
+* 工作流统一 **Node 22** + `actions/checkout@v5` / `actions/setup-node@v5`：Node 20 已于 2026-04 EOL，其 action runtime（node20）也随 GitHub 强制切 Node 24 而失效——继续钉 v4 会被 annotation 点名并在切换后硬失败。
 
 ***
 
