@@ -1203,11 +1203,15 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **门禁**
 
-* `npm run check` = `typecheck` + `lint` + `check:encoding` + `test` + `verify:md` —— 与 CI 逐步对齐，提交前一条命令跑完。
+* `npm run check` = `typecheck` + `lint` + `check:encoding` + `test` + `verify:md` + `verify:corpus` —— 与 CI 逐步对齐，提交前一条命令跑完。
 * `npm run lint` 覆盖全仓（`src` + `electron`），不再只扫 `src`：主进程是删除 / 移动 / 落盘等最高风险代码所在。
 * `npm run check:encoding` → `scripts/check-encoding.mjs`：扫描受版本管理的文本文件，出现 U+FFFD 即失败。合法 UTF-8 解码**永不**产出 U+FFFD，故它是「字符已被静默损坏」的高置信信号——这类损坏不报错、不拦构建，只有人读到才发现（2026-09-10 实测中过一次，单文件 80 字符被抹）。
   * 判读铁律：本仓库 CJK 在部分终端 / 日志管道里会被**二次编码**，肉眼看到的乱码未必是文件问题。判断一律以**码点或字节**为准（`scripts/check-encoding.mjs` 的报告刻意只输出 ASCII）。
 * `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（29 条）。
+* `npm run verify:corpus` = **Markdown 往返语料矩阵**：`tests/corpus/*.md` 逐个跑「parse → serialize，断言逐字节相等」（当前 9 个用例）。新增用例只需往目录丢一个 `.md`，**不需要写 JS**——把补用例的门槛从「会写 JS」降到「会写 Markdown」，避免自定义语法扩建时漏测。
+  * 语料必须写成 remark 的**规范形式**：`*` 项目符号（`--` 会被正常化）、`***` 分隔线（`---` 会被改）、表格 `--` 分隔行并按最宽单元格补空格对齐。这些是 remark 上游行为，**不是本项目缺陷**；完整对照表与编写约定见 `tests/corpus/README.md`。
+  * 与「未编辑文档一字不改」不冲突：未编辑文档走保真层（原始文本直通），只有真正被编辑、需要序列化时才走这条链路。
+  * 已证伪：把 wikiLink handler 的锚点去掉（历史 P0 缺陷）→ `06-wikilink.md` 正确失败并指出差异位置。
 * `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `perf:index` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
 * 工作流统一 **Node 22** + `actions/checkout@v5` / `actions/setup-node@v5`：Node 20 已于 2026-04 EOL，其 action runtime（node20）也随 GitHub 强制切 Node 24 而失效——继续钉 v4 会被 annotation 点名并在切换后硬失败。
 

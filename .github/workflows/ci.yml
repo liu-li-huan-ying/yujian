@@ -47,6 +47,9 @@ jobs:
       - name: Verify markdown round-trip
         run: npm run verify:md
 
+      - name: Verify markdown corpus (byte-exact round-trip)
+        run: npm run verify:corpus
+
       - name: Index performance baseline
         run: npm run perf:index
 

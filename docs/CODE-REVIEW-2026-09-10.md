@@ -169,6 +169,7 @@ export function reportSoftError(scope: string, err: unknown): void {
 | --- | --- | --- |
 | 核心逻辑单测 / 集成 | `npm test` → `scripts/test-core.mjs` | **124 条断言**（A–H 八段） |
 | Markdown 解析往返 | `npm run verify:md` | 29 条 |
+| Markdown 往返语料矩阵 | `npm run verify:corpus`（`tests/corpus/*.md`） | 9 个用例，逐个断言「parse → serialize 逐字节相等」 |
 | 表格稳定性压测 | `npm run stress:table`（新接线） | 19 条 |
 | 索引性能基线 | `npm run perf:index`（3000 文件，可由 `YJ_PERF_FILES` 放大） | 9 项断言（含严格增量性） |
 | 文本编码门禁 | `npm run check:encoding` | 全部受版本控制文本文件，断言无 U+FFFD |
@@ -197,7 +198,9 @@ export function reportSoftError(scope: string, err: unknown): void {
 1. ✅ **索引性能基线测试**（对应硬约束「5000 文件无感知、内存 < 100MB」）——`scripts/perf-index.mjs`（`npm run perf:index`），3000 文件实测：全量构建 ~1.0~1.4s、单文件增量 ~0.007ms、索引 2.04MB、堆增量 ~7MB；并断言「增量不得触碰无关条目」。
    * ⚠️ 「严格增量」的断言方式踩过一次坑：最初写「增量 ≥ 20× 便宜于全量/N」，但全量是 I/O 密集、增量是纯 CPU，机器一快 `全量/N` 变小、比值从本地 48× 掉到 CI 15× → **门禁随机飘红**。已改为**同进程内两个库规模对比**（N vs N/10）：O(1) 时 ~1.06×，退化成 O(n) 时 ~10.5×（已证伪验证）。这条防坑现在是确定性的，不再受机器快慢影响。
 2. ✅ **关联数据随迁的回归测试**（对应硬约束 6，数据安全红线）——未做 `vaultFs.ts` 大拆分，改用更小的手术：新增 `electron/main/trash.ts`，以**惰性** `import('electron')` + `setTrashImpl` 注入回收站实现，`vault.ts` / `snapshots.ts` 顶部不再 `import { shell }`，从而可在 Node 直测。H 段 27 条断言覆盖改名 / 移动 / 删除（含文件夹递归、拒止分支）对 `.assets` 与 `.yujian-history` 的搬运与清理。
-3. ⬜ **Markdown 往返语料矩阵**：`verify:md` 仍是手写用例（29 条）。自定义语法已不少（wikilink / 内联 HTML / 数学），建议后续扩成「语料文件夹 → 逐文件 parse→serialize 断言逐字节相等」。
+3. ✅ **Markdown 往返语料矩阵**——`scripts/verify-corpus.mjs`（`npm run verify:corpus`）：`tests/corpus/*.md` 逐个跑完整 remark 流水线（gfm + `wikilink` / `tag` / `htmlInline` 三个自定义插件），断言 parse→serialize 逐字节相等。新增用例 = 丢一个 `.md`，不写 JS。
+   * 关键取舍：断言的是「**规范形式**的往返」而非「任何 Markdown 都原样存回」——remark 会把 `-` 正常化成 `*`、`---` 改成 `***`、表格按列宽对齐。这些是上游行为，不是本项目的缺陷，故语料必须按规范形式编写（对照表见 `tests/corpus/README.md`）。
+   * 已证伪：把 wikiLink handler 的锚点去掉（历史 P0 缺陷）→ `06-wikilink.md` 正确失败。
 4. ✅ **软错误上报**（§2.2(2)）——G 段 30 条断言覆盖「某类失败会被记录」「上报自身永不抛错」「环形缓冲裁剪」。
 
 ---
@@ -229,4 +232,4 @@ export function reportSoftError(scope: string, err: unknown): void {
 
 1. ⬜ `Sidebar.vue`（1611 行）/ `SnapshotPanel.vue`（1493 行）同样偏大，可用 `App.vue` 的同一手法增量抽 composable。
 2. ⬜ `useTabs()`：`remapTabPaths` / `markProgrammatic` 仍留在组件里（需 host / session 上下文），按需再收。
-3. ⬜ `verify:md` 扩成语料矩阵（见 §4.4-3）。
+3. ⬜ 语料可继续扩：数学（`$…$` / `$$…$$`）、脚注、frontmatter、引用的引用等构造尚未纳入（`frontmatter` 需引入 `remark-frontmatter`）。
