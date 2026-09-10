@@ -17,11 +17,11 @@
  * 运行：npm test
  * 退出码：0 = 全部通过；1 = 存在失败。
  */
-import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, readFileSync, renameSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
+import { bundleTs } from './lib/bundle.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
@@ -46,29 +46,14 @@ function section(title) {
 }
 
 /**
- * 把 TS 模块用 esbuild 打成可在 Node 直接 import 的 mjs。
+ * 把 TS 模块打成可在 Node 直接 import 的 mjs（实现见 scripts/lib/bundle.mjs）。
+ * 刻意不在这里用子进程调 esbuild：那条路径在 Linux 上是原生二进制，
+ * `node <它>` 会直接崩（详见该文件注释）。
  * stubs：把「不必在 Node 里真跑」的依赖（如 Milkdown 的 $remark / $nodeSchema）替换为最小桩，
  * 从而对纯逻辑（remark 改写 / toMarkdown 序列化）做断言——与 scripts/verify-markdown.mjs 同法。
  */
 function bundle(entry, outName, stubs = {}) {
-  const tmp = mkdtempSync(join(tmpdir(), 'yj-test-'))
-  const out = join(tmp, outName)
-  const args = [
-    join(root, 'node_modules', 'esbuild', 'bin', 'esbuild'),
-    join(root, entry),
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${out}`,
-    '--log-level=error',
-  ]
-  for (const [pkg, code] of Object.entries(stubs)) {
-    const stubPath = join(tmp, pkg.replace(/[^\w]/g, '_') + '.mjs')
-    writeFileSync(stubPath, code, 'utf-8')
-    args.push(`--alias:${pkg}=${stubPath}`)
-  }
-  execFileSync(process.execPath, args, { cwd: root, stdio: 'pipe' })
-  return { url: pathToFileURL(out).href, dir: tmp }
+  return bundleTs({ root, entry, outName, stubs })
 }
 
 /** 建一个临时笔记库并写入若干文档（key = 相对路径，value = 正文） */
@@ -85,7 +70,7 @@ function makeVault(files) {
 const read = (p) => readFileSync(p, 'utf-8')
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-const { url, dir: bundleDir } = bundle('electron/main/vaultIndex.ts', 'vaultIndex.mjs')
+const { url, dir: bundleDir } = await bundle('electron/main/vaultIndex.ts', 'vaultIndex.mjs')
 
 try {
   const Idx = await import(url)
@@ -367,7 +352,7 @@ try {
 section('[D] wikilink 语法往返 —— 目标 / 别名 / 锚点一个都不能丢')
 
 {
-  const { url: wUrl, dir: wDir } = bundle('src/editor/features/wikilink.ts', 'wikilink.mjs', {
+  const { url: wUrl, dir: wDir } = await bundle('src/editor/features/wikilink.ts', 'wikilink.mjs', {
     '@milkdown/kit/utils':
       'export const $remark = (_id, f) => f()\nexport const $nodeSchema = (_id, f) => f()\nexport const $inputRule = (f) => f()\n',
     '@milkdown/kit/prose/inputrules':
@@ -437,8 +422,8 @@ section('[D] wikilink 语法往返 —— 目标 / 别名 / 锚点一个都不�
 section('[E] i18n 双语对齐 —— 键集合与插值变量逐条一致')
 
 {
-  const zh = bundle('src/i18n/locales/zh-CN.ts', 'zh-CN.mjs')
-  const en = bundle('src/i18n/locales/en-US.ts', 'en-US.mjs')
+  const zh = await bundle('src/i18n/locales/zh-CN.ts', 'zh-CN.mjs')
+  const en = await bundle('src/i18n/locales/en-US.ts', 'en-US.mjs')
   try {
     const zhObj = (await import(zh.url)).default
     const enObj = (await import(en.url)).default

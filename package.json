@@ -14,10 +14,10 @@
     "verify:md": "node scripts/verify-markdown.mjs",
     "test": "node scripts/test-core.mjs",
     "stress:table": "node scripts/stress-table.mjs",
-    "check": "npm run typecheck && npm run lint && npm test",
+    "check": "npm run typecheck && npm run lint && npm run check:encoding && npm test && npm run verify:md",
     "clean": "node scripts/clean.mjs",
-    "lint": "eslint src --ext .ts,.vue",
-    "lint:fix": "eslint src --ext .ts,.vue --fix",
+    "lint": "eslint . --ext .ts,.vue",
+    "lint:fix": "eslint . --ext .ts,.vue --fix",
     "format": "prettier --write \"src/**/*.{ts,vue}\"",
     "format:check": "prettier --check \"src/**/*.{ts,vue}\"",
     "dist": "electron-vite build && electron-builder --win",
@@ -25,7 +25,8 @@
     "dist:linux": "electron-vite build && electron-builder --linux",
     "release": "electron-vite build && electron-builder --win --publish=onTag",
     "release:mac": "electron-vite build && electron-builder --mac --publish=onTag",
-    "release:linux": "electron-vite build && electron-builder --linux --publish=onTag"
+    "release:linux": "electron-vite build && electron-builder --linux --publish=onTag",
+    "check:encoding": "node scripts/check-encoding.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

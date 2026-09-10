@@ -13,11 +13,10 @@
  *
  * 用法：npm run verify:md
  */
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { rmSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
+import { bundleTs } from './lib/bundle.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
@@ -39,31 +38,14 @@ function report(results) {
 
 /** 把 TS 模块打包成可在 Node 里直接 import 的 mjs（Milkdown 依赖走最小桩） */
 function bundle(entry, outName, stubs) {
-  const tmp = mkdtempSync(join(tmpdir(), 'yj-verify-'))
-  const args = [
-    join(root, 'node_modules', 'esbuild', 'bin', 'esbuild'),
-    join(root, entry),
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${join(tmp, outName)}`,
-    '--log-level=error'
-  ]
-  for (const [pkg, code] of Object.entries(stubs)) {
-    const stubPath = join(tmp, pkg.replace(/[^\w]/g, '_') + '.mjs')
-    writeFileSync(stubPath, code, 'utf-8')
-    args.push(`--alias:${pkg}=${stubPath}`)
-  }
-  execFileSync(process.execPath, args, { cwd: root, stdio: 'pipe' })
-  return { url: pathToFileURL(join(tmp, outName)).href, dir: tmp }
+  return bundleTs({ root, entry, outName, stubs })
 }
-
 /* ────────────────────────────────────────────────
    一、数学渲染（src/editor/features/mathjax.ts）
    ──────────────────────────────────────────────── */
 async function testMath() {
   console.log('\n[1m[数学渲染][0m')
-  const { url, dir } = bundle(
+  const { url, dir } = await bundle(
     'src/editor/features/mathjax.ts',
     'mathjax.mjs',
     { '@milkdown/kit/prose/state': 'export class Plugin { constructor(s) { this.spec = s } }\n' }
@@ -159,7 +141,7 @@ async function testMath() {
    ──────────────────────────────────────────────── */
 async function testHtmlInline() {
   console.log('\n[1m[内联 HTML / <kbd>][0m')
-  const { url, dir } = bundle(
+  const { url, dir } = await bundle(
     'src/editor/features/htmlInline.ts',
     'htmlInline.mjs',
     {

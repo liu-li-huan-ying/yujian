@@ -1181,7 +1181,9 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **测试套件（零新依赖）**
 
-* `npm test` → `scripts/test-core.mjs`。沿用既有「esbuild 把 TS 打成 mjs、在 Node 里直接断言」的做法，**不启动 Electron、不引入测试框架**。
+* `npm test` → `scripts/test-core.mjs`。沿用既有「用 esbuild 把 TS 打成 mjs、在 Node 里直接断言」的做法，**不启动 Electron、不引入测试框架**。打包统一走 `scripts/lib/bundle.mjs`（esbuild **JS API**）。
+  * ⚠️ 切勿为了图省事改成子进程 `node <node_modules/esbuild/bin/esbuild>`：该路径在 Windows 上是 JS 启动壳、在 Linux/macOS 上是**原生二进制**（ELF / Mach-O）。`node <它>` 只在 Windows 能跑，CI（ubuntu）会直接崩 `SyntaxError: Invalid or unexpected token`（2026-09-10 CI 失败根因）。
+  * `bundleTs()` 内置 60s 超时，避免打包子进程卡死把 CI job 拖到超时。
 * A / C / C2 / C3：`rewriteWikiLinksInText` 纯函数 + 临时库端到端（文件改名、目录移动、来源自迁移、零命中不写盘、幂等、CRLF 保真）。
 * B：索引纯函数（`parseFile` / `deriveBackLinks` / `indexFile` 增量 / `removeFileFromIndex` / 解析映射同源）。
 * D：wikilink 语法往返（目标 / 别名 / 锚点一个不丢）——上线首日即抓出 `#锚点` 被丢弃的数据丢失缺陷。
@@ -1191,9 +1193,12 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **门禁**
 
-* `npm run check` = `typecheck` + `lint` + `test`。
+* `npm run check` = `typecheck` + `lint` + `check:encoding` + `test` + `verify:md` —— 与 CI 逐步对齐，提交前一条命令跑完。
+* `npm run lint` 覆盖全仓（`src` + `electron`），不再只扫 `src`：主进程是删除 / 移动 / 落盘等最高风险代码所在。
+* `npm run check:encoding` → `scripts/check-encoding.mjs`：扫描受版本管理的文本文件，出现 U+FFFD 即失败。合法 UTF-8 解码**永不**产出 U+FFFD，故它是「字符已被静默损坏」的高置信信号——这类损坏不报错、不拦构建，只有人读到才发现（2026-09-10 实测中过一次，单文件 80 字符被抹）。
+  * 判读铁律：本仓库 CJK 在部分终端 / 日志管道里会被**二次编码**，肉眼看到的乱码未必是文件问题。判断一律以**码点或字节**为准（`scripts/check-encoding.mjs` 的报告刻意只输出 ASCII）。
 * `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（29 条）。
-* `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `test` / `verify:md` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
+* `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
 
 ***
 

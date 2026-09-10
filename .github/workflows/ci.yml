@@ -38,6 +38,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check text encoding (no U+FFFD)
+        run: npm run check:encoding
+
       - name: Test (core logic)
         run: npm test
 

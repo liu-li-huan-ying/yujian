@@ -188,7 +188,7 @@ function extractInlineTags(content: string): string[] {
   const out: string[] = []
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
-    const name = m[1].replace(/[/\-]+$/, '')
+    const name = m[1].replace(/[/-]+$/, '')
     if (name) out.push(name)
   }
   return out
@@ -196,7 +196,7 @@ function extractInlineTags(content: string): string[] {
 
 /** 标签归一：去前导 #、去尾部 / 或 -（#父/ 这类不成形写法不产生空层级） */
 function normalizeTag(raw: string): string {
-  return raw.trim().replace(/^#+/, '').replace(/[/\-]+$/, '')
+  return raw.trim().replace(/^#+/, '').replace(/[/-]+$/, '')
 }
 
 /** 把 wikilink 原始目标归一化为查表 key（去 `./` 前缀、去扩展名）——目标解析的唯一入口，勿另起实现 */
