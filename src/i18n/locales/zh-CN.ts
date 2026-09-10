@@ -403,6 +403,11 @@ const zhCN = {
     integrityRepairConfirm:
       '将重建索引并删除孤儿快照（走回收站）；缺失附件与断链需手动处理。是否继续？',
     integrityNothingToRepair: '无可修复项',
+    /* ── 软错误（已知可容忍失败）── */
+    integritySoftErrors: '已忽略的小故障',
+    integritySoftHint:
+      '这些失败不影响继续使用（如索引落盘失败、快照搬运失败），但反复出现说明有东西一直在坏。',
+    integritySoftClear: '清除记录',
     /* ── 整库备份 / 恢复（批次一）── */
     backup: '整库备份',
     backupTitleDesc: '把整个笔记库打包为 .zip（含快照与附件，不含可重建索引），或从中恢复。',

@@ -32,6 +32,7 @@ import {
   type MocItem,
   type MocGroup,
   type MoveResult,
+  type SoftErrorReport,
 } from '../shared/ipc-channels'
 
 /**
@@ -127,6 +128,14 @@ const api = {
   /** 一键修复：重建索引 / 删除孤儿快照（破坏性动作须前端二次确认后传入） */
   repairIntegrity: (root: string, actions: string[]): Promise<RepairResult> =>
     ipcRenderer.invoke(IPC.VAULT_INTEGRITY_REPAIR, root, actions),
+
+  /** 软错误（已知可容忍失败）查阅：主进程里被 catch 吞掉但不该消失的 IO 失败 */
+  getSoftErrors: (limit?: number): Promise<SoftErrorReport> =>
+    ipcRenderer.invoke(IPC.SOFT_ERRORS_GET, limit),
+
+  /** 清空软错误记录（用户确认已知晓后调用） */
+  clearSoftErrors: (): Promise<{ cleared: number }> =>
+    ipcRenderer.invoke(IPC.SOFT_ERRORS_CLEAR),
 
   /** 整库备份：打包为 zip 到 destZip（用户经保存对话框选定） */
   backupVault: (root: string, destZip: string): Promise<BackupResult> =>

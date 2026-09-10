@@ -11,6 +11,7 @@ import {
   type StartupMode,
   type ZenPrefs
 } from '../shared/ipc-channels'
+import { reportSoftError } from './softError'
 
 /**
  * 会话状态持久化 —— 崩溃恢复的地基。
@@ -98,7 +99,8 @@ async function persist(state: SessionState): Promise<void> {
   try {
     // 原子写（临时文件 + rename），对 Windows 只读 / 同步锁 EPERM 做兜底；写入中途崩溃不会留下半个 json
     await atomicWrite(target, JSON.stringify(state, null, 2))
-  } catch {
+  } catch (e) {
+    reportSoftError('session.persist', e, 'debug')
     // 会话持久化失败不该干扰编辑，静默即可
   }
 }

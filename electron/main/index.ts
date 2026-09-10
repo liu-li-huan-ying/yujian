@@ -32,6 +32,14 @@ import { patchSession, readSession } from './session'
 import { saveAsset } from './assets'
 import { getImgHost, setImgHost, uploadToImgHost, publishImages } from './imghost'
 import { listSnapshots, createSnapshot, restoreSnapshot, deleteSnapshot, setSnapshotTags } from './snapshots'
+import {
+  reportSoftError,
+  getSoftErrors,
+  summarizeSoftErrors,
+  countSoftErrors,
+  clearSoftErrors,
+  setSoftErrorVerbose
+} from './softError'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -97,7 +105,9 @@ function handleJadeAsset(request: GlobalRequest): GlobalResponse {
         'cache-control': 'public, max-age=31536000, immutable'
       }
     })
-  } catch {
+  } catch (e) {
+    // 图片/附件读盘失败 → 渲染层表现为「裂图」，留痕以便排查（缺文件属常见，故 debug 级）
+    reportSoftError('asset.read', e, 'debug')
     return new Response('Not found', { status: 404 })
   }
 }
@@ -239,7 +249,8 @@ function registerIpc(): void {
     try {
       const s = await stat(filePath)
       return { exists: true, mtimeMs: s.mtimeMs, size: s.size }
-    } catch {
+    } catch (e) {
+      reportSoftError('file.stat', e, 'debug')
       return { exists: false, mtimeMs: 0, size: 0 }
     }
   })
@@ -326,7 +337,8 @@ function registerIpc(): void {
       const src = candidates.find((p) => existsSync(p))
       if (!src) return
       await copyFile(src, target)
-    } catch {
+    } catch (e) {
+      reportSoftError('welcome.seed', e)
       // 播种失败静默忽略，绝不影响正常使用
     }
   }
@@ -380,6 +392,17 @@ function registerIpc(): void {
     async (_event, root: string, actions: string[]) =>
       VaultIntegrity.repairIntegrity(root, actions as IntegrityAction[])
   )
+
+  // 软错误（已知可容忍失败）查阅：把被 catch 吞掉的 IO 失败暴露给完整性面板。
+  // 纯读内存环（softError.ts），无写操作，故不需要二次确认。
+  ipcMain.handle(IPC.SOFT_ERRORS_GET, async (_event, limit?: number) => ({
+    entries: getSoftErrors({ limit }),
+    summary: summarizeSoftErrors(),
+    warnCount: countSoftErrors()
+  }))
+
+  // 软错误清空：用户确认已知晓后调用。返回清掉的条数。
+  ipcMain.handle(IPC.SOFT_ERRORS_CLEAR, async () => ({ cleared: clearSoftErrors() }))
 
   // 整库备份：打包为 zip 到用户选定的目标路径（排除 .mdeditor 缓存）。
   ipcMain.handle(
@@ -573,6 +596,8 @@ function registerIpc(): void {
 }
 
 void app.whenReady().then(() => {
+  // 打包后主进程没有可见控制台：软错误只入环（供完整性面板查阅），不再打印
+  setSoftErrorVerbose(!app.isPackaged)
   protocol.handle('jade-asset', handleJadeAsset)
   registerIpc()
   createWindow()

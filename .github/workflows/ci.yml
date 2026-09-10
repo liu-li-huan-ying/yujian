@@ -47,5 +47,8 @@ jobs:
       - name: Verify markdown round-trip
         run: npm run verify:md
 
+      - name: Index performance baseline
+        run: npm run perf:index
+
       - name: Build (main / preload / renderer)
         run: npm run build

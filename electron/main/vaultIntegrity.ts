@@ -1,7 +1,7 @@
 import { access, readdir, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { shell } from 'electron'
+import { trashItem } from './trash'
 import * as Idx from './vaultIndex'
 import { checkLinks } from './vault'
 import type {
@@ -11,6 +11,7 @@ import type {
   IntegrityReport,
   RepairResult
 } from '../shared/ipc-channels'
+import { reportSoftError } from './softError'
 
 /**
  * vault 级完整性自检与一键修复 —— Phase 3 批次一（数据安全）。
@@ -20,7 +21,7 @@ import type {
  *  - 自检**只在用户显式触发时**运行（面板打开 / 命令面板），不做任何后台周期扫描；
  *  - 索引是「可重建缓存」（落在 `.mdeditor/`，与快照 `.yujian-history/` 严格分离），
  *    因此索引不一致 / 空索引都可通过「重建索引」无损修复；
- *  - 孤儿快照删除走系统回收站（shell.trashItem），绝不 `rm`，符合项目数据安全规定。
+ *  - 孤儿快照删除走系统回收站（trashItem），绝不 `rm`，符合项目数据安全规定。
  */
 
 const HISTORY_DIR = '.yujian-history'
@@ -133,7 +134,8 @@ export async function runIntegrityCheck(root: string): Promise<IntegrityReport> 
         })
       }
     }
-  } catch {
+  } catch (e) {
+    reportSoftError('integrity.scan', e, 'debug')
     // 断链扫描失败不应让自检整体失败
   }
 
@@ -175,14 +177,15 @@ export async function repairIntegrity(
     let n = 0
     for (const d of await findOrphanSnapshots(root)) {
       try {
-        await shell.trashItem(d)
+        await trashItem(d)
         n++
       } catch {
         // 回收站不可用（如某些 Linux 环境）时降级为软删除（保留父目录）
         try {
           await rm(d, { recursive: true, force: true })
           n++
-        } catch {
+        } catch (e) {
+          reportSoftError('orphanSnapshot.delete', e, 'debug')
           /* 忽略单个失败，继续其余 */
         }
       }

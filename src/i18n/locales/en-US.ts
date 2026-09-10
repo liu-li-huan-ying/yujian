@@ -406,6 +406,11 @@ const enUS = {
     integrityRepairConfirm:
       'This rebuilds the index and deletes orphan snapshots (via trash). Missing attachments and broken links need manual fixes. Continue?',
     integrityNothingToRepair: 'Nothing to repair',
+    /* ── Soft errors (tolerated failures) ── */
+    integritySoftErrors: 'Tolerated failures',
+    integritySoftHint:
+      'These failures do not block usage (e.g. index save failed, snapshot move failed), but a recurring one means something keeps breaking.',
+    integritySoftClear: 'Clear',
     /* ── Vault backup / restore (batch one) ── */
     backup: 'Vault backup',
     backupTitleDesc:

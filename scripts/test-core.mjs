@@ -13,15 +13,30 @@
  *  C. 端到端（临时库真实读写）—— 文件改名 / 目录移动 / 来源自身也被移动 / 幂等
  *  D. wikilink 语法往返 —— 目标 / 别名 / 锚点一个都不能丢（src/editor/features/wikilink.ts）
  *  E. i18n 双语对齐 —— 键集合与插值变量逐条一致（zh-CN / en-US）
+ *  F. IPC 契约 —— 常量表 / 主进程接线 / preload 暴露三方一致
+ *  G. 软错误上报 —— 可容忍失败必须有出口、分级、有界，且上报自身绝不抛
+ *  H. 数据安全线 —— .assets / 快照桶随文档迁移、删除走回收站、危险操作前置守卫
  *
  * 运行：npm test
  * 退出码：0 = 全部通过；1 = 存在失败。
  */
-import { mkdtempSync, writeFileSync, readFileSync, renameSync, mkdirSync, rmSync } from 'node:fs'
+import {
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  renameSync,
+  mkdirSync,
+  rmSync,
+  readdirSync,
+  existsSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname, resolve } from 'node:path'
+import { join, basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bundleTs } from './lib/bundle.mjs'
+
+// 测试期静音软错误的开发态 console 输出（断言不依赖日志，日志会淹没 97 条结果）
+process.env.NODE_ENV = 'production'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..')
@@ -510,6 +525,261 @@ section('[F] IPC 契约 —— 每个通道都既有主进程接线又有 preloa
   check('每个通道都在主进程被引用（handle / send）', noHandler.length === 0, `未引用：${noHandler.join(', ')}`)
   check('每个通道都在 preload 被引用（invoke / on）', noPreload.length === 0, `未引用：${noPreload.join(', ')}`)
   check('不存在常量表里没有的野通道', orphan.length === 0, `多余：${orphan.join(', ')}`)
+}
+
+/* ── G. 软错误上报：可容忍失败必须有出口、有界、且绝不影响主流程 ── */
+section('[G] 软错误上报 —— 有出口 / 分级 / 有界 / 上报自身绝不抛')
+
+{
+  const { url: sUrl, dir: sDir } = await bundle('electron/main/softError.ts', 'softError.mjs')
+  try {
+    const S = await import(sUrl)
+
+    // describeError：把任意抛出物收敛成一行可读摘要
+    const enoent = Object.assign(new Error('no such file'), { code: 'ENOENT' })
+    check(
+      'describeError 带 errno code',
+      S.describeError(enoent) === 'Error[ENOENT]: no such file',
+      S.describeError(enoent)
+    )
+    check('describeError 普通 Error', S.describeError(new Error('boom')) === 'Error: boom')
+    check('describeError 字符串原样', S.describeError('plain') === 'plain')
+    check(
+      'describeError null / undefined',
+      S.describeError(null) === 'null' && S.describeError(undefined) === 'undefined'
+    )
+    check('describeError 普通对象转 JSON', S.describeError({ a: 1 }) === '{"a":1}', S.describeError({ a: 1 }))
+    {
+      const cyc = {}
+      cyc.self = cyc
+      const out = S.describeError(cyc)
+      check('describeError 循环引用不抛且给兜底串', typeof out === 'string' && out.length > 0, String(out))
+    }
+    check(
+      'describeError Symbol 也返回字符串（JSON.stringify 会返回 undefined）',
+      typeof S.describeError(Symbol('s')) === 'string',
+      String(S.describeError(Symbol('s')))
+    )
+
+    S.clearSoftErrors()
+
+    S.reportSoftError('index.save', new Error('disk full'))
+    S.reportSoftError('history.move', new Error('locked'), 'debug')
+    const all = S.getSoftErrors()
+    check('上报后可读回', all.length === 2, String(all.length))
+    check('默认级别为 warn', all[0].level === 'warn', all[0].level)
+    check('显式 debug 级别被保留', all[1].level === 'debug', all[1].level)
+    check('scope 如实记录', all[0].scope === 'index.save' && all[1].scope === 'history.move')
+    check('seq 严格递增', all[1].seq === all[0].seq + 1, all[0].seq + ' → ' + all[1].seq)
+    check('message 已收敛为一行摘要', all[0].message === 'Error: disk full', all[0].message)
+    check('记录时间戳', typeof all[0].at === 'number' && all[0].at > 0)
+
+    check('按级别过滤', S.getSoftErrors({ level: 'warn' }).length === 1)
+    check('limit 取最近 N 条', S.getSoftErrors({ limit: 1 })[0].scope === 'history.move')
+    check('countSoftErrors 默认只数 warn（debug 属正常降级，不计故障）', S.countSoftErrors() === 1)
+
+    {
+      const snapshot = S.getSoftErrors()
+      snapshot[0].scope = 'tampered'
+      check('getSoftErrors 返回副本（外部改写不污染内部状态）', S.getSoftErrors()[0].scope === 'index.save')
+    }
+
+    S.reportSoftError('index.save', new Error('disk full again'))
+    const sum = S.summarizeSoftErrors()
+    const save = sum.find((x) => x.scope === 'index.save')
+    check('summarize 按 scope 归并计数', !!save && save.count === 2, JSON.stringify(save))
+    check('summarize 记录最后一条消息', !!save && save.lastMessage === 'Error: disk full again', JSON.stringify(save))
+    const keys = sum.map((x) => x.level + ':' + x.scope)
+    check('summarize 区分级别（同 scope 不同级别不合并）', new Set(keys).size === keys.length)
+
+    {
+      S.clearSoftErrors()
+      for (let i = 0; i < 250; i++) S.reportSoftError('noise', new Error('e' + i))
+      const buf = S.getSoftErrors()
+      check('环容量有界（200 条，长时间运行不吃内存）', buf.length === 200, String(buf.length))
+      check('超出后保留最新', buf[buf.length - 1].message === 'Error: e249', buf[buf.length - 1].message)
+      check('淘汰的是最旧条目', buf[0].message === 'Error: e50', buf[0].message)
+    }
+
+    {
+      S.clearSoftErrors()
+      const seen = []
+      S.setSoftErrorSink((e) => seen.push(e.scope))
+      S.reportSoftError('assets.move', new Error('x'))
+      check('sink 收到上报', seen.length === 1 && seen[0] === 'assets.move', JSON.stringify(seen))
+
+      S.setSoftErrorSink(() => {
+        throw new Error('sink 自身故障')
+      })
+      let threw = false
+      try {
+        S.reportSoftError('replace.write', new Error('y'))
+      } catch {
+        threw = true
+      }
+      check('sink 抛错不得外溢（否则「可容忍」会变「致命」）', !threw)
+      check('sink 抛错仍完成入环', S.getSoftErrors().some((e) => e.scope === 'replace.write'))
+      S.setSoftErrorSink(null)
+    }
+
+    {
+      const n = S.clearSoftErrors()
+      check('clearSoftErrors 返回清掉的条数', n > 0, String(n))
+      check('清空后为空', S.getSoftErrors().length === 0)
+    }
+
+    {
+      let threw = false
+      try {
+        S.reportSoftError('weird', {
+          toString: () => {
+            throw new Error('nope')
+          }
+        })
+        S.reportSoftError('weird', Symbol('s'))
+        S.reportSoftError('weird', 0)
+      } catch {
+        threw = true
+      }
+      check('上报任意抛出物都不抛', !threw)
+    }
+  } finally {
+    rmSync(sDir, { recursive: true, force: true })
+  }
+}
+
+/* ── H. 数据安全线：关联数据必须随文档一起走，删除必须走回收站 ── */
+section('[H] 数据安全线 —— .assets / 快照桶随文档迁移，删除走回收站而非直接抹除')
+
+{
+  // 假回收站：把「删除」变成移到临时目录，从而能断言「确实走了回收站」而不是 rm。
+  // 这正是 trash.ts 存在的意义——vault.ts 因此不再顶层依赖 electron，可在 Node 里直测。
+  const trashDir = mkdtempSync(join(tmpdir(), 'yj-trash-'))
+  const V = await import((await bundle('electron/main/vault.ts', 'vault.mjs')).url)
+  const Snap = await import((await bundle('electron/main/snapshots.ts', 'snapshots.mjs')).url)
+  // 注入必须打在「被测模块自己的」trash 副本上（打包会内联 ./trash，外层单独打包的实例是另一份）
+  const fakeTrash = async (p) => {
+    await renameSync(p, join(trashDir, `${Date.now()}-${basename(p)}`))
+  }
+  V.setTrashImpl(fakeTrash)
+  Snap.setTrashImpl(fakeTrash)
+
+  const BODY_A = '# 甲\n\n见 [[B]]\n'
+
+  /** 建一个「三样关联数据俱全」的库：正文 + 同名 .assets + 快照桶（模拟真实文档） */
+  const makeDoc = async () => {
+    const dir = makeVault({ 'A.md': BODY_A, 'B.md': '# 乙\n' })
+    await Snap.createSnapshot(dir, join(dir, 'A.md'), BODY_A, '初稿')
+    mkdirSync(join(dir, 'A.assets'), { recursive: true })
+    writeFileSync(join(dir, 'A.assets', 'pic.png'), 'PNG', 'utf-8')
+    return dir
+  }
+  const bucketsOf = (dir) => readdirSync(join(dir, '.yujian-history'))
+
+  // H1 改名：正文 / .assets / 快照桶必须一起走（且全程未调用 watchVault——
+  //    这条同时守护「库根能自解析」，否则历史会被静默跳过）
+  {
+    const dir = await makeDoc()
+    const before = bucketsOf(dir)
+    const res = await V.renameItem(join(dir, 'A.md'), 'C.md')
+
+    check('改名：返回新绝对路径', res.path === join(dir, 'C.md'), res.path)
+    check('改名：正文逐字节不变', read(join(dir, 'C.md')) === BODY_A, JSON.stringify(read(join(dir, 'C.md'))))
+    check('改名：旧文件不复存在', !existsSync(join(dir, 'A.md')))
+    check(
+      '改名：同名 .assets 一并改名且内容保留',
+      existsSync(join(dir, 'C.assets', 'pic.png')) && !existsSync(join(dir, 'A.assets'))
+    )
+    const after = bucketsOf(dir)
+    check('改名：快照桶整桶迁移（旧桶消失、新桶生成）', after.length === 1 && after[0] !== before[0], after.join(','))
+    const bucketFiles = readdirSync(join(dir, '.yujian-history', after[0]))
+    check(
+      '改名：快照桶内 index.json 与正文都在（历史可读，非空壳）',
+      bucketFiles.includes('index.json') && bucketFiles.some((f) => f.endsWith('.md')),
+      bucketFiles.join(',')
+    )
+    check('改名：同批其它文档不受影响', read(join(dir, 'B.md')) === '# 乙\n')
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // H2 移动到子目录：绝对路径同样变化，关联数据要跟走
+  {
+    const dir = await makeDoc()
+    mkdirSync(join(dir, 'sub'))
+    const before = bucketsOf(dir)
+    await V.moveItem(join(dir, 'A.md'), join(dir, 'sub'))
+    check('移动：文档落到子目录', existsSync(join(dir, 'sub', 'A.md')))
+    check('移动：.assets 跟到子目录', existsSync(join(dir, 'sub', 'A.assets', 'pic.png')))
+    check('移动：源位置不再残留 .assets', !existsSync(join(dir, 'A.assets')))
+    check('移动：快照桶跟着迁移', bucketsOf(dir)[0] !== before[0], bucketsOf(dir)[0])
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // H3 文件夹改名：内部每篇文档都要处理（硬约束 6）
+  {
+    const dir = makeVault({ 'sub/A.md': BODY_A })
+    await Snap.createSnapshot(dir, join(dir, 'sub', 'A.md'), BODY_A, '初稿')
+    mkdirSync(join(dir, 'sub', 'A.assets'), { recursive: true })
+    writeFileSync(join(dir, 'sub', 'A.assets', 'pic.png'), 'PNG', 'utf-8')
+    const before = bucketsOf(dir)
+
+    await V.renameItem(join(dir, 'sub'), 'sub2')
+    check('文件夹改名：内部文档随迁', existsSync(join(dir, 'sub2', 'A.md')))
+    check('文件夹改名：内部 .assets 随迁', existsSync(join(dir, 'sub2', 'A.assets', 'pic.png')))
+    check('文件夹改名：嵌套文档的快照桶也迁移（不是只改精确匹配项）', bucketsOf(dir)[0] !== before[0], bucketsOf(dir)[0])
+    check('文件夹改名：旧目录名不再残留', !existsSync(join(dir, 'sub')))
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // H4 删除：一律走回收站（可恢复），三样关联数据都要进去
+  {
+    const dir = await makeDoc()
+    const trashBefore = readdirSync(trashDir).length
+    await V.deleteItem(join(dir, 'A.md'))
+    const added = readdirSync(trashDir).length - trashBefore
+    check('删除：文档本体已移出库', !existsSync(join(dir, 'A.md')))
+    check('删除：同名 .assets 一并移出库', !existsSync(join(dir, 'A.assets')))
+    check('删除：快照桶一并清走', !existsSync(join(dir, '.yujian-history')) || bucketsOf(dir).length === 0)
+    check('删除：本体 + 附件 + 历史三项都进了回收站', added === 3, `实际新增 ${added} 项`)
+    check('删除：无关文档未被波及', existsSync(join(dir, 'B.md')))
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // H5 删除文件夹：内部每篇文档的历史都要清（硬约束 6）
+  {
+    const dir = makeVault({ 'sub/A.md': BODY_A, 'sub/B.md': '# 乙\n' })
+    await Snap.createSnapshot(dir, join(dir, 'sub', 'A.md'), BODY_A, '初稿')
+    await V.deleteItem(join(dir, 'sub'))
+    check('文件夹删除：目录整体移出库', !existsSync(join(dir, 'sub')))
+    check('文件夹删除：内部文档历史已清理', !existsSync(join(dir, '.yujian-history')) || bucketsOf(dir).length === 0)
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // H6 危险操作的前置守卫：宁可显式失败，也绝不覆盖 / 绝不路径逃逸
+  {
+    const dir = makeVault({ 'A.md': BODY_A, 'C.md': '# 已存在\n' })
+    const mustThrow = async (label, fn) => {
+      let msg = ''
+      try {
+        await fn()
+      } catch (e) {
+        msg = String(e)
+      }
+      check(label, msg.length > 0, msg || '未抛错')
+    }
+
+    await mustThrow('改名：空名称被拒', () => V.renameItem(join(dir, 'A.md'), '   '))
+    await mustThrow('改名：含路径分隔符被拒（防路径逃逸）', () => V.renameItem(join(dir, 'A.md'), 'a/b.md'))
+    await mustThrow('改名：目标已存在时被拒（绝不覆盖）', () => V.renameItem(join(dir, 'A.md'), 'C.md'))
+    check('改名被拒后原文件完好无损', read(join(dir, 'A.md')) === BODY_A && read(join(dir, 'C.md')) === '# 已存在\n')
+    await mustThrow('移动：目标目录不存在时被拒', () => V.moveItem(join(dir, 'A.md'), join(dir, 'nope')))
+
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  V.setTrashImpl(null)
+  Snap.setTrashImpl(null)
+  rmSync(trashDir, { recursive: true, force: true })
 }
 
 /* ═══════════════════════════════════════════════════════════════════════ */

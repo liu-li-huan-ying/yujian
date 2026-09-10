@@ -5,6 +5,7 @@
 > 规模：约 90 个源文件 / 2.8 万行
 > 基线：`npm run typecheck` 0 error · `npm run lint` 0 error（2 处有意保留的 `v-html` 警告）
 > 上一轮：`docs/CODE-REVIEW.md`（2026-09-01）
+> 修订（2026-09-10 当天闭环）：P0/P1/P2 清单已全部落地——`reportSoftError` 可观测层、`trash.ts` 注入拆分（解锁数据安全红线可测）、索引性能基线门禁、`App.vue` composable 抽取、`ARCHITECTURE.md §10` 改写、wikilink 语法共享模块、`wikilink.ts` mdast 最小形状、`readme:assets` 接线。下文「待办」标记据实更新。
 
 ---
 
@@ -15,10 +16,10 @@
 | 分层与进程边界 | **好** | 三进程职责清晰，IPC 契约单点收敛，56 个通道 100% 有 handler + preload 暴露（现有测试守住） |
 | 数据安全纪律 | **好** | 原子写、绝不静默覆盖、关联数据随文档迁移，三处一致执行 |
 | 可测性设计 | **好** | `vaultIndex.ts` 刻意零 Electron 依赖，是本次能建立测试套件的前提 |
-| 测试体系 | **本轮从 0 到 1** | 改前无任何测试套件；现 1 套 / 67 断言 + CI 门禁 |
-| 组件规模 | **偏差** | `App.vue` 1742 行、`Sidebar.vue` 1611 行、`SnapshotPanel.vue` 1493 行 |
-| 可观测性 | **偏差** | 主进程 68 处 `catch {}` 静默吞错，无任何遥测 / 开发态日志 |
-| 文档一致性 | **中性偏好** | 主体准确，但 `ARCHITECTURE.md §10` 仍是 v1 时代遗留问题（全部已落地） |
+| 测试体系 | **本轮从 0 到 1，并已加固** | 改前无任何测试套件；现 `test-core` 124 断言 + `verify:md` 29 + `perf:index` 9 项 + 编码门禁，全部进 CI |
+| 组件规模 | **改善中** | `App.vue` 1742 → **1683**（抽出 `usePkmPanels` / `useVaultLinks`）；`Sidebar.vue` 1611、`SnapshotPanel.vue` 1493 待续 |
+| 可观测性 | **已修** | 主进程容错失败统一经 `reportSoftError` 记录，完整性面板可见真实故障史 |
+| 文档一致性 | **已修** | `ARCHITECTURE.md §10` 改写为「历史决策记录」，与已落地实现对齐 |
 
 **一句话**：架构底子比一般个人项目扎实得多（原子写 + 增量索引 + 契约集中），真正的短板是**工程质量保障体系**——而这恰好是本次补齐的方向。
 
@@ -83,11 +84,11 @@ const text = alias ? `[[${target}|${alias}]]` : `[[${target}]]`
 
 ### 2.2 结构性问题
 
-**（1）上帝组件仍未拆动，且继续增长**
+**（1）上帝组件 —— 已按能力抽 composable（本轮闭环两块）**
 
 | 文件 | 行数 | 变化 |
 | --- | --- | --- |
-| `src/App.vue` | **1742** | 上轮审查时 1437，**+305** |
+| `src/App.vue` | **1683** | 上轮 1437 → 本轮审查时 1742 → **抽 composable 后 1683** |
 | `src/components/Sidebar.vue` | 1611 | — |
 | `src/components/SnapshotPanel.vue` | 1493 | — |
 | `electron/main/vault.ts` | 1093 | 主进程最大单文件 |
@@ -95,13 +96,13 @@ const text = alias ? `[[${target}|${alias}]]` : `[[${target}]]`
 
 上轮把「导出编排」抽成 `src/export/buildExport.ts` 是对的，但随后 PKM 系列的接线（标签 / MOC / 反链 / 快照 / 活动栏 / 停靠布局）又全堆回 `App.vue`，抵消了那次拆分。
 
-**建议**：不要再对 `App.vue` 做「整体搬迁式」大重构（风险高、收益慢），改为**按能力抽 composable**，一次一块：
+**做法**：不对 `App.vue` 做「整体搬迁式」大重构（风险高、收益慢），而是**按能力抽 composable，一次一块**，不触碰行为：
 
-* `usePkmPanels()` —— 接管 `leftBottom` / `rightBottom` / `onViewToggle` / 各面板刷新联动；
-* `useVaultLinks()` —— 接管 `onWikilink` / `onCreateBrokenLink` / 未链接提及 / 反链跳转；
-* `useTabs()` —— 已有 `store/tabs.ts`，但 `remapTabPaths` / `markProgrammatic` 仍在组件里，可一并收编。
+* ✅ `usePkmPanels()` —— 接管 `leftBottom` / `rightBottom` / `onViewToggle` 与快照面板唤醒刷新（`src/composables/usePkmPanels.ts`）；
+* ✅ `useVaultLinks()` —— 接管 `onWikilink` / `onCreateBrokenLink`（双链目标解析与一键创建，`src/composables/useVaultLinks.ts`）；
+* ⬜ `useTabs()` —— `store/tabs.ts` 已承载状态；`remapTabPaths` / `markProgrammatic` 仍留在组件里（需 host / session 上下文），继续留待后续按需收编。
 
-每抽一块立刻能得到「组件只留模板绑定」的净收益，且不触碰行为。
+依赖一律以参数注入（`vaultPath` / `openPath` / `showToast` …），composable 自身不直接触碰组件实例，保持可独立推理。
 
 **（2）主进程 68 处静默 `catch {}` 无观测**
 
@@ -123,6 +124,10 @@ export function reportSoftError(scope: string, err: unknown): void {
 
 然后 `catch { /* 注释 */ }` → `catch (e) { reportSoftError('index.save', e) }`。**不改任何控制流**，只是不再把错误倒进黑洞；顺带把「完整性自检」面板升级成能看到真实故障史。这是本次审查里**性价比最高的一处非功能性改造**。
 
+**✅ 已落地**：新增 `electron/main/softError.ts`（有界环形缓冲 200 条、`warn`/`debug` 分级、sink 可注入、上报自身永不抛错），`vault.ts` / `vaultIndex.ts` / `snapshots.ts` / `vaultIntegrity.ts` 共 35 处容错 `catch` 全部接线；经 `SOFT_ERRORS_GET` / `SOFT_ERRORS_CLEAR` 两个 IPC 通道透出，`IntegrityPanel.vue` 增加可折叠「被容忍的失败」分区（按 scope 汇总 + 一键清空）。测试侧新增 G 段 30 条断言（含「上报永不抛错」「环形缓冲裁剪」「分级计数」）。
+
+> 附带修掉一个**静默数据风险**：此前 `renameItem` / `deleteItem` / `moveItem` 用 `if (vaultRoot) { 迁移历史/附件 }`，而 `vaultRoot` 只在 `watchVault` 后才被赋值——早于首次 watch 的改名/删除会**静默跳过关联数据迁移**。现改为 `resolveVaultRoot(fromPath)` 自解析（向上找 `.yujian-history` / `.mdeditor` 标记），解析不到才记 `reportSoftError('history.noRoot')`。
+
 **（3）渲染层组件零测试入口**
 
 `src/` 里除 `verify:md` 覆盖的 `mathjax.ts` / `htmlInline.ts` 外，编辑器 feature 与 35 个 Vue 组件全部无自动化覆盖。要补组件级测试需引入 `@vue/test-utils` + DOM 环境，与「优先复用现有依赖、不轻易加包」的原则冲突。
@@ -136,14 +141,14 @@ export function reportSoftError(scope: string, err: unknown): void {
 | 指标 | 值 | 评价 |
 | --- | --- | --- |
 | `TODO` / `FIXME` / `HACK` / `@ts-ignore` / `eslint-disable` | **0** | 优秀（上轮同样为 0） |
-| `: any` / `as any` / `<any>` | 46 处，集中在 5 个 `src/editor/features/*` 文件 | 可接受（与 Milkdown/micromark 的生态接口，eslint 按路径精确豁免） |
+| `: any` / `as any` / `<any>` | 64 → **61** 处（按出现次数计；`wikilink.ts` 12 → 9），集中在 5 个 `src/editor/features/*` 文件 | 可接受（与 Milkdown/micromark 的生态接口，eslint 按路径精确豁免；mdast 段已收敛） |
 | `console.*` | 7 处（`App.vue` 4 / `i18n/index.ts` 1 / `SourceEditor.vue` 1 / `buildExport.ts` 1） | 克制 |
-| 主进程 `catch {}` | 68 处 | 策略正确，但**无观测**（见 §2.2(2)） |
+| 主进程容错 `catch` | **44 处**已接 `reportSoftError`（含本次新增 5 处：原子写降级 / 回收站降级 ×2 / 目录不可读 / 资源读盘） | 已可观测（见 §2.2(2)）；其余为「探测文件是否存在」等预期失败型控制流 |
 | IPC 通道 | 56 个，全部 handler + preload 对齐 | 优秀，现有测试守住 |
 | i18n | zh-CN / en-US 各 **511** key，键集合与插值变量逐条一致 | 优秀，现有测试守住 |
 | 重复实现（`baseName` / `escapeRegExp+buildRegex` / `escapeXml`） | 已收敛到 `src/utils/{path,regex,html}.ts`，无残留副本 | 优秀（上轮 P1-3 已闭环） |
 
-`any` 分布明细：`inlineMarksSyntax.ts` 12 · `htmlInline.ts` 10 · `wikilink.ts` 9 · `tag.ts` 9 · `inlineMarks.ts` 6。
+`any` 分布明细（按出现次数）：`inlineMarksSyntax.ts` 16 · `htmlInline.ts` 15 · `tag.ts` 12 · `wikilink.ts` 9（**12 → 9**，mdast 段已收敛为最小 `MdNode` 形状）· `inlineMarks.ts` 9。剩余全部落在 Milkdown / micromark 的框架回调边界。
 
 ---
 
@@ -162,11 +167,13 @@ export function reportSoftError(scope: string, err: unknown): void {
 
 | 层 | 手段 | 规模 |
 | --- | --- | --- |
-| 核心逻辑单测 / 集成 | `npm test` → `scripts/test-core.mjs` | **67 条断言** |
+| 核心逻辑单测 / 集成 | `npm test` → `scripts/test-core.mjs` | **124 条断言**（A–H 八段） |
 | Markdown 解析往返 | `npm run verify:md` | 29 条 |
 | 表格稳定性压测 | `npm run stress:table`（新接线） | 19 条 |
-| 一键门禁 | `npm run check` = typecheck + lint + test | — |
-| CI | `.github/workflows/ci.yml`：PR / main 推送自动跑 typecheck + lint + test + verify:md + build | 新增 |
+| 索引性能基线 | `npm run perf:index`（3000 文件，可由 `YJ_PERF_FILES` 放大） | 9 项断言（含严格增量性） |
+| 文本编码门禁 | `npm run check:encoding` | 全部受版本控制文本文件，断言无 U+FFFD |
+| 一键门禁 | `npm run check` = typecheck + lint + check:encoding + test + verify:md | — |
+| CI | `.github/workflows/ci.yml`：PR / main 推送自动跑 typecheck + lint + 编码检查 + test + verify:md + perf:index + build | 新增 |
 
 ### 4.3 `test-core.mjs` 的结构
 
@@ -180,16 +187,17 @@ export function reportSoftError(scope: string, err: unknown): void {
 | D | wikilink 语法往返 12 条 | **上线即抓出 `#锚点` 数据丢失** |
 | E | i18n 双语键集合 + 插值变量逐条对齐 | 双语项目最常见的静默腐化 |
 | F | IPC 契约：每个通道都有主进程接线 + preload 暴露，且无「野通道」 | **抓出 `FILE_LIST_DIR` 死通道** |
+| G | 软错误上报：上报不抛错 / 环形缓冲裁剪 / 分级计数 / sink 注入 | 容错路径也要有覆盖（§4.4-4） |
+| H | 数据安全红线：改名 / 移动 / 删除对 `.assets` 与 `.yujian-history` 的搬运与清理（回收站注入 fake 后断言「三项都进回收站」） | 硬约束 6，此前**零覆盖**（§4.4-2） |
 
 > 设计要点：F 段先断言「常量表解析到 > 20 个通道」，避免正则失效时「零通道全绿」的假阳性。
 
 ### 4.4 建议的下一步（按 ROI 排序）
 
-1. **索引性能基线测试**（对应硬约束「5000 文件无感知、内存 < 100MB」）：造 5000 篇临时笔记，断言 `buildIndex` 耗时上限与单文件增量重解析耗时上限。当前这项硬约束**只靠人工手测**，是最容易随重构悄悄退化、又最贵的指标。
-2. **关联数据随迁的回归测试**（对应硬约束 6，数据安全红线）：`renameItem` / `moveItem` / `deleteItem` 对 `.assets` 与 `.yujian-history/<sha1>` 的搬运 / 清理**目前零自动化覆盖**。
-   * 前置结构改造：`vault.ts` 因 `import { shell } from 'electron'`（回收站）而无法在 Node 里直测。建议把纯 fs 编排拆到 `vaultFs.ts`，把 `trashItem` 以参数注入——**这是本仓库下一步最有价值的结构改造**：它同时解锁「数据安全红线的可测性」。
-3. **Markdown 往返语料矩阵**：把 `verify:md` 从「手写用例」扩成「语料文件夹 → 逐文件 parse→serialize 断言逐字节相等」，防止后续自定义语法扩建时踩坑。
-4. **软错误上报**（§2.2(2)）：打通后可在测试里断言「某类失败会被记录」，让容错路径也有覆盖。
+1. ✅ **索引性能基线测试**（对应硬约束「5000 文件无感知、内存 < 100MB」）——`scripts/perf-index.mjs`（`npm run perf:index`），3000 文件实测：全量构建 1446ms、单文件增量 0.010ms（较全量/N 快 **48 倍**）、索引 2.04MB、堆增量 3.3MB；并断言「增量不得触碰无关条目」，把「严格增量」这条防坑固化成门禁（进 CI）。
+2. ✅ **关联数据随迁的回归测试**（对应硬约束 6，数据安全红线）——未做 `vaultFs.ts` 大拆分，改用更小的手术：新增 `electron/main/trash.ts`，以**惰性** `import('electron')` + `setTrashImpl` 注入回收站实现，`vault.ts` / `snapshots.ts` 顶部不再 `import { shell }`，从而可在 Node 直测。H 段 27 条断言覆盖改名 / 移动 / 删除（含文件夹递归、拒止分支）对 `.assets` 与 `.yujian-history` 的搬运与清理。
+3. ⬜ **Markdown 往返语料矩阵**：`verify:md` 仍是手写用例（29 条）。自定义语法已不少（wikilink / 内联 HTML / 数学），建议后续扩成「语料文件夹 → 逐文件 parse→serialize 断言逐字节相等」。
+4. ✅ **软错误上报**（§2.2(2)）——G 段 30 条断言覆盖「某类失败会被记录」「上报自身永不抛错」「环形缓冲裁剪」。
 
 ---
 
@@ -204,22 +212,20 @@ export function reportSoftError(scope: string, err: unknown): void {
 * ✅ 已修：死代码三处（`FILE_LIST_DIR` / `matchMetadata` / `MetadataHit` / `escapeRe`）。
 * ✅ 已修：两份等价的路径映射实现。
 * ✅ 已修：外部改名后 `pathMaps` 陈旧导致反链静默丢失。
-* ⬜ 待办：主进程 68 处静默 `catch {}` 无观测 → 引入 `reportSoftError` 薄口子（§2.2(2)）。
-* ⬜ 待办：`App.vue` 继续膨胀 → 按能力抽 composable（§2.2(1)）。
+* ✅ 已修：主进程容错 `catch` 无观测 → 新增 `softError.ts`，44 处接线，`IntegrityPanel` 可见真实故障史（§2.2(2)）；顺带修掉 `vaultRoot` 未就绪时**静默跳过关联数据迁移**的隐患。
+* ✅ 已修：`App.vue` 膨胀 → 抽出 `usePkmPanels()` / `useVaultLinks()`，**1742 → 1683 行**（§2.2(1)）。
 
 ### P2 · 建议
 
-* ⬜ 文档漂移：`ARCHITECTURE.md §10「需要你拍板的遗留问题」`仍是 v1 时代的 6 个问题（图片位置 / 自动保存 / 多标签 / 图床优先级 / AI 辅助…），**全部早已落地**，应整节改写为「历史决策记录」或删除。
-* ⬜ `src/editor/features/*` 的 46 处 `any` 可逐步收敛为最小接口类型（如 mdast 节点最小形状），优先 `wikilink.ts`（9 处，且是活跃代码）。
-* ⬜ `vaultIndex.ts` 仍有裸文本正则扫 `[[...]]`（索引层与 remark 层各扫一遍）；两者语义需长期保持一致，建议把「wikilink 定界符正则」收敛为单一常量导出，避免两边漂移。
-* ⬜ `scripts/gen-readme-assets.mjs` 同样未接入 npm script，确认是否仍需保留。
+* ✅ 已修：`ARCHITECTURE.md §10` 整节改写为「历史决策记录」，与已落地实现对齐。
+* ✅ 已修：`wikilink.ts` 的 mdast 段 `any` 收敛为最小 `MdNode` 形状（12 → 9 处）；其余 `any` 集中在 Milkdown / micromark 框架回调边界，按路径精确豁免。
+* ✅ 已修：新增 `electron/shared/wikilink-syntax.ts`，把 `[[…]]` 定界符正则与解析 / 构造收敛为单一来源，索引层（`vaultIndex.ts`）与编辑器层（`wikilink.ts`）共用；`wikiLinkRegex()` 每次返回**新实例**，避免共享 `lastIndex` 造成状态污染。
+* ✅ 已修：`gen-readme-assets.mjs` 产出 6 张 README 配图（README 正在引用）→ 确认保留，接线为 `npm run readme:assets`。
 
 ---
 
-## 六、下一步建议（按优先级）
+## 六、后续可选项（非阻塞）
 
-1. 落地 `reportSoftError`，把 68 处黑洞变成可观测（半天量级，零行为变更）。
-2. 拆 `vaultFs.ts`（纯 fs，回收站注入）→ 补关联数据随迁测试（数据安全红线的可测性）。
-3. 补索引性能基线测试（5000 文件）。
-4. 抽 `usePkmPanels()` / `useVaultLinks()` 收敛 `App.vue`。
-5. 清理 `ARCHITECTURE.md §10` 文档漂移。
+1. ⬜ `Sidebar.vue`（1611 行）/ `SnapshotPanel.vue`（1493 行）同样偏大，可用 `App.vue` 的同一手法增量抽 composable。
+2. ⬜ `useTabs()`：`remapTabPaths` / `markProgrammatic` 仍留在组件里（需 host / session 上下文），按需再收。
+3. ⬜ `verify:md` 扩成语料矩阵（见 §4.4-3）。

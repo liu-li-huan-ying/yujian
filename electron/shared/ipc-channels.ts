@@ -39,6 +39,10 @@ export const IPC = {
   VAULT_INTEGRITY_CHECK: 'vault:integrityCheck',
   // 笔记库：一键修复（重建索引 / 删除孤儿快照，破坏性动作需前端二次确认）
   VAULT_INTEGRITY_REPAIR: 'vault:integrityRepair',
+  // 主进程：软错误（已知可容忍失败）查阅 —— 让被 catch 吞掉的 IO 失败在完整性面板可见
+  SOFT_ERRORS_GET: 'softErrors:get',
+  // 主进程：清空软错误记录（用户已知晓 / 修复后）
+  SOFT_ERRORS_CLEAR: 'softErrors:clear',
   // 笔记库：整库备份（打包为 zip）
   VAULT_BACKUP: 'vault:backup',
   // 笔记库：整库恢复（从 zip 解包）
@@ -542,6 +546,39 @@ export type IntegrityAction = 'rebuildIndex' | 'removeOrphanSnapshots'
 export interface RepairResult {
   actions: { action: string; fixed: number }[]
   errors: string[]
+}
+
+/* ── 软错误（已知可容忍失败）观测 ─────────────────── */
+
+/** warn = 意外失败（面板按问题展示）；debug = 预期内降级（仅收集，避免告警淹没在噪音里） */
+export type SoftErrorLevel = 'warn' | 'debug'
+
+export interface SoftErrorEntry {
+  /** 单调递增序号，便于 UI 去重 / 增量拉取 */
+  seq: number
+  /** 故障点标识，如 index.save / history.move */
+  scope: string
+  level: SoftErrorLevel
+  /** 一行摘要（不含堆栈，避免 IPC 体积不可控） */
+  message: string
+  /** epoch ms */
+  at: number
+}
+
+/** 按 scope 归并后的统计，供面板直接渲染「哪类失败反复出现」 */
+export interface SoftErrorSummary {
+  scope: string
+  level: SoftErrorLevel
+  count: number
+  lastAt: number
+  lastMessage: string
+}
+
+export interface SoftErrorReport {
+  entries: SoftErrorEntry[]
+  summary: SoftErrorSummary[]
+  /** warn 级计数（面板徽标用；debug 不计入，避免把正常降级当故障） */
+  warnCount: number
 }
 
 /* ── 整库备份 / 恢复（Phase 3 批次一）────────────────── */

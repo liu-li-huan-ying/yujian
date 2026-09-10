@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Icon from './components/Icon.vue'
 import Sidebar from './components/Sidebar.vue'
-import ActivityBar, { type ViewKey } from './components/ActivityBar.vue'
+import ActivityBar from './components/ActivityBar.vue'
 import EditorHost from './editor/EditorHost.vue'
 import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
@@ -52,6 +52,8 @@ import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
 import { useTabsStore } from './store/tabs'
 import { useSnapshotsStore } from './store/snapshots'
+import { usePkmPanels } from './composables/usePkmPanels'
+import { useVaultLinks } from './composables/useVaultLinks'
 import type { TextStats } from './utils/text-stats'
 
 const { t: L, getLocale } = useI18n()
@@ -301,33 +303,6 @@ async function onOpenBrokenLink(item: BrokenLinkItem): Promise<void> {
   // 两种模式都支持行定位，不再强制切到源码；等一拍确保新文档载入、视图就绪再定位
   await nextTick()
   host.value?.revealLine(item.line)
-}
-
-/**
- * 断链一键创建：按目标写法的意图落位并打开新笔记。
- *  - 目标带路径（`folder/Note`）→ 视作库内相对路径，在库内对应目录建；
- *  - 目标为裸名（`Note`）→ 就地建在**来源笔记所在目录**，
- *    因为断链多半是同主题笔记互引，就地补齐能让目录保持内聚，而不是把库根堆成孤儿收容所。
- */
-async function onCreateBrokenLink(item: BrokenLinkItem): Promise<void> {
-  const root = vaultPath.value
-  if (!root) return
-  const parts = item.target.replace(/\\/g, '/').trim().split('/').filter(Boolean)
-  const name = (parts.pop() ?? '').replace(/\.(md|markdown)$/i, '')
-  if (!name) {
-    showToast(U.linkCheckCreateFail, 'err')
-    return
-  }
-  const dir = parts.length > 0 ? [root, ...parts].join('/') : item.file.replace(/[\\/][^\\/]+$/, '')
-  try {
-    const created = await window.api.createDoc(dir, name)
-    await refreshTree()
-    await openPath(created)
-    showToast(U.wikilinkCreated.replace('{n}', name), 'ok')
-    linkCheckRef.value?.refresh()
-  } catch {
-    showToast(U.linkCheckCreateFail, 'err')
-  }
 }
 
 /** 全局替换完成：若当前正在编辑的文档在改写范围内，从磁盘重载以反映新内容 */
@@ -621,12 +596,18 @@ const snapshots = useSnapshotsStore()
 const linkCheckOpen = ref(false)
 /** 断链面板实例：一键创建成功后由 App 回调 refresh() 复检 */
 const linkCheckRef = ref<InstanceType<typeof LinkCheckPanel> | null>(null)
-/** 左列底部停靠面板：库级（标签 / 内容地图），与目录上下并列；与右列独立，可同时开 */
-const leftBottom = ref<'none' | 'tags' | 'moc'>('none')
-/** 右列底部停靠面板：文档级（反链 / 快照），与大纲上下并列；与左列独立，可同时开 */
-const rightBottom = ref<'none' | 'backlinks' | 'snapshot'>('none')
 /** 停靠列宽度（顶部视图收起、仅显示底部面板时使用） */
 const DOCK_W = 300
+
+/** 双链目标解析：跳转 / 一键创建 / 断链补齐（原内联编排 → composable，App 只留绑定） */
+const { onWikilink, onCreateBrokenLink } = useVaultLinks({
+  vaultPath,
+  openVault,
+  openPath,
+  refreshTree,
+  showToast,
+  refreshLinkCheck: () => linkCheckRef.value?.refresh(),
+})
 const integrityOpen = ref(false)
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
@@ -645,25 +626,12 @@ const stats = computed<TextStats>(
 
 /* ── 左缘活动栏 → 双栏 2×2 停靠布局（库级在左 / 文档级在右，各列上下两块）── */
 
-/** 左缘活动栏点击：上块=目录/大纲（切栏可见性），下块=库级/文档级面板
-    （左右两列各自独立、可同时开，互不互斥——满足「同屏看标签+反链」）。 */
-function onViewToggle(key: ViewKey): void {
-  if (key === 'files') {
-    onToggleSidebar()
-  } else if (key === 'outline') {
-    onToggleOutline()
-  } else if (key === 'tags') {
-    leftBottom.value = leftBottom.value === 'tags' ? 'none' : 'tags'
-  } else if (key === 'moc') {
-    leftBottom.value = leftBottom.value === 'moc' ? 'none' : 'moc'
-  } else if (key === 'backlinks') {
-    rightBottom.value = rightBottom.value === 'backlinks' ? 'none' : 'backlinks'
-  } else if (key === 'snapshot') {
-    const next = rightBottom.value === 'snapshot' ? 'none' : 'snapshot'
-    rightBottom.value = next
-    if (next === 'snapshot') void snapshots.refresh(vaultPath.value, filePath.value)
-  }
-}
+/** 左右两列各自独立、可同时开（满足「同屏看标签 + 反链」），面板编排见 composable */
+const { leftBottom, rightBottom, onViewToggle } = usePkmPanels({
+  toggleSidebar: () => onToggleSidebar(),
+  toggleOutline: () => onToggleOutline(),
+  onSnapshotShown: () => void snapshots.refresh(vaultPath.value, filePath.value),
+})
 
 /** 切换凝神模式：同步编辑器 + 持久化；含「自动全屏」偏好（进入转全屏、退出还原） */
 function onToggleFocus(): void {
@@ -751,33 +719,6 @@ function onToggleMoc(): void {
 /** 索引重建完成（标签 / 内容地图面板触发）：弹 toast 告知 */
 function onIndexRebuilt(kind: 'tags' | 'moc'): void {
   showToast(kind === 'tags' ? U.tagsRebuilt : U.mocRebuilt, 'ok')
-}
-
-/** 编辑器内点击 [[wikilink]] 芯片：解析目标 → 已存在则跳转，不存在则一键创建该笔记 */
-async function onWikilink(payload: { target: string; anchor?: string | null }): Promise<void> {
-  if (!vaultPath.value) {
-    await openVault()
-    return
-  }
-  const resolved = await window.api.resolveWikiTarget(vaultPath.value, payload.target)
-  if (resolved) {
-    await openPath(resolved)
-    return
-  }
-  // 目标不存在：以目标文件名一键创建笔记并打开（批次二需求：missing → one-click create）
-  const base = payload.target.split(/[\\/]/).pop()?.split('#')[0].trim()
-  if (!base) {
-    showToast(U.wikilinkOpenFail, 'err')
-    return
-  }
-  try {
-    const created = await window.api.createDoc(vaultPath.value, base)
-    await refreshTree()
-    await openPath(created)
-    showToast(U.wikilinkCreated.replace('{n}', created.split(/[\\/]/).pop() ?? base), 'ok')
-  } catch {
-    showToast(U.wikilinkOpenFail, 'err')
-  }
 }
 
 /** 自检浮层回报结果：状态栏据此展示告警标记（点击重开浮层） */

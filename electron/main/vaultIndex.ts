@@ -1,6 +1,7 @@
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
 import { atomicWrite } from './atomicWrite'
+import { wikiLinkRegex, parseWikiLink, buildWikiLink } from '../shared/wikilink-syntax'
 import type {
   BacklinkItem,
   NoteTitleItem,
@@ -10,6 +11,7 @@ import type {
   MocItem,
   MocGroup
 } from '../shared/ipc-channels'
+import { reportSoftError } from './softError'
 
 /**
  * 统一 vault 索引层 —— 整个 Phase 3 的地基。
@@ -155,7 +157,7 @@ function collectHeadings(content: string): { level: number; text: string }[] {
 /** 提取 wikilink 出链原始目标（去别名、去锚点、去扩展名） */
 function extractWikiTargets(content: string): string[] {
   const targets: string[] = []
-  const re = /\[\[([^\]\n]+?)\]\]/g
+  const re = wikiLinkRegex()
   let m: RegExpExecArray | null
   while ((m = re.exec(content)) !== null) {
     const target = m[1].trim().split('|')[0].split('#')[0].trim()
@@ -310,7 +312,8 @@ async function fileMtime(p: string): Promise<number> {
   try {
     const s = await stat(p)
     return s.mtimeMs
-  } catch {
+  } catch (e) {
+    reportSoftError('index.mtime', e, 'debug')
     return 0
   }
 }
@@ -324,7 +327,8 @@ export async function buildIndex(root: string): Promise<VaultIndex> {
     let content: string
     try {
       content = await readFile(p, 'utf-8')
-    } catch {
+    } catch (e) {
+      reportSoftError('index.parseFile', e, 'warn')
       continue
     }
     files[p] = parseFile(p, content, await fileMtime(p), byBase, byRel)
@@ -474,12 +478,13 @@ export async function getBacklinksWithContext(
   const index = await ensureIndex(root)
   const sources = index.backLinks[absPath] ?? []
   const out: BacklinkItem[] = []
-  const re = /\[\[([^\]\n]+?)\]\]/g
+  const re = wikiLinkRegex()
   for (const src of sources) {
     let content: string
     try {
       content = await readFile(src, 'utf-8')
-    } catch {
+    } catch (e) {
+      reportSoftError('index.backlinkContext', e, 'debug')
       continue
     }
     const lines = content.split(/\r?\n/)
@@ -663,7 +668,7 @@ function maskedPositions(line: string): boolean[] {
     }
   }
   mark(/`[^`]*`/g)
-  mark(/\[\[[^\]\n]*\]\]/g)
+  mark(wikiLinkRegex())
   return mask
 }
 
@@ -728,7 +733,8 @@ export async function getUnlinkedMentions(
     let content: string
     try {
       content = await readFile(src, 'utf-8')
-    } catch {
+    } catch (e) {
+      reportSoftError('index.unlinkedMentions', e, 'debug')
       continue
     }
     out.push(...findPlainMentions(src, content, name))
@@ -801,20 +807,16 @@ export function rewriteWikiLinksInText(
   newTargetOf: (resolvedAbs: string, originalTarget: string) => string | null
 ): { text: string; changed: number } {
   let changed = 0
-  const text = content.replace(/\[\[([^\]\n]+?)\]\]/g, (full: string, inner: string) => {
-    const pipe = inner.indexOf('|')
-    const targetPart = pipe === -1 ? inner : inner.slice(0, pipe)
-    const rest = pipe === -1 ? '' : inner.slice(pipe) // 含 '|别名'
-    const hash = targetPart.indexOf('#')
-    const rawTarget = (hash === -1 ? targetPart : targetPart.slice(0, hash)).trim()
-    const anchor = hash === -1 ? '' : targetPart.slice(hash) // 含 '#锚点'
-    if (!rawTarget) return full
-    const resolved = resolve(rawTarget)
+  const text = content.replace(wikiLinkRegex(), (full: string, inner: string) => {
+    const parts = parseWikiLink(inner)
+    if (!parts.target) return full
+    const resolved = resolve(parts.target)
     if (!resolved) return full
-    const next = newTargetOf(resolved, rawTarget)
-    if (!next || next === rawTarget) return full
+    const next = newTargetOf(resolved, parts.target)
+    if (!next || next === parts.target) return full
     changed++
-    return `[[${next}${anchor}${rest}]]`
+    // 只换 target 段；锚点与别名的原始拼写逐字节沿用（buildWikiLink 内部处理）
+    return buildWikiLink(parts, next)
   })
   return { text, changed }
 }
@@ -893,7 +895,8 @@ export async function rewriteLinksForMoves(
       summary.files++
       summary.links += changed
       summary.sources.push(target)
-    } catch {
+    } catch (e) {
+      reportSoftError('linkRewrite.write', e)
       // 单文件写失败不影响其余文件（如只读文件）
     }
   }
@@ -902,8 +905,11 @@ export async function rewriteLinksForMoves(
 
 /* ── 持久化（原子写，沿用项目 temp+rename 优势，避免多文件非原子写） ── */
 
+/** 索引缓存目录名：同时是「库根」标记之一（与 .yujian-history 一起用于向上定位库根） */
+export const INDEX_DIR_NAME = '.mdeditor'
+
 function indexDir(root: string): string {
-  return join(root, '.mdeditor')
+  return join(root, INDEX_DIR_NAME)
 }
 function indexPath(root: string): string {
   return join(indexDir(root), 'vault-index.json')
@@ -925,7 +931,8 @@ export async function saveIndex(root: string, index: VaultIndex): Promise<void> 
   // 原子写（对 Windows 只读 / 同步锁 EPERM 做兜底）；索引是缓存，写失败绝不应中断主流程
   try {
     await atomicWrite(indexPath(root), JSON.stringify(index))
-  } catch {
+  } catch (e) {
+    reportSoftError('index.save', e)
     // 索引是缓存，写失败绝不应中断主流程
   }
 }

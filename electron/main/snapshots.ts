@@ -1,8 +1,12 @@
 import { mkdir, readdir, readFile, writeFile, rename, cp, rm, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import { shell } from 'electron'
+import { trashItem, setTrashImpl } from './trash'
 import type { SnapshotInfo } from '../shared/ipc-channels'
+import { reportSoftError } from './softError'
+
+// 见 vault.ts 同名说明：打包会内联 ./trash，注入点必须从本模块导出才有效。
+export { setTrashImpl, trashItem }
 
 /**
  * 版本快照存储 —— 本地唯一真源之外的安全网（git 化 Phase A）。
@@ -17,7 +21,7 @@ import type { SnapshotInfo } from '../shared/ipc-channels'
  *   - tags：命名里程碑（git tag 思想）。
  *   - parent：线性血缘链（**同分支内**）。
  *   - branch：轻量草稿分支（git 分支思想的轻量版，不合并不解决冲突）。
- * 删除走系统回收站（shell.trashItem），绝不 `rm`，符合项目数据安全规定。
+ * 删除走系统回收站（trashItem），绝不 `rm`，符合项目数据安全规定。
  */
 
 const INDEX_FILE = 'index.json'
@@ -54,8 +58,11 @@ function hashPath(filePath: string): string {
   return createHash('sha1').update(filePath).digest('hex')
 }
 
+/** 历史目录名：同时是「库根」标记之一（见 vault.ts 的 resolveVaultRoot） */
+export const HISTORY_DIR_NAME = '.yujian-history'
+
 function historyDir(vaultPath: string, filePath: string): string {
-  return join(vaultPath, '.yujian-history', hashPath(filePath))
+  return join(vaultPath, HISTORY_DIR_NAME, hashPath(filePath))
 }
 
 /** 导出：供 vault.ts 在移动/删除文档时定位其历史目录（与内部 historyDir 同实现） */
@@ -177,7 +184,8 @@ async function readIndex(dir: string): Promise<SnapshotMeta[]> {
     const raw = await readFile(join(dir, INDEX_FILE), 'utf-8')
     const arr = JSON.parse(raw)
     if (Array.isArray(arr)) metas = arr as SnapshotMeta[]
-  } catch {
+  } catch (e) {
+    reportSoftError('snapshot.readIndex', e, 'debug')
     // 无 index 或解析损坏 → 走迁移
   }
   // 向后兼容：Phase A 落盘的 index 没有 branch / tags 字段，补齐默认值（不破坏已有数据）
@@ -344,8 +352,10 @@ export async function deleteSnapshot(
   if (stillReferenced) return
   const target = join(dir, removed.file)
   try {
-    await shell.trashItem(target)
-  } catch {
+    await trashItem(target)
+  } catch (e) {
+    // 回收站不可用 → 退回永久删除，该快照将无法从回收站找回，必须留痕
+    reportSoftError('snapshot.trashFallback', e, 'warn')
     const { unlink } = await import('node:fs/promises')
     await unlink(target).catch(() => {})
   }
@@ -396,9 +406,12 @@ export async function deleteHistory(vaultPath: string, filePath: string): Promis
     return // 无历史
   }
   try {
-    await shell.trashItem(dir)
-  } catch {
-    // 回收站不可用（沙箱 / 网络盘）时退回强制删除，避免历史残留无限堆积
+    await trashItem(dir)
+  } catch (e) {
+    // 回收站不可用（沙箱 / 网络盘）时退回强制删除，避免历史残留无限堆积。
+    // 注意：这绕过了「绝不 rm、一律走回收站」的数据安全红线——必须留痕，
+    // 让用户知道这次历史删除是不可恢复的。
+    reportSoftError('history.trashFallback', e, 'warn')
     await rm(dir, { recursive: true, force: true })
   }
 }

@@ -244,6 +244,11 @@ ProseMirror 事务 (WYSIWYG 模式)
 
 ## 4. 目录结构
 
+> ⚠️ 下方为 v1 立项时的**目标结构草图**，与当前实现已有出入，**以实际目录为准**：
+> * `electron/main/` 现为**扁平模块**（`vault.ts` / `vaultIndex.ts` / `snapshots.ts` / `vaultIntegrity.ts` / `vaultBackup.ts` / `softError.ts` / `trash.ts` / `atomicWrite.ts` / `imghost.ts` / `assets.ts` / `session.ts` / `index.ts`），不再有 `ipc/` 与 `services/` 子目录；
+> * 渲染层状态在 `src/store/`（非 `stores/`），本轮新增 `src/composables/`（`usePkmPanels.ts` / `useVaultLinks.ts`，见 §5.23）；
+> * 跨进程契约在 `electron/shared/`：`ipc-channels.ts`（通道唯一真源）+ `wikilink-syntax.ts`（共享语法，见 §5.23）。
+
 ```
 markdown-editor/
 ├─ electron/
@@ -1189,7 +1194,10 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * D：wikilink 语法往返（目标 / 别名 / 锚点一个不丢）——上线首日即抓出 `#锚点` 被丢弃的数据丢失缺陷。
 * E：i18n 双语键集合与插值变量逐条对齐。
 * F：IPC 契约——每个通道都既有主进程接线又有 preload 暴露（抓出并清理了零引用的 `FILE_LIST_DIR`）。
+* G：软错误上报——`reportSoftError` 上报自身永不抛错 / 环形缓冲裁剪 / 分级计数 / sink 注入。
+* H：数据安全红线——改名 / 移动 / 删除对 `.assets` 与 `.yujian-history` 的搬运与清理（回收站经 `setTrashImpl` 注入 fake，断言「本体 + 附件 + 历史三项都进回收站」）。
 * `npm run stress:table` → 表格往返压测（原 `scripts/stress-table.mjs`，此前未接线）。
+* `npm run perf:index` → `scripts/perf-index.mjs`：造 3000 篇临时笔记（`YJ_PERF_FILES` 可放大），断言全量构建上限、单文件增量上限、**增量必须显著快于全量/N（严格增量性）**、索引体积、堆增量，以及「增量不得触碰无关条目」。把硬约束 4「5000 文件无感知」从人工手测变成门禁。
 
 **门禁**
 
@@ -1198,7 +1206,44 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * `npm run check:encoding` → `scripts/check-encoding.mjs`：扫描受版本管理的文本文件，出现 U+FFFD 即失败。合法 UTF-8 解码**永不**产出 U+FFFD，故它是「字符已被静默损坏」的高置信信号——这类损坏不报错、不拦构建，只有人读到才发现（2026-09-10 实测中过一次，单文件 80 字符被抹）。
   * 判读铁律：本仓库 CJK 在部分终端 / 日志管道里会被**二次编码**，肉眼看到的乱码未必是文件问题。判断一律以**码点或字节**为准（`scripts/check-encoding.mjs` 的报告刻意只输出 ASCII）。
 * `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（29 条）。
-* `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
+* `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `perf:index` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
+
+***
+
+### 5.23 容错可观测 / 结构收敛（2026-09-10 第二轮审查后）
+
+> 背景：主进程大量 `catch {}`（某次 IO 失败不该让编辑器崩，策略正确）**但没有任何出口**——索引落盘失败、历史迁移失败、`.assets` 搬运失败全都被倒进黑洞。同时 `App.vue` 在 PKM 接线后回涨到 1742 行，`vault.ts` 因顶部 `import { shell } from 'electron'` 无法在 Node 直测。
+
+**（1）软错误可观测层 —— `electron/main/softError.ts`**
+
+* 极薄口子：`reportSoftError(scope, err, level?)`，`level` 为 `'warn' | 'debug'`，**不改变任何控制流**，只把「已知可容忍失败」记下来。
+* 有界环形缓冲（容量 200），`reportSoftError` 自身**永不抛错**（内部 try/catch + `describeError` 兜底 `String(err)`），避免「记录失败把应用搞崩」。
+* 经 `SOFT_ERRORS_GET` / `SOFT_ERRORS_CLEAR` 两个 IPC 通道透出；`IntegrityPanel.vue` 增加可折叠「被容忍的失败」分区（按 scope 汇总 + 一键清空）。开发态（`!app.isPackaged`）自动 verbose。
+* 现共 **44 处**容错 `catch` 接线。其中 5 处是「静默降级」而非普通探测，尤其关键：
+  * `atomicWrite.fallback`——rename 三层全败、退回非原子 `copyFile`，**原子性保障失效**；
+  * `history.trashFallback` / `snapshot.trashFallback`——回收站不可用、退回 `rm -rf`，**绕过「绝不 rm」红线、删除不可恢复**；
+  * `vault.readdir`——目录不可读会让内部文档被整体漏掉（关联数据迁移不完整）；
+  * `asset.read`——资源读盘失败（渲染层表现为裂图）。
+* 顺带修掉一个**静默数据风险**：`renameItem` / `deleteItem` / `moveItem` 原先 `if (vaultRoot) { 迁移历史/附件 }`，而 `vaultRoot` 仅由 `watchVault` 赋值——早于首次 watch 的改名 / 删除会**静默跳过关联数据迁移**。现改为 `resolveVaultRoot(fromPath)` 自解析（向上查找 `.yujian-history` / `.mdeditor` 标记），解析不到才 `reportSoftError('history.noRoot')`。
+
+**（2）回收站注入 —— `electron/main/trash.ts`**
+
+* `setTrashImpl(fn | null)` + `trashItem(absPath)`；`electron` 以**惰性** `import('electron')` 引入，模块顶层零 Electron 依赖。
+* `vault.ts` / `snapshots.ts` 移除顶部 `import { shell }`，改为 `import { trashItem, setTrashImpl } from './trash'` 并**再导出** `setTrashImpl`。
+  * ⚠️ 测试注入必须在**同一份打包产物**上调用 `V.setTrashImpl(...)`：esbuild 会把 `./trash` 内联进 `vault.mjs`，对「另打的 trash.mjs」注入无效。
+* 收益：`vault.ts` 首次可在 Node 里直测 → 解锁硬约束 6（数据安全红线）的自动化覆盖（测试 H 段）。
+
+**（3）`App.vue` 按能力抽 composable**
+
+* `src/composables/usePkmPanels.ts`——`leftBottom` / `rightBottom` / `onViewToggle` 与快照面板唤醒刷新；左右两列各自独立、可同时开。
+* `src/composables/useVaultLinks.ts`——`onWikilink` / `onCreateBrokenLink`（双链目标解析与一键创建）。
+* 依赖一律**参数注入**（`vaultPath` / `openPath` / `showToast` …），composable 不直接触碰组件实例。`App.vue` 1742 → 1683 行（`useTabs` 待续，见 `CODE-REVIEW-2026-09-10.md §6`）。
+
+**（4）wikilink 语法单一来源 —— `electron/shared/wikilink-syntax.ts`**
+
+* 索引层（`vaultIndex.ts` 裸正则扫 `[[…]]`）与编辑器层（remark 改写）此前各写一份定界符正则，语义有漂移风险。现收敛为共享模块：`wikiLinkRegex()` / `wikiLinkInputRegex()` / `parseWikiLink()` / `buildWikiLink()` / `findWikiLinks()`。
+* 铁律：`wikiLinkRegex()` **每次返回新 RegExp 实例**——共享同一实例会因 `lastIndex` 残留导致 `exec` 漏匹配（带 `g` 标志的经典陷阱）。
+* `wikilink.ts` 的 remark 遍历改用最小 `MdNode` 形状（12 → 9 处 `any`）；因 mdast 各节点类型均可满足该形状（字段全可选），调用处无需强转。
 
 ***
 
@@ -1306,17 +1351,19 @@ export interface SessionState {
 
 ***
 
-## 10. 需要你拍板的遗留问题
+## 10. 历史决策记录（原「待拍板问题」）
 
-这几个问题会影响后续实现细节，请确认（也可以先按我的默认建议走）：
+> 本节原为 v1 开工前的 6 个待确认问题。**全部已拍板并落地**，现改写为决策记录，
+> 保留「为什么是这样」的来龙去脉——后来者不必翻 git 历史或反复猜。
 
-1. **图片存放位置**：统一放 `vault/.assets/`（推荐，迁移方便）还是与 `.md` 同级目录（单文件分发方便）？
-2. **自动保存策略**：防抖多少毫秒？我建议 800ms，另外是否需要保留 `.bak` 备份文件？
-3. **源码模式切换时是否自动格式化**？我建议**不格式化**，保持你的原始排版。
-4. **是否需要多标签页**（像浏览器一样同时开多篇）？这会增加状态管理复杂度，建议 v1 先单文档窗口。
-5. **图床优先级**：v1 先只做本地存储、预留图床接口，还是直接接一个图床（比如 SM.MS）？
-6. **AI 辅助写作**：Crepe 已内置 AI Feature 接口（需自备 API Key），要不要纳入路线图？放在哪个阶段？
-
+| # | 当时的疑问 | 结论 | 落地位置 |
+| --- | --- | --- | --- |
+| 1 | 图片放哪：集中于 `vault/.assets/`，还是与 `.md` 同级？ | **与文档同级、同名 `.assets` 目录**（`笔记.md` ↔ `笔记.assets/`），正文引用一律相对路径。单文件分发时「文档 + 同名目录」可整体搬走，且删除文档时能连带清理。 | `electron/main/assets.ts`；渲染层经 `jade-asset://` 读盘（§5.9），导出时解码回绝对路径 |
+| 2 | 自动保存防抖多久？要不要 `.bak`？ | **800ms 防抖**（`AUTOSAVE_DELAY`）；**不用 `.bak`**，改用 `.yujian-history/` 版本快照（内容寻址 + 索引 + 命名标签，可回滚）。 | `src/editor/EditorHost.vue`；`electron/main/snapshots.ts` |
+| 3 | 源码模式切换是否自动格式化？ | **不格式化**。源码模式是「看真源」的窗口，任何自动重排都会破坏用户原始排版，与第一号红线「往返保真」直接冲突。 | `src/editor/useFidelity.ts`（脏标记驱动：未编辑则一字不改） |
+| 4 | 要不要多标签页？ | **要**，已实现。且与「关联数据随文档迁移」耦合：移动 / 改名文件夹时须按路径前缀批量重映射嵌套文档的标签（`remapTabPaths`），不能只改精确匹配项。 | `src/components/TabBar.vue`、`src/store/tabs.ts` |
+| 5 | 图床：先预留接口，还是直接接一个？ | **直接接，且密钥只存主进程**（`safeStorage` 加密），渲染层永远拿不到明文 Key。 | `electron/main/imghost.ts`、`src/components/ImgHostSettings.vue` |
+| 6 | AI 辅助写作要不要进路线图？ | **暂不纳入**。现有「写作辅助」是**本地规则**实现（不联网、不需要 API Key）；AI 能力待 Phase 3 之后再单独评估。 | `src/components/WritingAidsPanel.vue` |
 ***
 
 ## 附录 A：开工前必做的环境配置

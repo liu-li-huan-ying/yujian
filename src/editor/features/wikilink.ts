@@ -1,5 +1,6 @@
 import { InputRule } from '@milkdown/kit/prose/inputrules'
 import { $nodeSchema, $remark, $inputRule } from '@milkdown/kit/utils'
+import { wikiLinkRegex, wikiLinkInputRegex, parseWikiLink } from '../../../electron/shared/wikilink-syntax'
 
 /**
  * 双向链接 `[[wikilink]]` 真节点支持（Phase 3 批次二核心）。
@@ -25,15 +26,26 @@ export interface WikiLinkAttrs {
   anchor?: string | null
 }
 
+/**
+ * mdast 最小节点形状：只声明本插件真正读写的字段。
+ * 用具体形状取代 `any`，能在打错字段名（如 `node.childs`）时立刻报错，而不是静默什么都不发生。
+ * 其余字段一律可选，故任意 mdast 节点都能满足该形状，调用处无需强转。
+ */
+interface MdNode {
+  type: string
+  value?: string
+  children?: MdNode[]
+  target?: string
+  alias?: string | null
+  anchor?: string | null
+  position?: { start?: { offset?: number }; end?: { offset?: number } }
+}
+
 /** 解析 `[[` 与 `]]` 之间的原始内容：拆分别名与锚点 */
 function parseInner(inner: string): WikiLinkAttrs {
-  const [targetPart, alias] = inner.split('|')
-  const [target, anchor] = targetPart.split('#')
-  return {
-    target: target.trim(),
-    alias: (alias ?? '').trim() || null,
-    anchor: (anchor ?? '').trim() || null
-  }
+  // 走共享语法模块：索引层与编辑器层必须对「什么算链接、怎么分段」完全一致
+  const { target, alias, anchor } = parseWikiLink(inner)
+  return { target, alias, anchor }
 }
 
 /** 芯片显示文字：优先别名，回落到目标本身 */
@@ -45,14 +57,14 @@ function displayText(a: WikiLinkAttrs): string {
  * remark 插件：行内文本里的 `[[...]]` 改写为 `wikiLink` mdast 节点。
  * 逐节点递归；只对 text 节点做切片替换，其余节点原地保留并继续向下走。
  */
-export const remarkWikilink = $remark('remarkWikilink', () => () => (tree: any) => {
-  const WIKILINK_RE = /\[\[([^\]\n]+?)\]\]/g
+export const remarkWikilink = $remark('remarkWikilink', () => () => (tree: MdNode) => {
+  const WIKILINK_RE = wikiLinkRegex()
 
-  const walk = (node: any): void => {
+  const walk = (node: MdNode): void => {
     if (!node || typeof node !== 'object') return
     if (!Array.isArray(node.children)) return
 
-    const out: any[] = []
+    const out: MdNode[] = []
     for (const child of node.children) {
       if (child.type === 'text' && typeof child.value === 'string') {
         const value = child.value
@@ -136,7 +148,7 @@ export const wikiLinkSchema = $nodeSchema(wikiLinkId, () => ({
 
 /** 输入规则：敲完 `]]` 即刻把 `[[目标]]` / `[[目标|别名]]` 转成节点 */
 export const wikiLinkInputRule = $inputRule(() =>
-  new InputRule(/\[\[([^\]\n]+?)\]\]$/, (state, match, start, end) => {
+  new InputRule(wikiLinkInputRegex(), (state, match, start, end) => {
     const attrs = parseInner(match[1])
     if (!attrs.target) return null
     const node = state.schema.nodes[wikiLinkId].create(attrs)

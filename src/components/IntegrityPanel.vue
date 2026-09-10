@@ -6,7 +6,8 @@ import { useI18n } from '../i18n'
 import type {
   IntegrityReport,
   IntegrityCategory,
-  IntegrityIssue
+  IntegrityIssue,
+  SoftErrorReport
 } from '../../electron/shared/ipc-channels'
 
 const { t } = useI18n()
@@ -24,8 +25,13 @@ const error = ref<string | null>(null)
 const filter = ref<'all' | IntegrityCategory>('all')
 const confirmOpen = ref(false)
 
+// 软错误（已知可容忍失败）：主进程里被 catch 吞掉、但不该无声消失在黑洞里的 IO 失败
+const soft = ref<SoftErrorReport | null>(null)
+const softOpen = ref(false)
+
 const hasResult = computed(() => report.value !== null)
 const repairable = computed(() => report.value?.repairable ?? false)
+const softWarn = computed(() => soft.value?.warnCount ?? 0)
 
 const filters = computed(() => {
   const c = report.value?.counts
@@ -75,6 +81,8 @@ async function run(): Promise<void> {
   error.value = null
   try {
     report.value = await window.api.checkIntegrity(props.vaultPath)
+    // 软错误是进程级、与 vault 无关，独立拉取并互不阻塞
+    void loadSoft()
     filter.value = 'all'
     emit('report', report.value)
   } catch (e) {
@@ -100,6 +108,25 @@ async function doRepair(): Promise<void> {
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
     loading.value = false
+  }
+}
+
+/** 拉取主进程软错误（容错：拉不到就静默，绝不让「观测」本身变成新的故障） */
+async function loadSoft(): Promise<void> {
+  try {
+    soft.value = await window.api.getSoftErrors()
+  } catch {
+    soft.value = null
+  }
+}
+
+async function clearSoft(): Promise<void> {
+  try {
+    await window.api.clearSoftErrors()
+    soft.value = null
+    softOpen.value = false
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
   }
 }
 
@@ -178,6 +205,34 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
       <p v-if="!repairable" class="ic__hint">{{ L.integrityReportOnly }}</p>
     </template>
+
+    <!-- 软错误：主进程里被 catch 吞掉但不该消失的 IO 失败（索引落盘 / 快照搬运 / 附件迁移…） -->
+    <div v-if="soft && soft.summary.length > 0" class="sw">
+      <button class="sw__head" type="button" @click="softOpen = !softOpen">
+        <Icon name="alert" :size="13" class="sw__icon" />
+        <span class="sw__title">{{ L.integritySoftErrors }}</span>
+        <span v-if="softWarn > 0" class="sw__badge">{{ softWarn }}</span>
+        <Icon
+          :name="softOpen ? 'chevron-down' : 'chevron-right'"
+          :size="13"
+          class="sw__chev"
+        />
+      </button>
+      <p class="sw__hint">{{ L.integritySoftHint }}</p>
+      <div v-if="softOpen" class="sw__list">
+        <div v-for="s in soft.summary" :key="s.level + s.scope" class="sw__row">
+          <span class="sw__sev" :class="s.level === 'warn' ? 'sw__sev--warn' : 'sw__sev--dbg'" />
+          <span class="sw__scope">{{ s.scope }}</span>
+          <span class="sw__n">×{{ s.count }}</span>
+          <span class="sw__msg">{{ s.lastMessage }}</span>
+        </div>
+      </div>
+      <div v-if="softOpen" class="sw__acts">
+        <button class="sw__clear" type="button" @click="clearSoft">
+          {{ L.integritySoftClear }}
+        </button>
+      </div>
+    </div>
 
     <div v-if="hasResult && !loading" class="ic__acts">
       <span class="ic__spacer" />
@@ -476,5 +531,119 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .btn--primary:hover:not(:disabled) {
   filter: brightness(1.06);
   background: var(--hue-accent);
+}
+/* 软错误（已知可容忍失败） */
+.sw {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+}
+.sw__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.sw__icon {
+  flex: 0 0 auto;
+  color: var(--hue-mark);
+}
+.sw__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hue-text-1);
+}
+.sw__badge {
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--hue-mark);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+}
+.sw__chev {
+  margin-left: auto;
+  color: var(--hue-text-3);
+}
+.sw__hint {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--hue-text-3);
+}
+.sw__list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 132px;
+  overflow: auto;
+}
+.sw__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+}
+.sw__sev {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.sw__sev--warn {
+  background: var(--hue-mark);
+}
+.sw__sev--dbg {
+  background: var(--hue-text-3);
+  opacity: 0.5;
+}
+.sw__scope {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--hue-text-3);
+}
+.sw__n {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--hue-text-3);
+}
+.sw__msg {
+  flex: 1;
+  min-width: 0;
+  color: var(--hue-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sw__acts {
+  display: flex;
+  justify-content: flex-end;
+}
+.sw__clear {
+  padding: 2px 8px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-3);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.sw__clear:hover {
+  color: var(--hue-text-1);
+  background: var(--bg-hover);
 }
 </style>

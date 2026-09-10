@@ -26,7 +26,9 @@
     "release": "electron-vite build && electron-builder --win --publish=onTag",
     "release:mac": "electron-vite build && electron-builder --mac --publish=onTag",
     "release:linux": "electron-vite build && electron-builder --linux --publish=onTag",
-    "check:encoding": "node scripts/check-encoding.mjs"
+    "check:encoding": "node scripts/check-encoding.mjs",
+    "perf:index": "node scripts/perf-index.mjs",
+    "readme:assets": "node scripts/gen-readme-assets.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

@@ -1,6 +1,7 @@
 import { access, chmod, copyFile, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { reportSoftError } from './softError'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -54,8 +55,11 @@ export async function atomicWrite(filePath: string, content: string): Promise<vo
     await unlink(filePath)
     await rename(tmp, filePath)
     return
-  } catch {
-    // 第三层：直接覆盖写目标，再清临时文件
+  } catch (e) {
+    // 第三层：直接覆盖写目标，再清临时文件。
+    // 走到这里说明 rename 三层全败，本次写入的**原子性保障已失效**——必须留痕，
+    // 频繁出现即代表磁盘只读属性 / 云同步锁长期异常。
+    reportSoftError('atomicWrite.fallback', e, 'warn')
     await copyFile(tmp, filePath)
     await removeTmp()
   }

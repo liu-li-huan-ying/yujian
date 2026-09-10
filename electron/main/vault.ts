@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { watch as chokidarWatch, type FSWatcher } from 'chokidar'
-import { shell } from 'electron'
+import { trashItem, setTrashImpl } from './trash'
 import type {
   FileNode,
   SearchFileResult,
@@ -27,7 +27,14 @@ import type {
   MoveResult,
 } from '../shared/ipc-channels'
 import * as Idx from './vaultIndex'
+import { INDEX_DIR_NAME } from './vaultIndex'
+import { HISTORY_DIR_NAME } from './snapshots'
 import * as Snap from './snapshots'
+import { reportSoftError } from './softError'
+
+// 回收站实现可注入：生产用 Electron 系统回收站（trash.ts 惰性加载），测试可换假实现。
+// 必须从本模块也导出——打包会把 ./trash 内联成独立副本，只在外层模块设注入是无效的。
+export { setTrashImpl, trashItem }
 
 // 与 vault 索引层收拢同源判定（避免重复实现）
 const shouldSkipDir = Idx.shouldSkipDir
@@ -55,6 +62,24 @@ let vaultRoot: string | null = null
  * 外部改动（资源管理器里建/删）仍会照常 reconcile，不丢索引一致性。
  */
 let progSuppressUntil = 0
+/**
+ * 解析「库根」——关联数据（`.assets` / `.yujian-history/<sha1>`）随迁的定位基准。
+ *
+ * 优先用 watchVault 记录的值；未记录时从给定路径向上找库根标记（`.yujian-history` / `.mdeditor`）。
+ * 为什么要兜底：这些操作只该在库内发生，但一旦库根为空就会**静默跳过迁移**，
+ * 快照留在旧哈希桶里变成孤儿、附件留在旧名字上——且没有任何痕迹。
+ * 而两个标记恰好只在「确实有东西要迁移」时才存在，故向上查找是可靠的。
+ */
+async function resolveVaultRoot(fromPath: string): Promise<string | null> {
+  if (vaultRoot) return vaultRoot
+  let dir = dirname(fromPath)
+  for (;;) {
+    if ((await exists(join(dir, HISTORY_DIR_NAME))) || (await exists(join(dir, INDEX_DIR_NAME)))) return dir
+    const up = dirname(dir)
+    if (up === dir) return null
+    dir = up
+  }
+}
 function markProgrammaticChange(windowMs = 1500): void {
   progSuppressUntil = Date.now() + windowMs
 }
@@ -66,7 +91,9 @@ async function collectMarkdownPaths(dir: string): Promise<string[]> {
     let entries
     try {
       entries = await readdir(d, { withFileTypes: true })
-    } catch {
+    } catch (e) {
+      // 目录不可读 → 其内部文档会被整体漏掉（关联数据迁移不完整），留痕便于排查
+      reportSoftError('vault.readdir', e, 'warn')
       return
     }
     for (const entry of entries) {
@@ -93,7 +120,8 @@ async function clearReadOnlyRecursive(p: string): Promise<void> {
   }
   try {
     await chmod(p, 0o777)
-  } catch {
+  } catch (e) {
+    reportSoftError('vault.chmod', e, 'debug')
     // 单条失败忽略，继续处理其他条目
   }
   if (!st.isDirectory()) return
@@ -111,9 +139,10 @@ async function clearReadOnlyRecursive(p: string): Promise<void> {
 /** 删除：优先进系统回收站（可恢复、且能规避多数 Windows 只读/外部盘 EPERM），失败回退 rm（清只读后） */
 async function trashOrRemove(targetPath: string): Promise<void> {
   try {
-    await shell.trashItem(targetPath)
+    await trashItem(targetPath)
     return
-  } catch {
+  } catch (e) {
+    reportSoftError('trash.fallback', e, 'debug')
     // 回收站不可用（网络盘 / U 盘 / 沙箱）→ 回退 rm
   }
   if (process.platform === 'win32') {
@@ -304,7 +333,8 @@ async function mkdirRobust(target: string, parent: string): Promise<void> {
         await chmod(parent, 0o777)
         await mkdir(target)
         return
-      } catch {
+      } catch (e) {
+        reportSoftError('vault.chmod', e, 'debug')
         // 落到下方清晰报错
       }
     }
@@ -345,25 +375,30 @@ export async function renameItem(oldPath: string, newName: string): Promise<Move
     if (oldIsDir) {
       oldMdRels = (await collectMarkdownPaths(oldPath)).map((p) => relative(oldPath, p))
     }
-  } catch {
+  } catch (e) {
+    reportSoftError('history.scan', e)
     // 取不到则跳过历史迁移
   }
 
   await rename(oldPath, newPath)
 
   // 把历史目录一并迁移到新绝对路径（内容不含绝对路径，整目录搬走即可）
-  if (vaultRoot) {
+  const historyRoot = await resolveVaultRoot(oldPath)
+  if (historyRoot) {
     try {
       if (oldIsDir) {
         for (const rel of oldMdRels) {
-          await Snap.moveHistory(vaultRoot, join(oldPath, rel), join(newPath, rel))
+          await Snap.moveHistory(historyRoot, join(oldPath, rel), join(newPath, rel))
         }
       } else {
-        await Snap.moveHistory(vaultRoot, oldPath, newPath)
+        await Snap.moveHistory(historyRoot, oldPath, newPath)
       }
-    } catch {
+    } catch (e) {
+      reportSoftError('history.move', e)
       // 历史迁移失败不阻断主流程
     }
+  } else {
+    reportSoftError('history.noRoot', new Error('vaultRoot 尚未初始化（watchVault 未执行），已跳过关联数据随迁'), 'warn')
   }
 
   // 尽力同步同名 .assets（仅文档文件、且文件名确实变了时才搬）
@@ -381,7 +416,8 @@ export async function renameItem(oldPath: string, newName: string): Promise<Move
         }
       }
     }
-  } catch {
+  } catch (e) {
+    reportSoftError('assets.move', e)
     // .assets 同步失败不应让主流程报错
   }
 
@@ -407,7 +443,8 @@ export async function deleteItem(targetPath: string): Promise<void> {
     const st = await stat(targetPath)
     deletingDir = st.isDirectory()
     if (deletingDir) mdPaths = await collectMarkdownPaths(targetPath)
-  } catch {
+  } catch (e) {
+    reportSoftError('history.scan', e, 'debug')
     // 取不到则跳过历史清理
   }
 
@@ -415,12 +452,14 @@ export async function deleteItem(targetPath: string): Promise<void> {
   if (process.platform === 'win32') {
     try {
       await chmod(targetPath, 0o777)
-    } catch {
+    } catch (e) {
+      reportSoftError('vault.chmod', e, 'debug')
       // 目标可能已不存在或权限极高，rm 的 force 会兜底
     }
     try {
       await chmod(dirname(targetPath), 0o777)
-    } catch {
+    } catch (e) {
+      reportSoftError('vault.chmod', e, 'debug')
       // 忽略
     }
   }
@@ -435,21 +474,26 @@ export async function deleteItem(targetPath: string): Promise<void> {
       const assets = join(dirname(targetPath), `${noExt}.assets`)
       if (await exists(assets)) await trashOrRemove(assets)
     }
-  } catch {
+  } catch (e) {
+    reportSoftError('assets.delete', e)
     // 资源目录清理失败不影响删除结果
   }
 
   // 清理对应的版本历史（走回收站）；文件夹则清理其中每篇文档的历史
-  if (vaultRoot) {
+  const historyRoot = await resolveVaultRoot(targetPath)
+  if (historyRoot) {
     try {
       if (deletingDir) {
-        for (const p of mdPaths) await Snap.deleteHistory(vaultRoot, p)
+        for (const p of mdPaths) await Snap.deleteHistory(historyRoot, p)
       } else {
-        await Snap.deleteHistory(vaultRoot, targetPath)
+        await Snap.deleteHistory(historyRoot, targetPath)
       }
-    } catch {
+    } catch (e) {
+      reportSoftError('history.delete', e)
       // 历史清理失败不影响删除结果
     }
+  } else {
+    reportSoftError('history.noRoot', new Error('vaultRoot 尚未初始化（watchVault 未执行），已跳过关联数据随迁'), 'warn')
   }
 }
 
@@ -518,7 +562,8 @@ export async function moveItem(
   if (process.platform === 'win32') {
     try {
       await chmod(destDir, 0o777)
-    } catch {
+    } catch (e) {
+      reportSoftError('vault.chmod', e, 'debug')
       // 清不掉也无妨，交给下面的 rename 报错
     }
   }
@@ -552,24 +597,29 @@ export async function moveItem(
       if (oldIsDir) {
         oldMdRels = (await collectMarkdownPaths(target)).map((p) => relative(target, p))
       }
-    } catch {
+    } catch (e) {
+      reportSoftError('history.scan', e)
       // 忽略
     }
   }
 
   // 把历史目录一并迁移到新绝对路径（内容不含绝对路径，整目录搬走即可）
-  if (vaultRoot) {
+  const historyRoot = await resolveVaultRoot(oldPath)
+  if (historyRoot) {
     try {
       if (oldIsDir) {
         for (const rel of oldMdRels) {
-          await Snap.moveHistory(vaultRoot, join(oldPath, rel), join(target, rel))
+          await Snap.moveHistory(historyRoot, join(oldPath, rel), join(target, rel))
         }
       } else {
-        await Snap.moveHistory(vaultRoot, oldPath, target)
+        await Snap.moveHistory(historyRoot, oldPath, target)
       }
-    } catch {
+    } catch (e) {
+      reportSoftError('history.move', e)
       // 历史迁移失败不阻断主流程
     }
+  } else {
+    reportSoftError('history.noRoot', new Error('vaultRoot 尚未初始化（watchVault 未执行），已跳过关联数据随迁'), 'warn')
   }
 
   // 文件：顺带搬运同名的 `.assets` 资源目录（与 renameItem 同约定）
@@ -589,14 +639,16 @@ export async function moveItem(
             try {
               await copyRecursive(oldAssets, newAssets)
               await rm(oldAssets, { recursive: true, force: true })
-            } catch {
+            } catch (e) {
+              reportSoftError('assets.move', e)
               // 资源目录搬运失败不阻断主流程
             }
           }
         }
       }
     }
-  } catch {
+  } catch (e) {
+    reportSoftError('assets.move', e)
     // 资源目录同步失败不应让主流程报错
   }
 
@@ -646,7 +698,8 @@ async function refreshIndexAfterMove(
       const content = await readFile(m.to, 'utf-8')
       const mtime = (await stat(m.to)).mtimeMs
       Idx.indexFile(idx, root, m.to, content, mtime, maps)
-    } catch {
+    } catch (e) {
+      reportSoftError('index.reparse', e, 'debug')
       // 读不到则交给 watcher 兜底
     }
   }
@@ -655,7 +708,8 @@ async function refreshIndexAfterMove(
       const content = await readFile(src, 'utf-8')
       const mtime = (await stat(src)).mtimeMs
       Idx.indexFile(idx, root, src, content, mtime, maps)
-    } catch {
+    } catch (e) {
+      reportSoftError('index.reparse', e, 'debug')
       // 忽略：watcher 会兜底
     }
   }
@@ -744,7 +798,8 @@ async function reindexFile(root: string, absPath: string): Promise<void> {
   try {
     content = await readFile(absPath, 'utf-8')
     mtime = (await stat(absPath)).mtimeMs
-  } catch {
+  } catch (e) {
+    reportSoftError('index.reindex', e, 'debug')
     return
   }
   Idx.indexFile(idx, root, absPath, content, mtime, getMaps(root))
@@ -802,8 +857,9 @@ export function watchVault(root: string, onChange: (change: VaultChange) => void
     .on('addDir', emit('addDir'))
     .on('unlinkDir', emit('unlinkDir'))
     .on('change', emit('change'))
-    .on('error', () => {
-      // 监听失败（例如库所在磁盘被拔出）不该让应用崩掉
+    .on('error', (e) => {
+      // 监听失败（例如库所在磁盘被拔出）不该让应用崩掉，但必须留痕
+      reportSoftError('vault.watch', e, 'debug')
     })
 }
 
@@ -829,7 +885,8 @@ async function searchInFile(
   let content: string
   try {
     content = await readFile(file, 'utf-8')
-  } catch {
+  } catch (e) {
+    reportSoftError('search.readFile', e, 'debug')
     return []
   }
   const hits: SearchLineHit[] = []
@@ -958,7 +1015,8 @@ export async function replaceInVault(
     let content: string
     try {
       content = await readFile(p, 'utf-8')
-    } catch {
+    } catch (e) {
+      reportSoftError('replace.read', e, 'debug')
       continue
     }
     const next = content.replace(re, replacement)
@@ -968,7 +1026,8 @@ export async function replaceInVault(
       replaced += content.match(re)?.length ?? 0
       files++
       paths.push(p)
-    } catch {
+    } catch (e) {
+      reportSoftError('replace.write', e)
       // 单文件写失败不影响其余文件（如只读文件）
     }
   }
@@ -996,7 +1055,8 @@ export async function checkLinks(root: string): Promise<BrokenLinkReport> {
     let entries
     try {
       entries = await readdir(dir, { withFileTypes: true })
-    } catch {
+    } catch (e) {
+      reportSoftError('vault.walk', e, 'debug')
       return
     }
     for (const entry of entries) {
