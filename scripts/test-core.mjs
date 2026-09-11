@@ -16,6 +16,9 @@
  *  F. IPC 契约 —— 常量表 / 主进程接线 / preload 暴露三方一致
  *  G. 软错误上报 —— 可容忍失败必须有出口、分级、有界，且上报自身绝不抛
  *  H. 数据安全线 —— .assets / 快照桶随文档迁移、删除走回收站、危险操作前置守卫
+ *  I. 快照 diff 引擎 —— hunk 行号 / 聚合 / 并排配对（src/utils/snapshotDiff.ts）
+ *  J. frontmatter 解析 / 回写 —— 正文逐字保留（src/editor/frontmatter.ts）
+ *  K. 标签页重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）
  *
  * 运行：npm test
  * 退出码：0 = 全部通过；1 = 存在失败。
@@ -782,7 +785,145 @@ section('[H] 数据安全线 —— .assets / 快照桶随文档迁移，删除�
   rmSync(trashDir, { recursive: true, force: true })
 }
 
+section('[I] 快照 diff 引擎 —— hunk 行号 / 聚合 / 并排配对（src/utils/snapshotDiff.ts）')
+const { url: sdUrl, dir: sdDir } = await bundle('src/utils/snapshotDiff.ts', 'snapshotDiff.mjs')
+try {
+  const SD = await import(sdUrl)
+  const rowsOf = (a, b) => SD.buildDiffRows(a, b)
+  const sig = (rows) => rows.map((r) => r.prefix + r.text).join('|')
+
+  // 相同文本 → 全 ctx、无变更
+  const same = rowsOf('l1\nl2\n', 'l1\nl2\n')
+  check('相同文本 → 全 ctx 且 hasChanges=false', same.every((r) => r.type === 'ctx') && !SD.hasChanges(same))
+
+  // 行中修改
+  const mid = rowsOf('l1\nl2\nl3\nl4\nl5\n', 'l1\nl2\nX\nl4\nl5\n')
+  check('行中修改 → 行序列正确', sig(mid) === ' l1| l2|-l3|+X| l4| l5', sig(mid))
+  check('行中修改 → 统计 {add:1,del:1}', JSON.stringify(SD.diffStats(mid)) === '{"add":1,"del":1}', JSON.stringify(SD.diffStats(mid)))
+
+  // hunk 头行号必须与 `diff -U1` 一致（旧实现把上下文行重复计数 → 行号偏大）
+  const h1 = SD.buildHunks(mid)
+  check('单 hunk 且 kind=mod', h1.length === 1 && h1[0].kind === 'mod', JSON.stringify(h1.map((h) => h.kind)))
+  check('hunk 头 = @@ -2,3 +2,3 @@（对齐 diff -U1）', h1[0].oldStart === 2 && h1[0].oldSpan === 3 && h1[0].newStart === 2 && h1[0].newSpan === 3, `-${h1[0].oldStart},${h1[0].oldSpan} +${h1[0].newStart},${h1[0].newSpan}`)
+  check('hunk pickText = B 侧新增内容', h1[0].pickText === 'X\n', JSON.stringify(h1[0].pickText))
+
+  // 纯增
+  const add = SD.buildHunks(rowsOf('l1\nl2\n', 'l1\nX\nl2\n'))
+  check('纯增 → kind=add @@ -1,2 +1,3 @@', add.length === 1 && add[0].kind === 'add' && add[0].oldStart === 1 && add[0].oldSpan === 2 && add[0].newStart === 1 && add[0].newSpan === 3, JSON.stringify(add[0]))
+
+  // 纯删 → pickText 空（无可摘取来源）
+  const del = SD.buildHunks(rowsOf('l1\nX\nl2\n', 'l1\nl2\n'))
+  check('纯删 → kind=del @@ -1,3 +1,2 @@ 且 pickText 空', del.length === 1 && del[0].kind === 'del' && del[0].oldStart === 1 && del[0].oldSpan === 3 && del[0].newStart === 1 && del[0].newSpan === 2 && del[0].pickText === '', JSON.stringify(del[0]))
+
+  // 首行修改 → 无前置上下文
+  const head = SD.buildHunks(rowsOf('l1\nl2\n', 'Z\nl2\n'))
+  check('首行修改 → @@ -1,2 +1,2 @@', head.length === 1 && head[0].oldStart === 1 && head[0].newStart === 1 && head[0].oldSpan === 2 && head[0].newSpan === 2, JSON.stringify(head[0]))
+
+  // 两处相隔变更 → 两个 hunk，行号各自正确
+  const multi = SD.buildHunks(
+    rowsOf('a1\na2\na3\na4\na5\na6\na7\na8\na9\na10\n', 'a1\na2\nB3\na4\na5\na6\na7\nB8\na9\na10\n')
+  )
+  check('两处变更 → 2 个 hunk', multi.length === 2, String(multi.length))
+  check('第 2 个 hunk = @@ -7,3 +7,3 @@', Boolean(multi[1]) && multi[1].oldStart === 7 && multi[1].newStart === 7 && multi[1].oldSpan === 3 && multi[1].newSpan === 3, JSON.stringify(multi[1]))
+
+  // 任一侧为 null → 无 diff
+  check('任一侧 null → 空 rows', SD.buildDiffRows(null, 'x\n').length === 0 && SD.buildDiffRows('x\n', null).length === 0)
+
+  // 并排配对：ctx 两侧对齐，del/add 配对成一行
+  const sp = SD.splitPairs(mid)
+  check('并排：ctx 两侧同文', sp[0].left.text === 'l1' && sp[0].right.text === 'l1')
+  check('并排：del/add 配对成一行', sp[2].left.type === 'del' && sp[2].left.text === 'l3' && sp[2].right.type === 'add' && sp[2].right.text === 'X')
+} finally {
+  rmSync(sdDir, { recursive: true, force: true })
+}
+
+section('[J] frontmatter 解析 / 回写 —— 正文逐字保留（src/editor/frontmatter.ts）')
+// gray-matter 在 ESM 产物里做动态 require('fs') 会炸 → 外置回 Node 原生加载
+const grayStub = [
+  "import { createRequire } from 'node:module'",
+  "const require = createRequire(" + JSON.stringify(resolve(root, 'package.json')) + ")",
+  "export default require('gray-matter')"
+].join('\n')
+const { url: fmUrl, dir: fmDir } = await bundle('src/editor/frontmatter.ts', 'frontmatter.mjs', {
+  'gray-matter': grayStub
+})
+try {
+  const FM = await import(fmUrl)
+  const doc = '---\ntitle: 甲\nmoc: true\ncustom: 保留我\n---\n\n# 标题\n\n正文第一段。\n'
+  const p = FM.parseFrontmatter(doc)
+  check('解析出已知字段 + 未知字段透传', p.data.title === '甲' && p.data.moc === true && p.data.custom === '保留我', JSON.stringify(p.data))
+  check('hasFrontmatter=true', p.hasFrontmatter === true)
+  check('正文逐字保留', p.content === '\n# 标题\n\n正文第一段。\n', JSON.stringify(p.content))
+
+  const plain = '# 无属性\n\n正文。\n'
+  const pp = FM.parseFrontmatter(plain)
+  check('无 frontmatter：data 空 + hasFrontmatter=false', Object.keys(pp.data).length === 0 && pp.hasFrontmatter === false)
+  check('无 frontmatter：正文原样返回', pp.content === plain, JSON.stringify(pp.content))
+
+  const rt = FM.serializeFrontmatter(p.data, p.content)
+  check('parse→serialize 往返逐字节等于原文', rt === doc, JSON.stringify(rt))
+  check('往返后正文仍逐字一致', FM.parseFrontmatter(rt).content === p.content)
+
+  const cleaned = FM.serializeFrontmatter({ title: '', moc: true, tags: [] }, '# 正文\n')
+  check('空值字段被剔除（title/tags 去掉、moc 保留）', !cleaned.includes('title') && !cleaned.includes('tags') && cleaned.includes('moc: true'), JSON.stringify(cleaned))
+
+  const empty = FM.serializeFrontmatter({}, '\n\n# 正文\n')
+  check('全空 → 去掉 frontmatter 块并归一化前导换行', empty === '\n# 正文\n', JSON.stringify(empty))
+
+  const crlf = FM.serializeFrontmatter({ title: 'x' }, '第一行\r\n第二行\r\n')
+  check('CRLF 正文保真', crlf.includes('第一行\r\n第二行\r\n'))
+} finally {
+  rmSync(fmDir, { recursive: true, force: true })
+}
+
 /* ═══════════════════════════════════════════════════════════════════════ */
+
+section('[K] 标签页路径重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）')
+// pinia / vue 是纯 JS 依赖 → 外置回 Node 原生加载，保证探针与 store 共用同一 pinia 实例
+const piniaStub = [
+  "import { createRequire } from 'node:module'",
+  "const require = createRequire(" + JSON.stringify(resolve(root, 'package.json')) + ")",
+  "const m = require('pinia')",
+  "export const defineStore = m.defineStore"
+].join('\n')
+const vueStub = [
+  "import { createRequire } from 'node:module'",
+  "const require = createRequire(" + JSON.stringify(resolve(root, 'package.json')) + ")",
+  "const m = require('vue')",
+  "export const ref = m.ref",
+  "export const computed = m.computed"
+].join('\n')
+const { url: tabsUrl, dir: tabsDir } = await bundle('src/store/tabs.ts', 'tabs.mjs', {
+  pinia: piniaStub,
+  vue: vueStub
+})
+try {
+  const { createPinia, setActivePinia } = await import('pinia')
+  setActivePinia(createPinia())
+  const { useTabsStore } = await import(tabsUrl)
+  const tabs = useTabsStore()
+  tabs.open('C:/v/A.md')
+  tabs.open('C:/v/dir/B.md')
+  tabs.open('C:/v/dir/sub/C.md')
+  tabs.open('C:/v/other.md')
+  tabs.activate('C:/v/dir/sub/C.md')
+
+  const r = tabs.remap('C:/v/dir', 'C:/v/moved')
+  check('文件夹移动：前缀命中的嵌套标签全部改写', tabs.paths.join('|') === 'C:/v/A.md|C:/v/moved/B.md|C:/v/moved/sub/C.md|C:/v/other.md', tabs.paths.join('|'))
+  check('文件夹移动：激活标签同步改写', tabs.activePath === 'C:/v/moved/sub/C.md' && r.activeChanged === true, String(tabs.activePath))
+  check('affected 覆盖两条嵌套改写', r.affected.length === 2 && r.affected[0][1] === 'C:/v/moved/B.md' && r.affected[1][1] === 'C:/v/moved/sub/C.md', JSON.stringify(r.affected))
+  check('未命中标签不受影响', tabs.has('C:/v/other.md') && tabs.has('C:/v/A.md'))
+
+  const r2 = tabs.remap('C:/v/A.md', 'C:/v/z.md')
+  check('单文件精确改写', tabs.has('C:/v/z.md') && !tabs.has('C:/v/A.md') && r2.affected.length === 1, tabs.paths.join('|'))
+  check('非激活单文件改写不改变 activeChanged', r2.activeChanged === false)
+
+  const rb = tabs.remap('C:/v/nope', 'C:/v/x')
+  check('未命中任何标签 → no-op', rb.affected.length === 0 && rb.activeChanged === false)
+} finally {
+  rmSync(tabsDir, { recursive: true, force: true })
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')

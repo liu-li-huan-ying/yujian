@@ -504,12 +504,17 @@ markdown-editor/
 "显示红色的 \require"），还会污染导出。改为只输出错误徽标 `⚠ 公式无法渲染`，
 完整原因放 `title` 悬停可见 —— 读者不需要看源码，作者悬停能查因。
 
-**`\eqref` / `\ref` 交叉引用（2026-08-31）**：MathJax 的标签表挂在共享 `document` 上、
-**跨 `convert()` 保留**，所以 `\eqref` 能否解析取决于「`\label` 是否已经渲染过」。
+**`\eqref` / `\ref` 交叉引用（2026-08-31，机制于 2026-09-11 校正）**：MathJax 的标签表挂在共享
+`document` 上、**跨 `convert()` 保留**，所以 `\eqref` 能否解析取决于「`\label` 是否已经渲染过」。
 而渲染是异步且顺序不定的（行内 nodeView 立即渲染、块级走防抖预览），`\eqref` 经常先于
-`\label` 渲染 → 显示 `???`，且因其结果被缓存而**一直卡在 ???**。
-修复：`renderMathToSvg()` 检测到源码含 `\label{` 时广播 `onLabelsChanged`，
-含 `\eqref` / `\ref` 的行内 nodeView 与块级预览订阅该事件并重渲染（各自带令牌防串台）。
+`\label` 渲染 → 显示 `???`。
+
+机制（当前实现，见 `renderMathWithRef` / `flushPendingRefs`）：含引用的公式若解析不出，
+**不返回半成品**，而是把任务推入 `pendingRefs` 队列挂起；`renderMathToSvg()` 每渲染一个含
+`\label{` 的公式就调用一次 `flushPendingRefs()` 唤醒队列重试。三层保险：①入队后立即复查一次
+标签表（微任务时序下「入队」可能晚于「注册 → 刷新」，实测必现）；②最多重试 `MAX_REF_ATTEMPTS`
+轮；③1200ms 超时兜底，宁可结算出 `???` 也不让节点永久停在占位源码。
+> 注：早期版本的「`onLabelsChanged` 广播」接力**已移除**，勿再据此排查。
 
 **`$$` 定界符残留（2026-08-31）**：`renderLatexContent()` 增加 `stripMathDelims()`，
 去掉可能残留的 `$$…$$` / `\[…\]` 包裹 —— 带着 `$$` 喂 MathJax 不会报错，但会多渲染两个
@@ -522,12 +527,12 @@ markdown-editor/
 根因修复：新增 `stripRequireDirectives()` 在送入 MathJax 前正则移除所有 `\require{…}` 行。
 由于 AllPackages 已全量加载，该指令在功能上完全冗余；剥离后既消除视觉污染又不影响渲染能力。
 
-**`\eqref` 显示 `???` 的根治（2026-08-31，推翻此前两版结论）**：
+**`\eqref` 显示 `???` 的三个连环坑（2026-08-31 记录 · 2026-09-11 校正措辞与验证状态）**：
 
 此前两版修复（延迟重试、`onLabelsChanged` 广播）**全都无效**，因为踩了三个连环坑，
 且前两个都是"看起来在修、其实没生效"：
 
-| # | 坑 | 说明 | 根治 |
+| # | 坑 | 说明 | 修复 |
 |---|---|---|---|
 | 1 | **压根没编号** | MathJax v3 的 `TagsFactory.OPTIONS.defaultTags = 'none'`（见 `mathjax-full/js/input/tex/Tags.js`）。只有显式 `\tag{…}` 的公式才有号，`\begin{equation}\label{eq:x}` **不自动编号**，`\label` 登记的是一个 tag 为空的 `Label` → `\eqref` 拿到空值 → `(???)`。 | 构造 TeX 时传 **`tags: 'ams'`**（v2 的 `equationNumbers.autoNumber:'AMS'` 的 v3 等价写法，与 StackOverflow / Quarto / VSCode-MPE 的通行解法一致）。`ams` 语义：`equation`/`align` 编号，`equation*`/`align*` 与行内不编号。 |
 | 2 | **`???` 检测从未命中** | SVG 输出里没有字面文本，字符编成字形路径，`?` 写作 `<path data-c="3F">`。此前所有 `svg.includes('???')` 判断**恒为 false**，重试逻辑一次都没触发过。 | 改为解码 `data-c` 判断，且只在含 `MathJax_ref` 的节点上判定（避免误伤公式里正常的问号）。 |
@@ -539,6 +544,18 @@ markdown-editor/
   「标签注册 → 刷新队列」之后，此后不再有事件唤醒，任务将永久挂起（实测必现）；
 - **1200ms 超时兜底 + 最多 3 轮**：引用了根本不存在的 label 时永远不会有注册事件，
   宁可显示 `(???)` 提示用户"引用没解析出来"，也不要让节点一直停在占位源码 `$…$` 上装死。
+- **token 失效必结算（2026-09-11 修）**：`flushPendingRefs` 曾对 token 失效的任务直接
+  `return`（不 resolve、不再入队），而 1200ms 兜底又因该任务已出队（`indexOf < 0`）而跳过
+  → promise 永久挂起，节点卡在占位源码。现改为 `task.resolve(svg)` 结算（调用方有
+  `mine !== this.token` 守卫，不会污染陈旧 DOM）。
+
+> **验证状态（2026-09-11 校正）**：上述坑均已落地为真实代码，`verify-markdown.mjs` 在**纯逻辑层**
+> 覆盖了「引用先于定义渲染」「label 不存在超时兜底」「token 失效不挂起」等路径。
+> 但**用户实测的「重载后持久 `???`」尚未在本环境复现、也未经 DOM 取证定论**：纯逻辑探针已排除
+> 时序竞态（见 `docs/REVIEW-OPTIONAL-2026-09-11.md` §4.2），剩余可能落在 **app 层块级预览派发**
+> ——重载时 `codeBlockConfig.renderPreview('latex', …)` 是否被调用、调得够不够早。
+> 定论需在 Electron 里抓 DOM（取证清单见 `.workbuddy/memory/EQREF-KNOWN-ISSUE.md` §5）。
+> 故本节描述的是「**已实现的修复**」，**不等于端到端已根治**。
 
 **裸 `$$…\label…$$` 自动套编号环境（2026-08-31）**：AMS 语义下 `$$…$$` 本身不编号，
 写了 `\label` 也拿不到号。Markdown 用户写 `$$E=mc^2\label{eq:e}$$` 时心里想的
@@ -700,9 +717,9 @@ Milkdown 默认没有 HTML 节点，`<kbd>Ctrl</kbd>` 被 micromark 解析成 `h
 | CodeMirror i18n | 中文下 Edit/Hide 仍为英文 | Crepe 硬编码 fallback，已补 `previewToggleText` + 中英文 locale |
 | 渲染管线 | 是否执行 remark 转换器 | `remark.runSync(remark.parse(...))` 确实执行（旧记忆有误，已更正于项目记忆） |
 
-**回归用例（29 条，覆盖三大块）：**
+**回归用例（30 条，覆盖三大块）：**
 - 数学：`\label`/`\eqref` 跨顺序解析、AMS 编号稳定、裸 `$$…\label…$$` 兜底、`\require` 剥离、
-  未定义引用超时兜底、行内/块级两套节点视图。
+  未定义引用超时兜底、**token 失效必结算（不挂起）**、行内/块级两套节点视图。
 - HTML 内联：单/多键帽、带属性、`<br>`、嵌套、内含行内标记、块级不接管、逐字往返。
 - 混合：主题令牌存在性、跨皮肤明暗取值。
 
@@ -1196,6 +1213,9 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * F：IPC 契约——每个通道都既有主进程接线又有 preload 暴露（抓出并清理了零引用的 `FILE_LIST_DIR`）。
 * G：软错误上报——`reportSoftError` 上报自身永不抛错 / 环形缓冲裁剪 / 分级计数 / sink 注入。
 * H：数据安全红线——改名 / 移动 / 删除对 `.assets` 与 `.yujian-history` 的搬运与清理（回收站经 `setTrashImpl` 注入 fake，断言「本体 + 附件 + 历史三项都进回收站」）。
+* I：快照 diff 引擎——hunk 行号 / 聚合 / 并排配对（`src/utils/snapshotDiff.ts`，2026-09-11 抽自 `SnapshotPanel.vue`）。
+* J：frontmatter 解析 / 回写——正文逐字保留（`src/editor/frontmatter.ts`，数据保真红线）。
+* K：标签页路径重映射——文件夹移动按前缀整体改写（`src/store/tabs.ts` 的 `remap`）。
 * `npm run stress:table` → 表格往返压测（原 `scripts/stress-table.mjs`，此前未接线）。
 * `npm run perf:index` → `scripts/perf-index.mjs`：造 3000 篇临时笔记（`YJ_PERF_FILES` 可放大），断言全量构建上限、单文件增量**绝对**上限、**增量代价不随库规模增长（严格增量性）**、索引体积、堆增量，以及「增量不得触碰无关条目」。把硬约束 4「5000 文件无感知」从人工手测变成门禁。
   * ⚠️ 严格增量性**不要**用「增量 vs 全量/N 的耗时比」来断言：全量是 I/O 密集（N 次读文件）、增量是纯 CPU 且有固定底噪；机器越快 `全量/N` 越小、比值越难看——同一份代码本地 48×、CI 只有 15×，门禁会随机飘红（2026-09-10 实测踩中，属断言设计错误而非性能回归）。正确做法是**同进程内把同一操作跑在两个库规模上**（N 与 N/10）：O(1) 时比值 ≈1（实测 1.06~1.15），退化成 O(n) 时会放大到 ~N/10（证伪实测 10.5×，门禁正确拦住）。
@@ -1207,9 +1227,9 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * `npm run lint` 覆盖全仓（`src` + `electron`），不再只扫 `src`：主进程是删除 / 移动 / 落盘等最高风险代码所在。
 * `npm run check:encoding` → `scripts/check-encoding.mjs`：扫描受版本管理的文本文件，出现 U+FFFD 即失败。合法 UTF-8 解码**永不**产出 U+FFFD，故它是「字符已被静默损坏」的高置信信号——这类损坏不报错、不拦构建，只有人读到才发现（2026-09-10 实测中过一次，单文件 80 字符被抹）。
   * 判读铁律：本仓库 CJK 在部分终端 / 日志管道里会被**二次编码**，肉眼看到的乱码未必是文件问题。判断一律以**码点或字节**为准（`scripts/check-encoding.mjs` 的报告刻意只输出 ASCII）。
-* `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（29 条）。
-* `npm run verify:corpus` = **Markdown 往返语料矩阵**：`tests/corpus/*.md` 逐个跑「parse → serialize，断言逐字节相等」（当前 9 个用例）。新增用例只需往目录丢一个 `.md`，**不需要写 JS**——把补用例的门槛从「会写 JS」降到「会写 Markdown」，避免自定义语法扩建时漏测。
-  * 语料必须写成 remark 的**规范形式**：`*` 项目符号（`--` 会被正常化）、`***` 分隔线（`---` 会被改）、表格 `--` 分隔行并按最宽单元格补空格对齐。这些是 remark 上游行为，**不是本项目缺陷**；完整对照表与编写约定见 `tests/corpus/README.md`。
+* `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（30 条，含 2026-09-11 新增的「token 失效必结算」）。
+* `npm run verify:corpus` = **Markdown 往返语料矩阵**：`tests/corpus/*.md` 逐个跑「parse → serialize，断言逐字节相等」（当前 18 个用例，覆盖 gfm 脚注 / 硬换行 / 块级 HTML / 引用定义 / 转义字面量 / **行内与块级数学** / wikilink·tag 边界）。流水线为 remark-parse + remark-gfm + **remark-math** + 三个自定义插件；`remark-math` 与编辑器 `Crepe.Feature.Latex` 同包，故数学走真实解析 + 序列化路径而非当普通文本的假绿。新增用例只需往目录丢一个 `.md`，**不需要写 JS**——把补用例的门槛从「会写 JS」降到「会写 Markdown」，避免自定义语法扩建时漏测。
+  * 语料必须写成 remark 的**规范形式**：`*` 项目符号（`--` 会被正常化）、`***` 分隔线（`---` 会被改）、表格 `--` 分隔行并按最宽单元格补空格对齐、行尾两空格硬换行→反斜杠 `\`、裸 URL→尖括号形式、字符实体→字面字符、块级公式须写 `$$\n…\n$$`。这些是 remark 上游行为，**不是本项目缺陷**；完整对照表与编写约定见 `tests/corpus/README.md`。
   * 与「未编辑文档一字不改」不冲突：未编辑文档走保真层（原始文本直通），只有真正被编辑、需要序列化时才走这条链路。
   * 已证伪：把 wikiLink handler 的锚点去掉（历史 P0 缺陷）→ `06-wikilink.md` 正确失败并指出差异位置。
 * `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `perf:index` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
@@ -1251,6 +1271,47 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * 索引层（`vaultIndex.ts` 裸正则扫 `[[…]]`）与编辑器层（remark 改写）此前各写一份定界符正则，语义有漂移风险。现收敛为共享模块：`wikiLinkRegex()` / `wikiLinkInputRegex()` / `parseWikiLink()` / `buildWikiLink()` / `findWikiLinks()`。
 * 铁律：`wikiLinkRegex()` **每次返回新 RegExp 实例**——共享同一实例会因 `lastIndex` 残留导致 `exec` 漏匹配（带 `g` 标志的经典陷阱）。
 * `wikilink.ts` 的 remark 遍历改用最小 `MdNode` 形状（12 → 9 处 `any`）；因 mdast 各节点类型均可满足该形状（字段全可选），调用处无需强转。
+
+***
+
+### 5.24 审查可选项落地（2026-09-11）
+
+> 背景：`docs/CODE-REVIEW-2026-09-10.md` §六 列了 4 项非阻塞可选项。先做**只取证、不改码**的审查（产出 `docs/REVIEW-OPTIONAL-2026-09-11.md`），据此**证伪**「1600 行大组件必须抽 composable」「该新建 `useTabs()`」等提法，再按优先级逐项落地。
+
+**（1）修 `renderMathWithRef` 的 token 失效挂起（真 bug）**
+
+* 场景：内联 `\eqref` 节点的 pending 任务在其视图销毁后失去有效 token 时，`flushPendingRefs` 曾直接 `return`（不 resolve、不再入队），而 1200ms 兜底又因任务已出队（`indexOf < 0`）而跳过 → promise **永久挂起**，DOM 停在占位源码 `$…$`。
+* 修复：改为 `task.resolve(svg)` 结算（调用方有 `mine !== this.token` 守卫，不会污染陈旧 DOM）。`verify:md` 新增断言覆盖；把修复 stash 掉后该断言立刻 FAIL（已证伪）。
+
+**（2）抽 `src/utils/snapshotDiff.ts`（纯 diff 引擎 + 单测）**
+
+* 从 `SnapshotPanel.vue` 抽出行/块级 diff 引擎：`buildDiffRows` / `buildHunks` / `splitPairs` / `diffStats` / `hasChanges`。**是 util 不是 composable**——纯逻辑不该藏在组件里。
+* 顺带**发现并修掉一个真 bug**：旧 `buildHunks` 把 hunk 内的上下文行也计入 `baseOld/baseNew`，导致 hunk 头行号偏大。改为只统计 hunk 起点之前的行；以 `diff -U1` 为准校验收敛（`mod-mid` 由 `@@ -5,3` 修正为 `@@ -2,3`）。
+* `test-core.mjs` 新增 `[I]` 段（14 条断言：与 `diff -U1` 对齐、纯增/删头、双 hunk、null 侧、并排配对）。
+
+**（3）`frontmatter.ts` 补数据保真断言（`test-core` `[J]` 段）**
+
+* frontmatter **不走 remark 链**（编辑器先剥 YAML 头、只编辑正文、再拼回），故不该做成 corpus 的 `.md`（会被当 `***` 分隔线）。真正缺口是它此前零测试。
+* `[J]` 段（10 条）：解析已知字段 + 未知字段透传、正文逐字保留、`parse→serialize` 往返逐字节等于原文、空值字段剔除、CRLF 保真。`gray-matter` 的动态 `require('fs')` 在 ESM 产物里会崩 → 用 `createRequire` 桩外置回 Node 原生加载。
+
+**（4）`remapTabPaths` 收进 `useTabsStore`（`remap` action）**
+
+* 审查结论：**不新建 `useTabs()`**——App.vue 里剩余的标签代码全是同时牵动 watcher 抑制 / 会话持久化 / 文件树的编排胶水，搬进 composable 只是搬家不减熵。
+* 唯一放错位置的是 `remapTabPaths`：纯粹的「标签列表前缀批量重映射 + activePath 迁移」，不碰编辑器 / 会话 / 文件树，天然属于 store。落地为 `remap(oldPath, newPath) → { activeChanged, affected }`；`App.vue` 只据此拼 watcher 回声抑制的 `immune` 集合，store 保持对 `refreshGuard` 无感。
+* `test-core.mjs` 新增 `[K]` 段（7 条：文件夹前缀批量重映射、嵌套后代、activePath 同步、no-op）。
+
+**（5）语料矩阵扩展 + 接 `remark-math`**
+
+* 审查指出原提法有误导：不补 `remark-math` 就往 corpus 丢 math 是**假绿**（`$x$` 被当普通文本，往返必然一致）。
+* 现给 harness 接上与编辑器同包的 `remark-math`（内部自注册 from/toMarkdown 扩展），数学语料走真实解析 + 序列化路径。用例 9 → 18：行内/块级数学、gfm 脚注、硬换行、块级 HTML、引用定义、转义字面量、wikilink·tag 边界、删除线/自动链接。
+* `tests/corpus/README.md` 补充正常化对照表（两空格硬换行→`\`、裸 URL→尖括号、字符实体→字面字符、多余转义被去掉、块级公式须写 `$$\n…\n$$` 等）。**已知边界**：语料是 mdast 级往返，**未复刻**编辑器 `remarkMathBlockPlugin`（把 `math` 改写成 `code(lang=LaTeX)`）这一步。
+
+**（6）对齐 `\eqref` 三处矛盾文档**
+
+* `ARCHITECTURE §5.3.2` 曾称「已根治」、`EQREF-KNOWN-ISSUE.md` 称「未解决」、`PHASE3-PLAN` 同一文件内自相矛盾，且引用了**代码里不存在**的 `refAutoInputRule`（全库零命中）。
+* 现统一为：三个连环坑与 token 挂起**已修**（纯逻辑层 `verify:md` 已覆盖）；用户所报「重载持久 `???`」**端到端待定论**，需 Electron 抓 DOM 取证。单一定义落在 `.workbuddy/memory/EQREF-KNOWN-ISSUE.md`。
+
+**门禁现状（2026-09-11）**：`typecheck` 0 错 / `lint` 0 错（2 处 `v-html` 警告有意保留）/ `check:encoding` 161 文件 0 损坏 / `test` 155 / `verify:md` 30 / `verify:corpus` 18 / `perf:index` 9 项全过。
 
 ***
 

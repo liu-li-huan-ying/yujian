@@ -228,8 +228,15 @@ function flushPendingRefs(): void {
   for (const task of tasks) {
     task.attempts += 1
     void renderMathToSvg(task.source, task.display).then((svg) => {
-      // token 检查：调用方已销毁/更新则丢弃结果（token 为 0 表示不检查，块级场景）
-      if (task.token > 0 && !isTokenValid(task.token)) return
+      // token 失效 = 调用方（nodeView）已销毁或重建，无人需要这次结果。
+      // 必须 resolve 结算掉，不能 return 丢弃：丢弃会让该 promise 永久挂起——
+      // 任务已被 splice 出队，1200ms 兜底又因 indexOf < 0 而跳过，于是内联节点
+      // 永远停在占位源码 `$…$`。调用方自身有 `mine !== this.token` 守卫，
+      // 会忽略这次写入，故结算不存在的污染陈旧 DOM 风险。
+      if (task.token > 0 && !isTokenValid(task.token)) {
+        task.resolve(svg)
+        return
+      }
       // 解析成功、或重试次数用尽（label 多半根本不存在）→ 交出结果
       if (!refUnresolved(svg) || task.attempts >= MAX_REF_ATTEMPTS) {
         task.resolve(svg)

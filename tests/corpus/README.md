@@ -1,8 +1,11 @@
 # Markdown 往返语料（tests/corpus）
 
 每个 `.md` 文件都是一个用例：`npm run verify:corpus` 会把它喂进完整的 remark 流水线
-（remark-parse + remark-gfm + 本项目三个自定义插件 `wikilink` / `tag` / `htmlInline`），
+（remark-parse + remark-gfm + remark-math + 本项目三个自定义插件 `wikilink` / `tag` / `htmlInline`），
 序列化后断言**逐字节等于原文**。
+
+> `remark-math` 与编辑器 `Crepe.Feature.Latex` 用的是同一个包（内部会自注册 from/toMarkdown 扩展），
+> 所以 `$…$` / `$$…$$` 走的是与真实编辑器一致的解析 + 序列化路径——**不是**被当成普通文本的假绿。
 
 新增用例 = 往这个目录丢一个 `.md`。不需要写 JS。
 
@@ -20,6 +23,12 @@ remark 会把不规范的写法**正常化**，这些差异是上游行为、**�
 | `_强调_` | `*强调*` |
 | setext 标题（下划线式） | ATX 标题（`#`） |
 | 缩进代码块 | 围栏代码块 |
+| 行尾**两个空格**的硬换行 | 反斜杠硬换行 `\` |
+| 裸 URL `https://example.com` | 尖括号形式 `<https://example.com>` |
+| 字符实体 `&amp;` / `&lt;` / `&#35;` | 字面字符 `&` / `<` / `#` |
+| 多余转义 `\#` `\!` `\|` `\\` `\$` | 去掉反斜杠（仅**必要**转义保留，如 `\*` `\_` `\[`） |
+| 连续的引用定义 `[a]: u` 两行 | 每行之间补一个空行 |
+| 单行块级公式 `$$x$$` | 视为行内 `$x$`（块级须写成 `$$\n…\n$$`） |
 
 所以语料文件请**直接写成上表右列的形式**。跑一次 `npm run verify:corpus`，
 它会指出第一处差异的位置（行 / 列 + 原文片段），照着改语料即可。

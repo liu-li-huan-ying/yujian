@@ -6,7 +6,7 @@
  * 漏了就是「静默失真」——文档看着还在，其实存盘时已被改写。改成语料文件夹后，
  * 新增用例 = 往 `tests/corpus/` 丢一个 .md，门槛从「会写 JS」降到「会写 Markdown」。
  *
- * 做法：对每个语料文件跑一次完整的 remark 流水线（gfm + 本项目三个自定义插件），
+ * 做法：对每个语料文件跑一次完整的 remark 流水线（gfm + math + 本项目三个自定义插件），
  * 断言 **parse → serialize 后逐字节等于原文**。
  *
  * 语料文件的编写约定（重要）：
@@ -114,6 +114,9 @@ try {
   const { unified } = await import('unified')
   const remarkParse = (await import('remark-parse')).default
   const remarkGfm = (await import('remark-gfm')).default
+  // remark-math 与编辑器 Crepe.Feature.Latex 用的是同一个包（内部自注册 from/toMarkdown 扩展），
+  // 故语料里的 $…$ / $$…$$ 走的就是与真实编辑器一致的解析 + 序列化路径，而非「当普通文本」的假绿。
+  const remarkMath = (await import('remark-math')).default
   const remarkStringify = (await import('remark-stringify')).default
 
   /**
@@ -136,6 +139,7 @@ try {
   const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
+    .use(remarkMath)
     .use(remarkWikilink)
     .use(remarkTag)
     .use(remarkHtmlInline)

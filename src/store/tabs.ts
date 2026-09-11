@@ -79,6 +79,43 @@ export const useTabsStore = defineStore('tabs', () => {
     activePath.value = active && has(active) ? active : (tabs.value[0]?.path ?? null)
   }
 
+  /**
+   * 路径重映射：重命名 / 移动后，把命中 oldPath 的标签（及其内部所有后代文档）整体改写到 newPath。
+   * 文件夹的移动/重命名会让内部每篇文档的绝对路径都变，必须**按路径前缀批量重映射**，
+   * 否则嵌套的活动文档标签仍指向旧路径，编辑器自动保存会把已迁走的文件「复活」回来。
+   *
+   * 返回值：
+   * - activeChanged：当前激活标签是否被改写（调用方据此决定是否持久化会话）
+   * - affected：每条被改写的 [旧, 新] 路径对（调用方据此喂给 watcher 回声抑制）
+   */
+  function remap(
+    oldPath: string,
+    newPath: string
+  ): { activeChanged: boolean; affected: Array<[string, string]> } {
+    const sep = oldPath.includes('\\') ? '\\' : '/'
+    const prefix = oldPath + sep
+    const affected: Array<[string, string]> = []
+    for (const t of tabs.value) {
+      let np: string | null = null
+      if (t.path === oldPath) np = newPath
+      else if (t.path.startsWith(prefix)) np = newPath + t.path.slice(oldPath.length)
+      if (np) {
+        affected.push([t.path, np])
+        t.path = np
+      }
+    }
+    let activeChanged = false
+    const ap = activePath.value
+    if (oldPath === ap) {
+      activePath.value = newPath
+      activeChanged = true
+    } else if (ap && ap.startsWith(prefix)) {
+      activePath.value = newPath + ap.slice(oldPath.length)
+      activeChanged = true
+    }
+    return { activeChanged, affected }
+  }
+
   /** 当前打开标签的路径数组（用于会话持久化） */
   const paths = computed(() => tabs.value.map((t) => t.path))
 
@@ -93,6 +130,7 @@ export const useTabsStore = defineStore('tabs', () => {
     close,
     closeOthers,
     closeToRight,
-    restore
+    restore,
+    remap
   }
 })

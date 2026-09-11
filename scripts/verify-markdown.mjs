@@ -51,7 +51,7 @@ async function testMath() {
     { '@milkdown/kit/prose/state': 'export class Plugin { constructor(s) { this.spec = s } }\n' }
   )
   try {
-    const { renderMathWithRef, renderLatexContent, resetMathNumbering } = await import(url)
+    const { renderMathWithRef, renderLatexContent, resetMathNumbering, trackToken } = await import(url)
 
     // SVG 里没有字面文本，字符是字形路径 <path data-c="3F">，需解码后判断
     const glyphs = (svg) =>
@@ -129,6 +129,18 @@ async function testMath() {
     // 11. 已有环境不重复套壳
     resetMathNumbering()
     t('equation* 不被重复套壳（仍不编号）', !glyphs(await renderLatexContent('\\begin{equation*}x=1\\label{eq:s2}\\end{equation*}')).includes('('))
+
+    // 12. token 失效（nodeView 销毁/重建）不得让引用任务永久挂起
+    resetMathNumbering()
+    const untrackTok = trackToken(4242)
+    const pTok = renderMathWithRef('\\eqref{eq:tok}', false, 4242)
+    untrackTok() // 模拟 nodeView destroy：token 失效
+    await renderLatexContent(eq('eq:tok'))
+    const tokSvg = await Promise.race([
+      pTok,
+      new Promise((r) => setTimeout(() => r('__HANG__'), 2500))
+    ])
+    t('token 失效后引用任务仍会结算（不挂起）', tokSvg !== '__HANG__', String(tokSvg))
 
     report(R)
   } finally {

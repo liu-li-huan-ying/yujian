@@ -166,27 +166,13 @@ function remapTabPaths(
   oldPath: string,
   newPath: string,
 ): { activeChanged: boolean; immune: string[] } {
-  const sep = oldPath.includes('\\') ? '\\' : '/'
-  const prefix = oldPath + sep
+  // 标签路径的前缀批量重映射（含嵌套后代）与激活项迁移，统一由 tabs store 负责
+  const { activeChanged, affected } = tabs.remap(oldPath, newPath)
+  // 组装 watcher 回声抑制集合：本节点 + 其附件目录，以及每条被改写标签的旧/新路径
   const immune = new Set<string>([oldPath, newPath, assetsPathOf(oldPath), assetsPathOf(newPath)])
-  for (const t of tabs.tabs) {
-    let np: string | null = null
-    if (t.path === oldPath) np = newPath
-    else if (t.path.startsWith(prefix)) np = newPath + t.path.slice(oldPath.length)
-    if (np) {
-      immune.add(t.path)
-      immune.add(np)
-      t.path = np
-    }
-  }
-  let activeChanged = false
-  const ap = tabs.activePath
-  if (oldPath === ap) {
-    tabs.activePath = newPath
-    activeChanged = true
-  } else if (ap && ap.startsWith(prefix)) {
-    tabs.activePath = newPath + ap.slice(oldPath.length)
-    activeChanged = true
+  for (const [from, to] of affected) {
+    immune.add(from)
+    immune.add(to)
   }
   return { activeChanged, immune: [...immune] }
 }
