@@ -1311,7 +1311,36 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 * `ARCHITECTURE §5.3.2` 曾称「已根治」、`EQREF-KNOWN-ISSUE.md` 称「未解决」、`PHASE3-PLAN` 同一文件内自相矛盾，且引用了**代码里不存在**的 `refAutoInputRule`（全库零命中）。
 * 现统一为：三个连环坑与 token 挂起**已修**（纯逻辑层 `verify:md` 已覆盖）；用户所报「重载持久 `???`」**端到端待定论**，需 Electron 抓 DOM 取证。单一定义落在 `.workbuddy/memory/EQREF-KNOWN-ISSUE.md`。
 
-**门禁现状（2026-09-11）**：`typecheck` 0 错 / `lint` 0 错（2 处 `v-html` 警告有意保留）/ `check:encoding` 161 文件 0 损坏 / `test` 155 / `verify:md` 30 / `verify:corpus` 18 / `perf:index` 9 项全过。
+**门禁现状（2026-09-11）**：`typecheck` 0 错 / `lint` 0 错（2 处 `v-html` 警告有意保留）/ `check:encoding` 172 文件 0 损坏 / `test` 171 / `verify:md` 30 / `verify:corpus` 18 / `perf:index` 9 项全过。
+
+### 5.25 Phase 3 批次三（二·下）：关系图谱（2026-09-11，已落地）
+
+> 批次三三块（`#标签` + 内容地图 MOC + 关系图谱）至此收官。规格见 `docs/PHASE3-UI-DESIGN.md` §4.3。
+
+**（1）数据完全由索引派生，零新数据层**
+
+* `vaultIndex.buildGraph(index, { center, maxHops, maxNodes })` —— 纯函数（Node 可测，`test-core` `[L]` 段 16 条断言）。
+  * 节点 = 索引内文件；边 = `IndexEntry.outLinks`（**已是解析后的绝对路径**），只保留两端都在展示集合内的边，并按「无向对」去重（互链只画一条线）。
+  * 由于两端都在集合内，反链方向（w→u）会在处理 w 时被自然补上，**无需额外求并集**。
+  * **本地子图**：以 center 为根沿「出链 ∪ 反链」的**无向邻接**做 BFS，取 maxHops 跳内节点，`depth` 记跳数（0=中心）。center 不在库内 → 退化为全局。
+  * **全局视图**：超过 `GRAPH_MAX_NODES=300` 时按节点**度降序**取前 300 —— 保留「最连通」的核心子图，是**确定性**采样（不依赖随机、可复现、可单测）。
+* IPC `VAULT_GRAPH` → preload `getGraph`；主进程走 `getLiveIndex`，与其它索引消费通道同源。
+
+**（2）渲染：Canvas 2D + d3-force**
+
+* 依赖先翻仓库：`d3-force` **已在 `node_modules`**（mermaid 的传递依赖）。因其纯 JS、无 node-gyp（红线 3），提升为**直接依赖** `d3-force ^3.0.0`（+ `@types/d3-force`）即可安全复用，**未引入任何编译型依赖**。平移 / 缩放 / 拖拽在 Canvas 上自行实现，故不需 `d3-zoom` / `d3-drag`。
+* **Canvas 而非 SVG**：节点数多时 SVG DOM 会拖垮渲染（UI-DESIGN §4.3）。
+* 底用 `--hue-editor` 纯净实色，**不叠玉质纹理**；节点分三级：中心 r8 走 `--hue-accent`、一跳 r5 走 `--hue-text-2`、二跳及更远 r3.5 走 `--hue-text-3` 且默认不显标签（悬停才出）。
+* 主题适配：Canvas 不能直接用 CSS 变量 → 每次绘制经 `getComputedStyle` 取计算值（`--hue-editor` / `--hue-accent` / `--hue-text-1/2/3`），切皮肤自动跟随。
+  * ⚠️ `--hue-*` 是**完整色值**（如 `#5fa8a0`）而非三元组，与 `--hue-mark` / `--hue-tint-*` 那组三元组不同 → `withAlpha()` 需自行解析成 `rgba()`，别照抄 `rgb(var(--hue-mark))` 写法。
+
+**（3）交互与护栏**
+
+* 入口：左缘活动栏新增第 7 键「图谱」（`ViewKey` 加 `'graph'`）。图谱是**独立全屏视图**，不进双栏停靠布局 —— 激活时占用整个内容区、隐藏左右停靠栏；`EditorHost` 用 `v-show` 保留实例（不丢编辑状态）。
+* 单击选中（高亮邻居、其余淡化至 40%）· 双击打开笔记并退出图谱 · 拖拽平移 · 滚轮缩放 · 拖节点可固定位置。
+* 性能：≤300 节点、tick 经 `requestAnimationFrame` 节流、`alphaDecay` 衰减后停算；超限时提示「已显示 N / 共 M，切换本地子图以聚焦」。
+* 无障碍：Canvas 不可读 → 提供**等价列表视图**（图谱 / 列表切换，条目为 `<button>`、键盘可操作）。
+* `prefers-reduced-motion` → 同步跑 300 个 tick 直接到收敛终态，不做逐帧动画。
 
 ***
 

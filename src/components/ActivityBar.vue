@@ -15,7 +15,7 @@ import { computed } from 'vue'
 import Icon from './Icon.vue'
 import { i18n } from '../i18n'
 
-export type ViewKey = 'files' | 'tags' | 'moc' | 'outline' | 'backlinks' | 'snapshot'
+export type ViewKey = 'files' | 'tags' | 'moc' | 'graph' | 'outline' | 'backlinks' | 'snapshot'
 
 const L = i18n.ui
 
@@ -26,6 +26,8 @@ const props = defineProps<{
   tagsActive: boolean
   /** 内容地图浮层是否打开 */
   mocActive: boolean
+  /** 关系图谱全屏视图是否打开 */
+  graphActive: boolean
   /** 大纲是否可见 */
   outlineActive: boolean
   /** 反链浮层是否打开 */
@@ -51,6 +53,7 @@ const groups = computed<ViewItem[][]>(() => [
     { key: 'files', icon: 'folder', label: L.sidebar, on: props.filesActive },
     { key: 'tags', icon: 'tag', label: L.tags, on: props.tagsActive },
     { key: 'moc', icon: 'map', label: L.moc, on: props.mocActive },
+    { key: 'graph', icon: 'graph', label: L.graph, on: props.graphActive },
   ],
   [
     { key: 'outline', icon: 'file-text', label: L.outline, on: props.outlineActive },

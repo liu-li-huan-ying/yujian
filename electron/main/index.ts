@@ -22,7 +22,8 @@ import {
   type SearchOptions,
   type IntegrityAction,
   type FileStat,
-  type UnlinkedMention
+  type UnlinkedMention,
+  type GraphRequest
 } from '../shared/ipc-channels'
 import { createDoc, createFolder, deleteItem, listTree, renameItem, moveItem, replaceInVault, searchVault, stopWatching, watchVault, checkLinks, getLiveIndex } from './vault'
 import * as VaultIndex from './vaultIndex'
@@ -454,6 +455,10 @@ function registerIpc(): void {
   // 内容地图：某篇 MOC 的下级聚合（标签 / 出链 / 反链分组）
   ipcMain.handle(IPC.VAULT_GET_MOC_OUTLINE, async (_event, root: string, path: string) =>
     VaultIndex.getMocOutline(root, path, await getLiveIndex(root)),
+  )
+  // 关系图谱：由索引派生节点 / 边（本地子图 BFS / 全局度降序截断，纯函数零额外扫描）
+  ipcMain.handle(IPC.VAULT_GRAPH, async (_event, root: string, req?: GraphRequest) =>
+    VaultIndex.buildGraph(await getLiveIndex(root), req ?? {}),
   )
 
   // ── 会话持久化（崩溃恢复）──

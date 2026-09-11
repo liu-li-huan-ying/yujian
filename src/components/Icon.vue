@@ -62,6 +62,11 @@ const PATHS: Record<string, string> = {
   'chevron-right': '<path d="m9 6 6 6-6 6"/>',
   /* 内容地图（MOC）：折叠的地图 */
   map: '<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
+  /* 关系图谱：五节点网络（节点 + 连线） */
+  graph:
+    '<circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="12" r="2.2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><line x1="6.7" y1="6.9" x2="10.4" y2="10.8"/><line x1="17.3" y1="6.9" x2="13.6" y2="10.8"/><line x1="6.7" y1="17.1" x2="10.4" y2="13.2"/><line x1="17.3" y1="17.1" x2="13.6" y2="13.2"/>',
+  /* 适应窗口：四角取景框 */
+  fit: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
   /* 提示说明（面板内引导） */
   info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/>',
   writing: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',

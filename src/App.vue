@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Icon from './components/Icon.vue'
 import Sidebar from './components/Sidebar.vue'
-import ActivityBar from './components/ActivityBar.vue'
+import ActivityBar, { type ViewKey } from './components/ActivityBar.vue'
 import EditorHost from './editor/EditorHost.vue'
 import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
@@ -16,6 +16,7 @@ import LinkCheckPanel from './components/LinkCheckPanel.vue'
 import BacklinksPanel from './components/BacklinksPanel.vue'
 import TagPanel from './components/TagPanel.vue'
 import MocPanel from './components/MocPanel.vue'
+import GraphView from './components/GraphView.vue'
 import IntegrityPanel from './components/IntegrityPanel.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import ConflictDialog from './components/ConflictDialog.vue'
@@ -619,6 +620,28 @@ const { leftBottom, rightBottom, onViewToggle } = usePkmPanels({
   onSnapshotShown: () => void snapshots.refresh(vaultPath.value, filePath.value),
 })
 
+/**
+ * 关系图谱是**独立全屏视图**（UI-DESIGN §4.3），不挤进双栏停靠布局：
+ * 激活时占用整个内容区、隐藏左右停靠栏。故此处先于停靠面板处理「图谱」键。
+ */
+const graphActive = ref(false)
+
+/** 活动栏点击：图谱单独处理；点击任何其它视图都会先退出图谱再走停靠面板编排 */
+function onActivityToggle(key: ViewKey): void {
+  if (key === 'graph') {
+    graphActive.value = !graphActive.value
+    return
+  }
+  if (graphActive.value) graphActive.value = false
+  onViewToggle(key)
+}
+
+/** 图谱中双击节点 / 点击列表条目：打开该笔记并退出图谱，回到编辑器视图 */
+function onGraphOpen(path: string): void {
+  graphActive.value = false
+  void openPath(path)
+}
+
 /** 切换凝神模式：同步编辑器 + 持久化；含「自动全屏」偏好（进入转全屏、退出还原） */
 function onToggleFocus(): void {
   focusMode.value = !focusMode.value
@@ -1167,15 +1190,16 @@ onBeforeUnmount(() => {
         :files-active="sidebarVisible"
         :tags-active="leftBottom === 'tags'"
         :moc-active="leftBottom === 'moc'"
+        :graph-active="graphActive"
         :outline-active="outlineVisible"
         :backlinks-active="rightBottom === 'backlinks'"
         :snapshot-active="rightBottom === 'snapshot'"
-        @toggle="onViewToggle"
+        @toggle="onActivityToggle"
       />
 
-      <!-- 左列：上=目录，下=库级面板（标签 / 内容地图） -->
+      <!-- 左列：上=目录，下=库级面板（标签 / 内容地图）；图谱全屏时整列隐藏 -->
       <div
-        v-if="!focusMode && (sidebarShown || leftBottom !== 'none')"
+        v-if="!focusMode && !graphActive && (sidebarShown || leftBottom !== 'none')"
         class="dock-col dock-col--left"
         :style="{ width: sidebarShown && !focusMode ? sidebarWidth + 'px' : DOCK_W + 'px' }"
       >
@@ -1222,6 +1246,7 @@ onBeforeUnmount(() => {
 
       <main class="editor" @click.capture="onEditorClick">
         <EditorHost
+          v-show="!graphActive"
           ref="host"
           :file-path="filePath"
           :vault-path="vaultPath"
@@ -1232,8 +1257,16 @@ onBeforeUnmount(() => {
           @wikilink="onWikilink"
         />
 
+        <!-- 关系图谱：独立全屏视图，替换编辑区（EditorHost 用 v-show 保留实例，不丢编辑状态） -->
+        <GraphView
+          v-if="graphActive"
+          :vault-path="vaultPath ?? ''"
+          :center-path="filePath"
+          @open="onGraphOpen"
+        />
+
         <LinkCheckPanel
-          v-if="linkCheckOpen"
+          v-if="linkCheckOpen && !graphActive"
           ref="linkCheckRef"
           :vault-path="vaultPath"
           @close="linkCheckOpen = false"
@@ -1242,21 +1275,21 @@ onBeforeUnmount(() => {
         />
 
         <IntegrityPanel
-          v-if="integrityOpen"
+          v-if="integrityOpen && !graphActive"
           :vault-path="vaultPath"
           @close="integrityOpen = false"
           @report="onIntegrityReport"
         />
 
         <BackupPanel
-          v-if="backupOpen"
+          v-if="backupOpen && !graphActive"
           :vault-path="vaultPath"
           @close="backupOpen = false"
           @after-restore="onBackupRestored"
         />
 
         <ConflictDialog
-          v-if="conflictOpen"
+          v-if="conflictOpen && !graphActive"
           :open="conflictOpen"
           :path="conflict?.path ?? null"
           :mine="conflict?.mine ?? ''"
@@ -1268,7 +1301,7 @@ onBeforeUnmount(() => {
         />
 
         <WritingAidsPanel
-          v-if="writingAidsOpen"
+          v-if="writingAidsOpen && !graphActive"
           :current-text="host?.getMarkdown() ?? ''"
           :can-edit="!!filePath"
           @apply="onApplyFrontmatter"
@@ -1277,7 +1310,7 @@ onBeforeUnmount(() => {
         />
 
         <StatsPopover
-          v-if="statsOpen"
+          v-if="statsOpen && !graphActive"
           :stats="stats"
           :selection-count="host?.selectionCount ?? 0"
           :goal="writingGoal"
@@ -1286,9 +1319,9 @@ onBeforeUnmount(() => {
         />
       </main>
 
-      <!-- 右列：上=大纲，下=文档级面板（反链 / 快照） -->
+      <!-- 右列：上=大纲，下=文档级面板（反链 / 快照）；图谱全屏时整列隐藏 -->
       <div
-        v-if="!focusMode && (outlineShown || rightBottom !== 'none')"
+        v-if="!focusMode && !graphActive && (outlineShown || rightBottom !== 'none')"
         class="dock-col dock-col--right"
         :style="{ width: DOCK_W + 'px' }"
       >

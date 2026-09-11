@@ -31,6 +31,8 @@ import {
   type TagNoteItem,
   type MocItem,
   type MocGroup,
+  type GraphData,
+  type GraphRequest,
   type MoveResult,
   type SoftErrorReport,
 } from '../shared/ipc-channels'
@@ -179,6 +181,10 @@ const api = {
   /** 内容地图：某篇 MOC 的下级聚合（标签 / 出链 / 反链分组） */
   getMocOutline: (root: string, path: string): Promise<MocGroup[]> =>
     ipcRenderer.invoke(IPC.VAULT_GET_MOC_OUTLINE, root, path),
+
+  /** 关系图谱：由索引派生节点 / 边（本地子图 BFS / 全局度降序截断） */
+  getGraph: (root: string, req?: GraphRequest): Promise<GraphData> =>
+    ipcRenderer.invoke(IPC.VAULT_GRAPH, root, req),
 
   /** 索引是「可重建缓存」：手动重建（面板自愈 / 用户触发），返回重建后的文件数 */
   rebuildIndex: (root: string): Promise<{ ok: boolean; files: number }> =>

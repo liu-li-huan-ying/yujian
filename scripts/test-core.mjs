@@ -19,6 +19,7 @@
  *  I. 快照 diff 引擎 —— hunk 行号 / 聚合 / 并排配对（src/utils/snapshotDiff.ts）
  *  J. frontmatter 解析 / 回写 —— 正文逐字保留（src/editor/frontmatter.ts）
  *  K. 标签页重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）
+ *  L. 关系图谱派生 —— 节点 / 边由索引派生，本地子图 BFS / 全局度降序截断（electron/main/vaultIndex.ts）
  *
  * 运行：npm test
  * 退出码：0 = 全部通过；1 = 存在失败。
@@ -923,6 +924,83 @@ try {
 } finally {
   rmSync(tabsDir, { recursive: true, force: true })
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+section('[L] 关系图谱派生 —— buildGraph 由索引派生节点 / 边（electron/main/vaultIndex.ts）')
+const { buildGraph } = await import(url)
+
+  /** 由「路径 → 出链」简表构造索引（出链已是解析后的绝对路径，与真实索引一致） */
+  const mkIdx = (spec) => {
+    const files = {}
+    for (const [p, outLinks] of Object.entries(spec)) {
+      files[p] = {
+        mtime: 1,
+        title: p.replace(/^.*[\\/]/, '').replace(/\.(md|markdown)$/i, ''),
+        headings: [],
+        outLinks,
+        tags: [],
+        moc: false,
+      }
+    }
+    return { version: 2, files, backLinks: {} }
+  }
+  const pathsOf = (g) => g.nodes.map((n) => n.path).slice().sort()
+  const depthOf = (g, p) => g.nodes.find((n) => n.path === p)?.depth
+
+  // A→B、A→C、B→C、C→D；F→A（反链方向，须被 BFS 纳入）；E 孤立
+  const IDX = mkIdx({
+    '/v/A.md': ['/v/B.md', '/v/C.md'],
+    '/v/B.md': ['/v/C.md'],
+    '/v/C.md': ['/v/D.md'],
+    '/v/D.md': [],
+    '/v/E.md': [],
+    '/v/F.md': ['/v/A.md'],
+  })
+
+  const all = buildGraph(IDX)
+  check('全局：total / shown 等于全库文件数且不截断', all.total === 6 && all.shown === 6 && all.truncated === false, JSON.stringify({ t: all.total, s: all.shown }))
+  check('全局：边去重后为 5 条（A→B A→C B→C C→D F→A）', all.edges.length === 5, String(all.edges.length))
+  check('全局：孤立节点不产生边', !all.edges.some((e) => e.source === '/v/E.md' || e.target === '/v/E.md'))
+
+  const h1 = buildGraph(IDX, { center: '/v/A.md', maxHops: 1 })
+  check('本地 1 跳：出链与反链邻居都纳入（A B C F），排除更远与孤立', pathsOf(h1).join(',') === '/v/A.md,/v/B.md,/v/C.md,/v/F.md', pathsOf(h1).join(','))
+  check('本地 1 跳：中心 depth=0 且 center=true，其余邻居 depth=1', depthOf(h1, '/v/A.md') === 0 && h1.nodes.find((n) => n.path === '/v/A.md').center === true && h1.nodes.filter((n) => n.depth === 1).length === 3, JSON.stringify(h1.nodes.map((n) => [n.path, n.depth, n.center])))
+  check('本地 1 跳：shown < total 时 truncated=true', h1.shown === 4 && h1.total === 6 && h1.truncated === true, JSON.stringify({ s: h1.shown, t: h1.total }))
+  check('本地 1 跳：只保留两端都在子图内的边（4 条）', h1.edges.length === 4, String(h1.edges.length))
+
+  const h2 = buildGraph(IDX, { center: '/v/A.md', maxHops: 2 })
+  check('本地 2 跳：沿 C 再扩到 D（depth=2）', pathsOf(h2).includes('/v/D.md') && depthOf(h2, '/v/D.md') === 2, pathsOf(h2).join(','))
+  check('本地 2 跳：孤立节点 E 永远进不来', !pathsOf(h2).includes('/v/E.md'))
+
+  const miss = buildGraph(IDX, { center: '/v/NOPE.md', maxHops: 2 })
+  check('center 不在库内 → 退化为全局视图', miss.shown === 6 && miss.nodes.every((n) => !n.center), String(miss.shown))
+
+  const emptyGraph = buildGraph({ version: 2, files: {}, backLinks: {} })
+  check('空索引 → 空图', emptyGraph.total === 0 && emptyGraph.shown === 0 && emptyGraph.nodes.length === 0 && emptyGraph.edges.length === 0 && emptyGraph.truncated === false)
+  // 互链：A→B 与 B→A 是同一条线的两个方向，去重后只能画一次
+  const MUTUAL = mkIdx({
+    '/v/A.md': ['/v/B.md'],
+    '/v/B.md': ['/v/A.md'],
+  })
+  const mu = buildGraph(MUTUAL)
+  check('互链：A→B 与 B→A 去重后只有 1 条边', mu.edges.length === 1, String(mu.edges.length))
+
+  // 400 节点：N0 连其余全部（度 399）→ 超限时按「度降序」确定性截断到 300
+  const big = {}
+  for (let i = 0; i < 400; i++) big['/v/N' + i + '.md'] = []
+  const bigAll = Object.keys(big)
+  big['/v/N0.md'] = bigAll.filter((p) => p !== '/v/N0.md')
+  big['/v/N1.md'] = bigAll.slice(2, 52)
+  const BIG = mkIdx(big)
+  const gb = buildGraph(BIG)
+  check('超限：截断到 300 且 truncated=true', gb.shown === 300 && gb.truncated === true, JSON.stringify({ s: gb.shown, t: gb.total }))
+  check('超限：按度降序保留最连通的核心（N0 / N1 必在）', pathsOf(gb).includes('/v/N0.md') && pathsOf(gb).includes('/v/N1.md'))
+  const shownSet = new Set(pathsOf(gb))
+  check('超限：边两端恒在展示集合内', gb.edges.every((e) => shownSet.has(e.source) && shownSet.has(e.target)))
+  const gb2 = buildGraph(BIG)
+  check('超限：采样确定性（两次结果完全一致）', pathsOf(gb).join(',') === pathsOf(gb2).join(','))
 
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {

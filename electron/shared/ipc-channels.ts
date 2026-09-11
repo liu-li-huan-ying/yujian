@@ -65,6 +65,8 @@ export const IPC = {
   VAULT_LIST_MOCS: 'vault:listMocs',
   // 笔记库：某篇 MOC 的下级聚合（按标签 / 出链 / 反链分组，由索引派生）
   VAULT_GET_MOC_OUTLINE: 'vault:getMocOutline',
+  // 笔记库：关系图谱数据（节点 / 边由索引派生，本地子图 BFS / 全局度降序截断）
+  VAULT_GRAPH: 'vault:graph',
 
   // 会话持久化（崩溃恢复）
   SESSION_GET: 'session:get',
@@ -182,6 +184,52 @@ export interface MocGroup {
   notes: TagNoteItem[]
   /** 是否因触及软上限而截断（大库保护，与 searchVault 同源约定） */
   truncated: boolean
+}
+
+/* ── 关系图谱（批次三之三）────────────────────── */
+
+/** 图谱节点：一篇笔记（由索引派生，不存原始图） */
+export interface GraphNode {
+  /** 文档绝对路径（节点唯一 id） */
+  path: string
+  /** 显示名：frontmatter title > 文件名（不含扩展名） */
+  title: string
+  /** 距中心跳数：本地子图 0=中心 / 1 / 2 / 3；全局视图统一 0（渲染层按 center 区分） */
+  depth: number
+  /** 是否为当前笔记（本地子图的中心节点） */
+  center: boolean
+  /** 该节点携带的标签（小写 key），供渲染层着色 / 过滤 */
+  tags: string[]
+  /** 是否为内容地图（MOC） */
+  moc: boolean
+}
+
+/** 图谱一条边：源 → 目标（均为文档绝对路径） */
+export interface GraphEdge {
+  source: string
+  target: string
+}
+
+/** 关系图谱数据（全屏视图渲染用） */
+export interface GraphData {
+  /** 全库笔记总数（提示条「共 N」） */
+  total: number
+  /** 实际渲染节点数（可能 < total，因本地子图 / 采样截断） */
+  shown: number
+  /** 是否因达到 maxNodes 而被截断（渲染层据此提示「切本地子图以聚焦」） */
+  truncated: boolean
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+}
+
+/** 图谱查询参数 */
+export interface GraphRequest {
+  /** 当前笔记绝对路径（本地子图中心）；为空或不在库内 → 退化为全局图 */
+  center?: string | null
+  /** 本地子图跳数（center 存在且命中时生效）：1 / 2 / 3，默认 2 */
+  maxHops?: number
+  /** 全局限额：节点总数超过时按「度降序」截断到该值，默认 300 */
+  maxNodes?: number
 }
 
 /** 未链接提及单条：某篇笔记以纯文本提到当前笔记名，但未加 `[[ ]]` */
