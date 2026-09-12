@@ -43,6 +43,13 @@ const groups = computed(() => [
     ]
   },
   {
+    title: H.scCmd,
+    items: [
+      { keys: ['Ctrl', 'Shift', 'P'], desc: H.scPalette },
+      { keys: ['Ctrl', 'K'], desc: H.scQuickOpen }
+    ]
+  },
+  {
     title: H.scSearch,
     items: [{ keys: ['Ctrl', 'F'], desc: H.scFind }]
   },

@@ -40,7 +40,17 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 ### Title bar & help
 
 * **Icon toolbar (redesigned)** — three semantic groups: File / Vault (new · switch vault · open) ｜ View / Layout (WYSIWYG⇄source segmented · sidebar · outline) ｜ Share / Tools (export ⌄ · appearance · more ⌄ · help ?). Low-frequency actions live in dropdowns. Window controls are self-drawn on Windows only; macOS yields to native traffic lights.
-* **Help panel** — title-bar "?" or `F1` opens a glass panel with **Shortcuts** and **Guide** tabs: shortcuts grouped by File / View / General as `kbd` capsules; a 6-step illustrated quick start.
+* **Help panel** — title-bar "?" or `F1` opens a glass panel with **Shortcuts** and **Guide** tabs: shortcuts grouped by File / View / Commands / Search / General as `kbd` capsules; a 10-step illustrated quick start.
+* **Command palette (unified entry)** — `Ctrl/Cmd+Shift+P` opens the command palette, `Ctrl/Cmd+K` quick-opens a note: almost any action is a keystroke away (open vault, toggle outline / graph, enter focus, export, switch skin…) — the fastest entry now that panels have multiplied; the activity bar triggers it too.
+
+### Personal knowledge management (PKM) · new in v2.0.0
+
+* **Command palette** — see "Title bar & help · Command palette" above; `Ctrl/Cmd+Shift+P` runs any command, `Ctrl/Cmd+K` jumps to any note — the unified entry now that panels have multiplied.
+* **Bidirectional links `[[wikilink]]`** — write `[[note name]]` in Markdown to link; it's a real editor node, insertable from the hover toolbar or the title-bar "More". The right-side **Backlinks** panel lists every note pointing here; click to jump back to the source.
+* **Tags `#tag`** — inline `#tag` marks plus dual-track frontmatter collection; the left **Tags** panel aggregates all tags across the vault for one-click filtering.
+* **Content map (MOC)** — mark notes with a frontmatter `moc` field to group them into a map; the left **Content Map** panel presents them by group for a quick thematic overview.
+* **Relation graph** — click the 7th activity-bar button for a full-screen Canvas graph: notes are nodes, links are edges, with pan / zoom / drag, local-subgraph focus, and degree-based truncation; an accessible list view is provided (`prefers-reduced-motion` converges straight to the final layout).
+* **Rename / move auto-rewrites `[[refs]]`** — renaming or moving a document (whole folders included) updates every `[[link]]` pointing to it, migrating history and attachments together — zero manual link repair.
 
 ### Vault
 
@@ -283,8 +293,11 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 | 7. Polish        | themes/skins, shortcut hints, settings, title-bar redesign                                                                                | ✅ done (skins + preferences/appearance + icon toolbar + help/shortcuts + unified glass)                                                                                                                        |
 | 8. Distribution  | electron-builder + **3-platform CI**                                                                                                      | ✅ done (v1.0.0; GitHub Actions builds Win/macOS/Linux installers)                                                                                                                                              |
 | 9. Phase 2       | multi-doc tabs + find/replace + version snapshots + writing stats + Focus (typewriter/zen) mode + export enh. + writing aids + link check | ✅ all batches done — see [`docs/PHASE2-PLAN.md`](./docs/PHASE2-PLAN.md) |
+| 10. Phase 3      | PKM (unified index · data safety · bi-links/backlinks · tags · content map MOC · relation graph) + command palette + dual-column 2×2 dock layout | ✅ done — shipped in v2.0.0, see [`docs/PHASE3-PLAN.md`](./docs/PHASE3-PLAN.md) |
 
 **Beyond the roadmap**: bilingual i18n, switch working folder, startup preferences, five skins + dark/light/system, app icon (YuJian), independent panel toggle, jade scrollbars, adaptive code height, right-side reading progress, title-bar icon toolbar redesign, help & shortcut panel (F1), consistent left-rail block handles, unified glass (all overlays follow mode), long-token table wrapping, size trimming (asar + max compression + zh/en locales only).
+
+**Phase 3 shipped in v2.0.0**: see [`docs/PHASE3-PLAN.md`](./docs/PHASE3-PLAN.md) — unified index layer · data safety · bi-links / backlinks · tags · content map MOC · relation graph · command palette · dual-column 2×2 dock layout.
 
 ***
 

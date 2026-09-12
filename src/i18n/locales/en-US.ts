@@ -582,9 +582,12 @@ const enUS = {
     scFocusEsc: 'In focus: collapse / reveal retreat bar',
     scGeneral: 'General',
     scHelp: 'Open help',
+    scCmd: 'Commands',
+    scPalette: 'Command palette',
+    scQuickOpen: 'Quick open note',
     guideTitle: 'Get Started with 玉笺',
     guideIntro:
-      '玉笺 is a desktop Markdown editor for technical writers: WYSIWYG and source modes, multi-tabs, version snapshots and a zen focus mode, a jade-textured interface, local-first, with faithful Markdown round-tripping.',
+      '玉笺 is a desktop Markdown editor for technical writers: WYSIWYG and source modes, multi-tabs, version snapshots and a zen focus mode, a jade-textured interface, local-first, with faithful Markdown round-tripping. 2.0 adds a command palette and full personal knowledge management (bidirectional links · tags · content map · relation graph).',
     guideSections: [
       {
         h: '1 · Open a vault',
@@ -617,6 +620,14 @@ const enUS = {
       {
         h: '8 · Appearance & skins',
         p: 'The palette icon cycles five traditional Chinese kiln skins (Celadon / Sky / Moon / Dai / Amber) and dark / light / system — material and hue are decoupled, switching is instant.',
+      },
+      {
+        h: '9 · Command palette',
+        p: 'Press Ctrl+Shift+P to open the command palette: search and run any command by keyboard (open vault, toggle outline / graph, enter focus, export, switch skin…). Press Ctrl+K to search and jump straight to any note. The unified entry now that panels have multiplied; the activity bar also triggers it.',
+      },
+      {
+        h: '10 · Links · Tags · Map · Graph',
+        p: '玉笺 2.0 ships personal knowledge management: write [[note name]] for bidirectional links — hover the toolbar or use "More" to insert, and the right-side Backlinks panel lists who links to the current note; inline #tags aggregated in the left Tags panel; frontmatter moc marks build a content map; click the 7th activity-bar button for a full-screen relation graph to browse and navigate your knowledge network. Renaming or moving a note auto-rewrites its [[references]].',
       },
     ],
     aboutBody:
