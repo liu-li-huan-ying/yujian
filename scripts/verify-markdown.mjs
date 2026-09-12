@@ -51,7 +51,13 @@ async function testMath() {
     { '@milkdown/kit/prose/state': 'export class Plugin { constructor(s) { this.spec = s } }\n' }
   )
   try {
-    const { renderMathWithRef, renderLatexContent, resetMathNumbering, trackToken } = await import(url)
+    const {
+      renderMathWithRef,
+      renderLatexContent,
+      resetMathNumbering,
+      trackToken,
+      mathInlineNodeViewPlugin,
+    } = await import(url)
 
     // SVG 里没有字面文本，字符是字形路径 <path data-c="3F">，需解码后判断
     const glyphs = (svg) =>
@@ -64,12 +70,130 @@ async function testMath() {
     const R = []
     const t = (name, ok, detail = '') => R.push({ name, ok, detail })
 
+    const makeFakeElement = () => {
+      let html = ''
+      let text = ''
+      const attributes = {}
+      return {
+        classList: { add() {} },
+        attributes,
+        setAttribute(name, value) {
+          attributes[name] = String(value)
+        },
+        get textContent() {
+          return text
+        },
+        set textContent(value) {
+          text = String(value)
+          html = ''
+        },
+        get innerHTML() {
+          return html
+        },
+        set innerHTML(value) {
+          html = String(value)
+          text = ''
+        },
+      }
+    }
+
+    const makeInlineView = (value) => {
+      const previousDocument = globalThis.document
+      globalThis.document = { createElement: makeFakeElement }
+      try {
+        const plugin = mathInlineNodeViewPlugin()
+        const createNodeView = plugin.spec.props.nodeViews.math_inline
+        return createNodeView({ type: { name: 'math_inline' }, attrs: { value } })
+      } finally {
+        globalThis.document = previousDocument
+      }
+    }
+
     // 1. 竞态：\eqref 先渲染、\label 后渲染
     resetMathNumbering()
     const refFirst = renderMathWithRef('\\eqref{eq:emc}', true)
     await renderLatexContent(eq('eq:emc'))
     const refSvg = await refFirst
     t('竞态：\\eqref 先于 \\label 渲染，最终解析为 (1)', refSvg.includes('data-c="28"') && !unresolved(refSvg), JSON.stringify(glyphs(refSvg)))
+
+    // 1b. 回归：引用已经超时显示 (???) 后，晚到的 label 仍须自动刷新同一个 NodeView
+    resetMathNumbering()
+    const lateView = makeInlineView('\\eqref{eq:late}')
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1350))
+      const beforeLateLabel = lateView.dom.innerHTML
+      await renderLatexContent(eq('eq:late'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const afterLateLabel = lateView.dom.innerHTML
+      t(
+        '晚到 label：已显示 (???) 的同一 NodeView 自动恢复为 (1)',
+        unresolved(beforeLateLabel) && afterLateLabel.includes('data-c="28"') && !unresolved(afterLateLabel),
+        JSON.stringify({ before: glyphs(beforeLateLabel), after: glyphs(afterLateLabel) })
+      )
+    } finally {
+      lateView.destroy()
+    }
+
+    // 1c. 无关 label 不得触发当前引用的恢复
+    resetMathNumbering()
+    const unrelatedView = makeInlineView('\\eqref{eq:emc}')
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1350))
+      const beforeUnrelatedLabel = unrelatedView.dom.innerHTML
+      await renderLatexContent(eq('eq:other'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const afterUnrelatedLabel = unrelatedView.dom.innerHTML
+      t(
+        '无关 label：不触发错误恢复或无意义重渲染',
+        unresolved(beforeUnrelatedLabel) && beforeUnrelatedLabel === afterUnrelatedLabel,
+        JSON.stringify({ before: glyphs(beforeUnrelatedLabel), after: glyphs(afterUnrelatedLabel) })
+      )
+    } finally {
+      unrelatedView.destroy()
+    }
+
+    // 1d. NodeView 销毁后，晚到的 label 不得写入旧 DOM 或抛异常
+    resetMathNumbering()
+    const destroyedView = makeInlineView('\\eqref{eq:destroyed}')
+    await new Promise((resolve) => setTimeout(resolve, 1350))
+    const beforeDestroy = destroyedView.dom.innerHTML
+    destroyedView.destroy()
+    let destroyRegistrationThrew = false
+    try {
+      await renderLatexContent(eq('eq:destroyed'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    } catch {
+      destroyRegistrationThrew = true
+    }
+    t(
+      'NodeView 销毁：晚到 label 不更新旧 DOM 且不抛异常',
+      !destroyRegistrationThrew && destroyedView.dom.innerHTML === beforeDestroy,
+      JSON.stringify({ threw: destroyRegistrationThrew, unchanged: destroyedView.dom.innerHTML === beforeDestroy })
+    )
+
+    // 1e. 快速编辑：eq:a 的旧结果回来时不能覆盖当前 eq:b
+    resetMathNumbering()
+    const fastView = makeInlineView('\\eqref{eq:a}')
+    try {
+      fastView.update({ type: { name: 'math_inline' }, attrs: { value: '\\eqref{eq:b}' } })
+      await new Promise((resolve) => setTimeout(resolve, 1350))
+      await renderLatexContent(eq('eq:a'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const afterOldLabel = fastView.dom.innerHTML
+      await renderLatexContent(eq('eq:b'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const afterCurrentLabel = fastView.dom.innerHTML
+      t(
+        '快速编辑：旧 eq:a 结果不覆盖当前 eq:b',
+        unresolved(afterOldLabel) &&
+          fastView.dom.attributes['data-value'] === '\\eqref{eq:b}' &&
+          glyphs(afterCurrentLabel).includes('(2)') &&
+          !unresolved(afterCurrentLabel),
+        JSON.stringify({ old: glyphs(afterOldLabel), current: glyphs(afterCurrentLabel) })
+      )
+    } finally {
+      fastView.destroy()
+    }
 
     // 2. 编号不漂移
     resetMathNumbering()

@@ -134,6 +134,34 @@ const pendingRefs: Array<{
 }> = []
 
 /**
+ * label 注册通知 —— 专门补上「引用已超时、任务已结算」这一条路径。
+ *
+ * 为什么不能只依赖 pendingRefs：
+ *   pendingRefs 只负责唤醒尚未超时的引用；1200ms 兜底一旦把任务结算为
+ *   (???)，该任务就不再队列里，后续 label 即使注册成功也没有 Promise 可 resolve。
+ *   因此这里另设轻量通知，让仍存活的内联 nodeView 自己检查 DOM 后补渲染。
+ *
+ * 监听器跟随 nodeView 生命周期注册 / 解除，不扫描全局 DOM，也不改变原有的
+ * 「排队重试 + 超时兜底」机制。
+ */
+type LabelChangeListener = (labels: readonly string[]) => void
+const labelChangeListeners = new Set<LabelChangeListener>()
+
+/** 注册 label 变化监听，返回 nodeView 销毁时调用的取消函数。 */
+function onLabelsChanged(listener: LabelChangeListener): () => void {
+  labelChangeListeners.add(listener)
+  return () => {
+    labelChangeListeners.delete(listener)
+  }
+}
+
+/** 只通知本次 MathJax 转换中已经实际登记成功的 label。 */
+function notifyLabelsChanged(labels: readonly string[]): void {
+  if (labels.length === 0) return
+  for (const listener of [...labelChangeListeners]) listener(labels)
+}
+
+/**
  * 最多重试几轮。
  *
  * 引用了一个根本不存在的 label（写错名字、label 被删）时，永远等不到注册事件。
@@ -271,9 +299,16 @@ export async function renderMathToSvg(
     const labels = hasLabel(tex) ? extractLabels(tex) : []
     if (labels.length > 0) mj.primeCounter(assignLabelNumbers(labels))
     const svg = mj.convert(tex, display)
+    const registeredLabels = labels.filter((label) => mj.hasLabel(label))
     if (labels.length > 0) {
-      // 有新标签登记 → 唤醒等待中的引用
+      // 只要源码含 label，就保留原有 pendingRefs 刷新行为；其中尚未登记成功的
+      // label 仍可能在下一轮转换时出现，不能因为本次查询未命中就提前改变重试语义。
       flushPendingRefs()
+      if (registeredLabels.length > 0) {
+        // 已经超时显示 ??? 的内联引用不再属于 pendingRefs；只有确认 MathJax
+        // 的 label 表已经有值时，才通知它们做一次晚到恢复。
+        notifyLabelsChanged(registeredLabels)
+      }
     }
     return svg
   } catch (err: unknown) {
@@ -366,6 +401,14 @@ class MathInlineView {
   private token = 0
   /** 令牌追踪（供 renderMathWithRef 判断有效性） */
   private untrackToken: (() => void) | null = null
+  /**
+   * 晚到 label 监听的取消函数。
+   *
+   * 1200ms 兜底后，引用任务已经交出 (???)，但 nodeView 仍可能存在；监听器
+   * 让它能在 label 后续登记时恢复，同时必须在 destroy() 中解除，避免旧 nodeView
+   * 被模块级监听器长期持有。
+   */
+  private offLabels: (() => void) | null = null
 
   constructor(node: PMNode) {
     this.node = node
@@ -373,6 +416,17 @@ class MathInlineView {
     this.dom.classList.add('math-inline')
     this.dom.setAttribute('data-type', 'math_inline')
     this.dom.setAttribute('contenteditable', 'false')
+    // 监听器在首次 render 前注册：这样首次渲染与晚到 label 的通知共享同一套
+    // nodeView 生命周期；真正是否需要重渲染由当前源码和 DOM 状态共同决定。
+    this.offLabels = onLabelsChanged((labels) => {
+      const value = String(this.node.attrs.value ?? '')
+      // 只处理当前仍是引用公式、且已经显示 unresolved SVG 的节点。
+      // 这两个守卫同时避免无关 label 触发重渲染，也避免覆盖用户刚编辑出的新内容。
+      if (!hasRef(value) || !refUnresolved(this.dom.innerHTML)) return
+      const refs = extractRefs(value)
+      if (!refs.some((ref) => labels.includes(ref))) return
+      this.render()
+    })
     this.render()
   }
 
@@ -414,7 +468,10 @@ class MathInlineView {
   }
 
   destroy(): void {
-    // 让在途渲染失效，避免回调写入已销毁的 DOM
+    // label 监听与在途渲染令牌必须一起清理：前者阻止晚到通知继续触碰旧 DOM，
+    // 后者阻止已经发出的异步结果覆盖销毁 / 重建后的 nodeView。
+    this.offLabels?.()
+    this.offLabels = null
     this.token++
     this.untrackToken?.()
     this.untrackToken = null

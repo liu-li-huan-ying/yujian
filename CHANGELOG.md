@@ -4,6 +4,23 @@
 
 ---
 
+## v2.1.0 — 2026-09-12
+
+**主题：修复数学公式编号引用 `\eqref` 重载后持久显示 `???`**
+
+这是一次聚焦修复的维护性发布，不含功能新增。
+
+### 修复 · 数学公式编号引用
+- **根治行内 `\eqref` 重载持久 `???`**：根因并非此前怀疑的「KaTeX 覆盖竞态」或「重载时序竞态」，而是 **late-label gap**——CodeMirror 块级预览通过 `IntersectionObserver` 懒初始化，块级 `\label` 的注册**晚于**行内 `\eqref` 的引用结算；一旦行内引用在超时后已回落为 `(???)` 并「定型」，后续迟到的 `\label` 再无机制唤醒它重渲染，已解析的 NodeView 永远不会刷新。
+- **修复机制**：在公式编号标签状态中新增 `labelChangeListeners` 通知（`onLabelsChanged`）。当某个 `\label` 注册或更新时，向所有**仍处于未解析状态**（`refDisplay === '???'`）的行内 `\eqref` 派发重渲染；若此时标签已可用，则立即结算为正确编号；与 `pendingRefs`（仅唤醒尚未定型的引用）互补，覆盖「先引用后定义 + 定义迟到」这一真实路径。已销毁的 NodeView 不会泄漏（监听器随节点销毁移除）。
+- **配套回归测试**：`scripts/verify-markdown.mjs` 新增 1b（迟到标签恢复编号）、1c（无关标签不误触发）、1d（NodeView 已销毁不泄漏）、1e（快速编辑不报错）四组用例，连同既有的 token 失效 / 引用先于定义 / 超时兜底，`\eqref` 逻辑层覆盖已较完整。
+
+### 文档
+- `docs/ARCHITECTURE.md` §5.3.2 将 `\eqref` 验证状态由「部分修复·待定论」更正为「端到端已根治」，并补记 late-label 根因与 `labelChangeListeners` 机制。
+- `.workbuddy/memory/EQREF-KNOWN-ISSUE.md` 归档为已解决，指明真实根因为 late-label gap 而非块级预览派发缺失。
+
+---
+
 ## v2.0.0 — 2026-09-11
 
 **主题：个人知识管理（PKM）体系成型 + 双栏停靠布局重构**

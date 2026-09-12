@@ -307,10 +307,10 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 
 ## 📦 Installers
 
-### Local build (v2.0.0)
+### Local build
 
 * **Build**: `npm run dist` (then `electron-vite build` + `electron-builder --win`); publish to GitHub Release with `npm run release` (tag `v*` first).
-* **Windows**: `release/yujian-2.0.0-setup.exe` (NSIS, \~140MB) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
+* **Windows**: `release/yujian-<version>-setup.exe` (NSIS) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
 * **Cross-platform**: macOS `dmg`, Linux `AppImage` targets configured; **must build on the target OS** (see below).
 * **Size strategy**: `asar` + max compression + zh/en locales only; removed unused `@codemirror/theme-one-dark`.
 * **Size note**: the package is dominated by the Electron runtime and the Mermaid engine; Mermaid is lazy-loaded (only on render) and works offline. Switch to CDN loading for further trimming.
@@ -330,8 +330,8 @@ Pushing a `v*` tag triggers [`.github/workflows/release.yml`](./.github/workflow
 Release flow:
 
 ```bash
-git tag v2.0.0
-git push origin v2.0.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 # → GitHub Actions builds the three-platform installers into a draft release
 # → review on the GitHub Releases page, then click Publish
 ```

@@ -1,6 +1,6 @@
 # Markdown 编辑器 · 架构设计文档
 
-> 版本：v2.0.0 ｜ 日期：2026-09-11 ｜ 状态：已发布
+> 版本：v2.1.0 ｜ 日期：2026-09-12 ｜ 状态：已发布
 > 本文所有依赖版本均经过 `npm view` 实测可获取，环境结论来自本机实际探测。
 
 ***
@@ -514,7 +514,8 @@ markdown-editor/
 `\label{` 的公式就调用一次 `flushPendingRefs()` 唤醒队列重试。三层保险：①入队后立即复查一次
 标签表（微任务时序下「入队」可能晚于「注册 → 刷新」，实测必现）；②最多重试 `MAX_REF_ATTEMPTS`
 轮；③1200ms 超时兜底，宁可结算出 `???` 也不让节点永久停在占位源码。
-> 注：早期版本的「`onLabelsChanged` 广播」接力**已移除**，勿再据此排查。
+> 注：早期版本曾有一套 `onLabelsChanged` 广播接力，**因未区分「已超时结算」与「未超时挂起」而失效，已移除**；
+> 现 `labelChangeListeners` 是**仅针对「已超时显示 ??? 的存活 NodeView」**的晚到恢复通知，二者不可混为一谈。
 
 **`$$` 定界符残留（2026-08-31）**：`renderLatexContent()` 增加 `stripMathDelims()`，
 去掉可能残留的 `$$…$$` / `\[…\]` 包裹 —— 带着 `$$` 喂 MathJax 不会报错，但会多渲染两个
@@ -549,13 +550,24 @@ markdown-editor/
   → promise 永久挂起，节点卡在占位源码。现改为 `task.resolve(svg)` 结算（调用方有
   `mine !== this.token` 守卫，不会污染陈旧 DOM）。
 
-> **验证状态（2026-09-11 校正）**：上述坑均已落地为真实代码，`verify-markdown.mjs` 在**纯逻辑层**
-> 覆盖了「引用先于定义渲染」「label 不存在超时兜底」「token 失效不挂起」等路径。
-> 但**用户实测的「重载后持久 `???`」尚未在本环境复现、也未经 DOM 取证定论**：纯逻辑探针已排除
-> 时序竞态（见 `docs/REVIEW-OPTIONAL-2026-09-11.md` §4.2），剩余可能落在 **app 层块级预览派发**
-> ——重载时 `codeBlockConfig.renderPreview('latex', …)` 是否被调用、调得够不够早。
-> 定论需在 Electron 里抓 DOM（取证清单见 `.workbuddy/memory/EQREF-KNOWN-ISSUE.md` §5）。
-> 故本节描述的是「**已实现的修复**」，**不等于端到端已根治**。
+- **晚到 label 自动恢复（2026-09-12 根治 `???` 端到端）**：`pendingRefs` 只唤醒**尚未超时**
+  的引用；一旦 `1200ms` 兜底把任务结算成 `(???)`，该任务就出队了，后续 `\label` 即便注册成功
+  **也没有 Promise 可 resolve**。而块级公式走 CodeMirror 懒初始化（`IntersectionObserver →
+  initializeCodeMirror → Vue 挂载 → renderPreview`），其 `\label` 经常**晚于**行内 `\eqref` 的
+  1200ms 兜底才登记——于是行内已显示 `(???)` 且永不再刷新（用户重输字符才恢复，正因 `update()`
+  重新触发了 `renderMathWithRef`）。
+  修复：新增 `labelChangeListeners` 通知（非替换 `pendingRefs`）。`renderMathToSvg()` 在确认
+  MathJax 标签表**确有**新 label 后调用 `notifyLabelsChanged(labels)`；`MathInlineView` 构造时
+  订阅，仅当「当前仍是引用公式、DOM 仍是 unresolved SVG、且新注册的 label 命中其引用」时
+  `render()` 补渲染一次；`destroy()` 中 `offLabels?.()` 退订，避免旧 nodeView 被模块级监听器持有。
+  全程复用既有 token 守卫，不新增竞态。回归测试见 `verify-markdown.mjs` `1b`（晚到恢复）/
+  `1c`（无关 label 不触发）/`1d`（销毁后不写旧 DOM）/`1e`（快速编辑不覆盖）。
+
+> **验证状态（2026-09-12 更新）**：用户实测的「重载后持久 `???`」**已根治**——根因是
+> 「晚到 label + 已结算 NodeView 不重渲染」的局部生命周期同步缺口，而非块级预览派发缺失
+> （`renderPreview` 本就会被调用，只是常常晚于兜底）。修复为最小局部改动，不依赖任何 DOM 取证，
+> 且 `verify-markdown.mjs` 在**纯逻辑层**覆盖「引用先于定义」「label 不存在超时兜底」「token 失效不挂起」
+> 以及「**已超时显示 ??? 的同一 NodeView 被晚到 label 自动恢复**」四条路径（修复前 `1b` 必失败）。
 
 **裸 `$$…\label…$$` 自动套编号环境（2026-08-31）**：AMS 语义下 `$$…$$` 本身不编号，
 写了 `\label` 也拿不到号。Markdown 用户写 `$$E=mc^2\label{eq:e}$$` 时心里想的

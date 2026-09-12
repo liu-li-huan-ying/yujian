@@ -347,9 +347,9 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 发布流程：
 
 ```bash
-# 本地打标签
-git tag v2.0.0
-git push origin v2.0.0
+# 本地打标签（版本号随本次发布而定，例如 v2.1.0）
+git tag vX.Y.Z
+git push origin vX.Y.Z
 # → GitHub Actions 自动构建三平台安装包并归入 draft release
 # → 在 GitHub Releases 页面检查无误后点 Publish 发布
 ```
