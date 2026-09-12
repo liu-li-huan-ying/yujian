@@ -31,7 +31,7 @@ Phase 3 新增两条：
 | wikilink 编辑器节点        | ❌ 无（grep 确认 `src/` 无 wikilink node）                                   | 批次一新建                           |
 | 标签                    | ⚠️ frontmatter `tags` 表单已有（写作辅助属性面板）；**无 `#标签` 内联语法、无标签聚合面板**         | 批次二                             |
 | 关系图                   | ❌ 无                                                                   | 批次三                             |
-| 命令面板                  | ❌ 无（Phase 2 §3.6 提及为未来项）                                               | 可选                              |
+| 命令面板                  | ✅ 已实现（2026-09-11，`CommandPalette.vue` + `utils/commands.ts` / `fuzzy.ts`，`Ctrl+Shift+P` 唤起） | 已交付                            |
 | 全文检索索引                | ⚠️ **实为暴力递归扫描**（`vault.ts:searchVault` 逐文件 `searchInFile`），上限 20 命中/文件、80 文件 | 批次三统一索引收口 + 解除上限                |
 | `minisearch` 依赖        | ⚠️ `package.json` 里有，但**代码中零引用（死依赖）**                                  | 批次零清理 + 修正文档表述                  |
 

@@ -1463,6 +1463,18 @@ export interface SessionState {
 | 6 | AI 辅助写作要不要进路线图？ | **暂不纳入**。现有「写作辅助」是**本地规则**实现（不联网、不需要 API Key）；AI 能力待 Phase 3 之后再单独评估。 | `src/components/WritingAidsPanel.vue` |
 ***
 
+## 5.26 Phase 3 批次四（一）：命令面板（2026-09-11，已落地）
+
+> 面板增多后的统一任务型入口。规格见 `docs/PHASE3-UI-DESIGN.md` §3（浮起层玻璃体系）。
+
+* 组件：`src/components/CommandPalette.vue`（玻璃模态，`Ctrl+Shift+P` 唤起）。两种模式——**命令模式**（按分组列出全部动作）与**快速打开**（模糊搜笔记路径）。
+* 命令规格表：`src/utils/commands.ts` 导出 `COMMANDS`（`CommandId` / `CommandGroup` / `keys`）、`GROUP_ORDER`、`CommandId` 联合类型。新增命令只改此表 + i18n `palette.cmd` 文案，无需动组件。
+* 模糊匹配：`src/utils/fuzzy.ts` 逐字符子序列匹配 + 命中位置（高亮）+ 大小写不敏感；命令模式按分组归并并保持组序。
+* 接线：`App.vue` 注入 `CommandPalette`，以**捕获阶段** `keydown` 监听实现面板开启时让位守卫（放行 `Ctrl+Shift+P` 关闭面板、屏蔽其它全局快捷键）；`CmdAction` 映射把每条命令派发到既有动作函数（`openPath` / `openVault` / `saveFile` / `saveFileAs` / `graphActive` / `toggleFocus` / `openCompile` / 各浮层 toggle 等）。
+* i18n：zh-CN / en-US 各加 `palette` 段（标题、占位、6 个分组名、30+ 命令文案）。
+* 测试：`test-core.mjs` `[M]` 段 10 条（命令规格完整性 / `fuzzyRank` 命中·排序·大小写 / 分组归并）。
+* 防复发：`.git/hooks/commit-msg` 自动剥离 `Co-Authored-By:` 行（GitHub 贡献者仅计真实 author，详见 2026-09-11 日志「GitHub 署名清洗」）。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash
