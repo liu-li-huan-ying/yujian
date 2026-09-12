@@ -10,13 +10,13 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#%E5%AE%89%E8%A3%85%E5%8C%85)
 [![Docs](https://img.shields.io/badge/Docs-%E8%8B%B1%E6%96%87%E7%89%88-blue)](./README_EN.md)
 
-> 🇬🇧 **English documentation**: [README\_EN.md](./README_EN.md) ｜ 📐 第一版样式报告：[docs/preview/style-report-v1.html](./docs/preview/style-report-v1.html)
+> 🇬🇧 **English documentation**: [README\_EN.md](./README_EN.md) ｜ 📐 材质与皮肤设计报告：[docs/preview/style-report-v1.html](./docs/preview/style-report-v1.html)
 
 **玉笺**（yù jiān，意为"玉制的信笺"）是一款本地优先的 Markdown 写作工具：文件夹即笔记库，文档是普通的 `.md` 文件，数据永远可读、可 Git、可迁移。编辑器内核基于 [Milkdown Crepe](https://milkdown.dev/)，Markdown 是一等公民，未编辑的文档保存时一字不改写回原文。
 
 视觉上，玉笺以「玉质」为核心材质语言——框架层温润玉质、浮层玻璃透亮、内容层纯净实色，并提供五套中国传统窑色皮肤（青瓷 / 天青 / 月白 / 黛 / 琥珀）与深 / 浅 / 跟随系统三档明暗。
 
-![1.00](./docs/assets/yujian-overview.svg)
+![玉笺界面插图](./docs/assets/yujian-overview.svg)
 
 ***
 
@@ -59,6 +59,9 @@
 * **外部改动同步** — 基于 chokidar 单例监听，文档被别的程序修改 / 删除时实时反映到界面。
 * **切换工作文件夹** — 标题栏「文件夹」图标可**不重启应用**切换到另一目录；切换前自动保存当前文档。
 * **搜索（双范围）** — 左侧搜索框统一检索，提供「全部 / 本文档」两种范围：切到「全部」对整个笔记库全文搜索（结果点击直接定位命中行；源码与所见即所得**两种模式都能定位**，不打断当前编辑模式），命中可展开「全局替换」仅在命中文件范围内批量替换；切到「本文档」只在当前文档内查找 / 替换（与「全部」共用同一套检索逻辑、仅范围不同，命中点击即跳转）。两种范围都支持「区分大小写 / 全词匹配」，`Ctrl+F` 快速聚焦搜索框。两种范围都会在**当前打开文档内常驻高亮全部命中**——源码模式为 CodeMirror 装饰、所见即所得为 ProseMirror 装饰，对称一致；当前结果命中额外强化。
+
+* **文件树自然排序** — 主进程按「token 化 + 中文数字解析」排序：阿拉伯数字与中文数字词（一 / 五 / 十 / 百 / 千 / 万 / 亿…）按数值比较，文字段按语种比较。效果与系统文件管理器一致——「第2章」<「第10章」、「第一章」<「第五章」<「第七章」，文件夹仍优先于文件。
+* **空库引导《使用说明》** — 首次打开一个**全新空库**（库根无 `使用说明.md` 且无任何笔记）时，自动播种一份详尽的中文《使用说明》到库根，帮你立即上手；已有笔记的文件夹不会被污染，你删掉的《使用说明》也不会被重新塞回。
 
 ### 多文档与查找
 
@@ -109,7 +112,7 @@
 
 玉的关键不是绿，而是**温润**：光进入后被散射开，颜色不均匀、边缘略亮、内部有絮状层次。玉笺把界面拆成三层，各用一种材质，互不污染：
 
-![1.00](./docs/assets/yujian-material.svg)
+![玉笺界面插图](./docs/assets/yujian-material.svg)
 
 1. **框架层（标题栏 / 侧边栏 / 大纲 / 状态栏）= 玉质，静态预渲染。** 渐变 + 极细噪点（`feTurbulence`，opacity .045）一次渲染成型，**零运行时开销**，模拟真实玉石的散射透光，是品牌识别核心。
 2. **浮起层（所有菜单 / 命令面板 / 对话框）= 玻璃。** 仅在小面积浮层使用实时 `backdrop-filter: blur(28px) saturate(160~180%)`——玻璃需"背后有东西可透"才有意义，也才值得付性能代价。
@@ -123,7 +126,7 @@
 
 设置面板（外观）里以真实玉质材质缩略图呈现，选中环用外层描边避免覆盖材质；每套皮肤都有**深 / 浅**两档，外加"跟随系统"。切换皮肤**不重建编辑器实例**（Crepe 只读 CSS 变量），根节点挂 `data-skin` / `data-mode`，选择持久化到 `localStorage`。默认：青瓷 + 深色。
 
-![1.00](./docs/assets/yujian-skins.svg)
+![玉笺界面插图](./docs/assets/yujian-skins.svg)
 
 | 皮肤      | 中文名 | 深档强调色     | 浅档强调色     | 气质                |
 | ------- | --- | --------- | --------- | ----------------- |
@@ -141,7 +144,7 @@
 
 第一版把此前"导出下拉、更多下拉、关于面板各自一套玻璃"的割裂彻底收敛：`.glass` 改为**明暗双版的单一事实来源**，并统一覆盖到标题栏下拉（导出 / 更多）、右键菜单、帮助 / 偏好 / 外观面板，以及编辑区内 Crepe 的 slash 菜单、选取气泡工具条、链接预览 / 编辑浮层。点外部或 `Esc` 关闭。
 
-![1.00](./docs/assets/yujian-glass.svg)
+![玉笺界面插图](./docs/assets/yujian-glass.svg)
 
 ***
 
@@ -159,17 +162,21 @@
 
 保留 Crepe floating-ui 算出的**块自身左缘**，仅用 `translateX(-12px)` 向左挪出与正文的呼吸缝；缩进块（如列表）的手柄随之右移，始终在块左缘左侧、永不遮字。编辑区左侧预留 `96px` 沟槽（约 64px 手柄 + 12px 位移 + 20px 余量），最窄窗口也不被裁切。
 
-![1.00](./docs/assets/yujian-handle.svg)
+![玉笺界面插图](./docs/assets/yujian-handle.svg)
 
 ### ④ 表格长串换行 —— 修掉叠字
 
 表格为 `table-layout: fixed`，此前加粗 / 强调等无空格长串会撑破单元格、与邻格叠字。已加 `overflow-wrap: anywhere; word-break: break-word; white-space: normal`，任何长串都在单元格内断行。表头用强调色填充、偶行浅底、发丝边单向网格、四角圆角。
 
-![1.00](./docs/assets/yujian-table.svg)
+![玉笺界面插图](./docs/assets/yujian-table.svg)
 
 ### ⑤ 代码块 & 阅读进度条 —— 玉质细节
 
 代码块改为**自适应内容高度**（不再撑满父容器），面板加内陷高光像"玉上一道凹槽"；全局滚动条细、圆角、半透明、hover 仅微亮一档；编辑区原生滚动条隐藏，改由**右侧玉质阅读进度条**统一指示。
+
+### ⑥ 左缘活动栏与双栏 2×2 停靠 —— 布局重构
+
+把早期「加功能就往更多里塞、再把更多拆成浮层」的拥挤结构，重做成常驻分散：窗口左缘一条玉质活动栏承载 7 个视图入口（库级 4 + 文档级 3），左右两列各自停靠两块面板、可同屏；PKM 四面板（标签 / 内容地图 / 反链 / 快照）以玉质停靠块嵌入，不再全局互斥。已废弃的「轨道视图」浮层方案因未绑 `v-if` 导致面板切换失灵，新方案零改面板源码、用 `.dock-slot :deep(...)` 强制中和成填满停靠块的玉质面板。
 
 ***
 
@@ -285,7 +292,7 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 
 ## 📐 设计文档
 
-* **[`docs/preview/style-report-v1.html`](./docs/preview/style-report-v1.html)** — 第一版样式报告（严格基于真实实现，浏览器直接打开；本 README 配图同源）。
+* **[`docs/preview/style-report-v1.html`](./docs/preview/style-report-v1.html)** — 玉质 / 玻璃材质系统与设计令牌（严格基于真实实现，浏览器直接打开；本 README 配图同源）。
 * **[`docs/UI-DESIGN.md`](./docs/UI-DESIGN.md)** — 设计令牌、组件规范、材质系统（玉质 / 玻璃）、皮肤架构。
 * **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** — 架构设计、模块划分、保真策略、路线图与风险应对。
 

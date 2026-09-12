@@ -10,13 +10,13 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](#installers)
 [![Docs](https://img.shields.io/badge/Docs-%E4%B8%AD%E6%96%87%E7%89%88-blue)](./README.md)
 
-> 🇨🇳 **中文文档**: [README.md](./README.md) ｜ 📐 Style report (v1): [docs/preview/style-report-v1.html](./docs/preview/style-report-v1.html)
+> 🇨🇳 **中文文档**: [README.md](./README.md) ｜ 📐 Material & skin design report: [docs/preview/style-report-v1.html](./docs/preview/style-report-v1.html)
 
 **YuJian** (玉笺, literally "a letter on jade") is a local-first Markdown writing tool: a folder *is* your vault, documents are plain `.md` files, and your data is always readable, Git-friendly, and portable. The editing core is built on [Milkdown Crepe](https://milkdown.dev/); Markdown is a first-class citizen, and an unedited document is written back byte-for-byte.
 
 Visually, YuJian speaks the language of **jade** — a jade-textured framework, glassy floating layers, and a clean solid-color content surface — and ships with five traditional Chinese kiln-inspired skins (Celadon / Sky / Moon / Dai / Amber) plus dark / light / system modes.
 
-![1.00](./docs/assets/yujian-overview.svg)
+![YuJian UI illustration](./docs/assets/yujian-overview.svg)
 
 ***
 
@@ -97,7 +97,7 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 
 Jade is not about being green — it is about being **warm and lustrous**: light scatters inside, color is uneven, edges glow, and there is a cloudy interior. YuJian splits the UI into three layers, each with one material:
 
-![1.00](./docs/assets/yujian-material.svg)
+![YuJian UI illustration](./docs/assets/yujian-material.svg)
 
 1. **Framework layer (title bar / sidebar / outline / status bar) = jade, statically pre-rendered.** Gradient + fine noise (`feTurbulence`, opacity .045) rendered once — **zero runtime cost** — mimicking jade's scattered translucency; the brand core.
 2. **Floating layer (all menus / command palette / dialogs) = glass.** Real-time `backdrop-filter: blur(28px) saturate(160~180%)` only on small overlays — glass only makes sense when there is something behind it to blur, and only then is the cost worth it.
@@ -111,7 +111,7 @@ Jade is not about being green — it is about being **warm and lustrous**: light
 
 The appearance panel shows real jade-material thumbnails; the selection ring uses an outer stroke so it never covers the material. Each skin has **dark / light** plus "follow system". Switching skin **does not rebuild the editor instance** (Crepe only reads CSS variables); the root node carries `data-skin` / `data-mode`, persisted to `localStorage`. Default: Celadon + Dark.
 
-![1.00](./docs/assets/yujian-skins.svg)
+![YuJian UI illustration](./docs/assets/yujian-skins.svg)
 
 | Skin    | 中文 | Dark accent | Light accent | Character                                              |
 | ------- | -- | ----------- | ------------ | ------------------------------------------------------ |
@@ -129,7 +129,7 @@ The appearance panel shows real jade-material thumbnails; the selection ring use
 
 v1 collapses the earlier fragmentation (export dropdown, more dropdown, and about panel each had their own glass) into a **single source of truth with dark/light variants**, covering title-bar dropdowns (export / more), context menus, help / preferences / appearance panels, and the in-editor Crepe slash menu, selection bubble, and link preview / editor. Click outside or `Esc` to close.
 
-![1.00](./docs/assets/yujian-glass.svg)
+![YuJian UI illustration](./docs/assets/yujian-glass.svg)
 
 ***
 
@@ -147,17 +147,21 @@ No more "shove a text button wherever". Three semantic icon groups: File / Vault
 
 Keeps Crepe floating-ui's **block-left-edge**, nudged only `translateX(-12px)` for breathing room; indented blocks shift right, always left of the block edge, never covering text. A `96px` gutter (≈64px handle + 12px shift + 20px margin) prevents clipping even at the narrowest window.
 
-![1.00](./docs/assets/yujian-handle.svg)
+![YuJian UI illustration](./docs/assets/yujian-handle.svg)
 
 ### ④ Long-token table wrapping — no more overlap
 
 Tables use `table-layout: fixed`; previously bold/emphasized unbreakable tokens burst the cell and overlapped neighbors. Now `overflow-wrap: anywhere; word-break: break-word; white-space: normal` wraps any token inside the cell. Accent-filled header, zebra rows, hairline grid, rounded corners.
 
-![1.00](./docs/assets/yujian-table.svg)
+![YuJian UI illustration](./docs/assets/yujian-table.svg)
 
 ### ⑤ Code blocks & reading progress — jade details
 
 Code blocks get **adaptive height** (no longer fill the parent) with an inset highlight like "a groove on jade"; global scrollbars are thin, rounded, translucent, brightening only one notch on hover; the editor's native scrollbar is hidden in favor of the **right-side jade reading progress bar**.
+
+### ⑥ Left-edge activity bar & dual-column 2×2 dock — layout redesign
+
+The early "shove new features into 'More', then split 'More' into overlays" crowding is redone as always-on and spread out: a jade activity bar on the left edge carries 7 view entries (4 vault-level + 3 document-level), the two columns each dock two panels and can show together; the four PKM panels (tags / content map / backlinks / snapshot) are embedded as jade dock blocks and are no longer mutually exclusive. The abandoned "rail view" overlay (unbound `v-if`, which broke panel switching) is replaced by a zero-source-change approach: `.dock-slot :deep(...)` neutralizes each panel into a jade block that fills its dock slot.
 
 ***
 
@@ -303,10 +307,10 @@ In a GPU-less sandbox the GPU process crashes repeatedly and triggers "GPU proce
 
 ## 📦 Installers
 
-### Local build (v1.1.0)
+### Local build (v2.0.0)
 
 * **Build**: `npm run dist` (then `electron-vite build` + `electron-builder --win`); publish to GitHub Release with `npm run release` (tag `v*` first).
-* **Windows**: `release/yujian-1.1.0-setup.exe` (NSIS, \~140MB) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
+* **Windows**: `release/yujian-2.0.0-setup.exe` (NSIS, \~140MB) — customizable dir, desktop + Start-menu shortcut "玉笺" by default.
 * **Cross-platform**: macOS `dmg`, Linux `AppImage` targets configured; **must build on the target OS** (see below).
 * **Size strategy**: `asar` + max compression + zh/en locales only; removed unused `@codemirror/theme-one-dark`.
 * **Size note**: the package is dominated by the Electron runtime and the Mermaid engine; Mermaid is lazy-loaded (only on render) and works offline. Switch to CDN loading for further trimming.
