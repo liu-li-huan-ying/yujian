@@ -31,6 +31,7 @@ import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
 import { createFocusBlockPlugin } from './focusBlock'
 import { createHugeDocPlugin } from './hugeDoc'
+import { createWordSelectPlugin } from './wordSelect'
 import {
   createFindDecoPlugin,
   findKey,
@@ -477,6 +478,8 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.editor.use($prose(() => createFocusBlockPlugin()))
   // 大文档分块渲染：超阈值时给 ProseMirror 挂 .yj-huge-doc，CSS 用 content-visibility 跳过屏外块。
   crepe.editor.use($prose(() => createHugeDocPlugin()))
+  // 双击选词：中文按词边界选中（原生双击会把整段中文选走），西文交回默认。
+  crepe.editor.use($prose(() => createWordSelectPlugin()))
   // 所见即所得搜索命中高亮插件：与源码模式对称，由统一搜索 query/选项驱动。
   crepe.editor.use($prose(() => createFindDecoPlugin()))
   // Emoji 短代码：输入 `:smile:` 自动转 emoji + 已有短代码只读显示为 emoji

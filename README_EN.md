@@ -42,6 +42,7 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 * **Automatic ¼ em Han–Latin / Han–digit spacing** — a ¼ em visual gap is inserted between Han characters and Latin letters or digits (the engine-level behaviour recommended by W3C *Requirements for Chinese Text Layout* §3.2.2), but not next to full-width punctuation; disabled inside code blocks, kept for inline code. **The source file is never modified.**
 * **Non-italic CJK emphasis · punctuation squeezing · line-break rules** — emphasis uses the accent colour instead of the much-disliked Chinese italics; consecutive full-width punctuation tightens and line-start/end punctuation stays tidy; CJK paragraph spacing is 4px larger to offset the density of full-width punctuation.
 * **Pure render-layer implementation** — delegated to the layout engine via standard CSS (`text-autospace` / `text-spacing-trim`): zero performance cost, no export pollution; each option is toggleable in Preferences, all on by default.
+* **Double-click selects a word** — double-clicking Chinese text selects at **word boundaries** (it used to grab a whole run of Han characters including punctuation), so double-clicking 开源 selects exactly 开源; Latin letters and digits keep the editor's original selection logic.
 
 ### Large-document performance
 

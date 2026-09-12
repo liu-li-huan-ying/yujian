@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>中文双击选词对照 · 玉笺</title>
+<style>
+  :root{
+    --ink-0:#14131a; --ink-1:#1b1a23; --ink-2:#232230; --ink-3:#2d2c3c;
+    --txt-1:#eceaf3; --txt-2:#b7b4c6; --txt-3:#7d7a90;
+    --accent:#8f6dd6; --accent-2:#6fc8d8; --danger:#d9705f;
+    --tint:143,109,214; --line:rgba(255,255,255,.08);
+    --radius-lg:16px; --radius-md:10px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; padding:24px 26px 30px;
+    background:radial-gradient(1200px 700px at 20% -10%, #241f33 0%, var(--ink-0) 60%);
+    color:var(--txt-1); font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  h1{margin:0 0 8px; font-size:19px; font-weight:600}
+  .sub{margin:0 0 18px; font-size:12.5px; color:var(--txt-3); line-height:1.75}
+  .sub b{color:var(--txt-2); font-weight:600}
+  .box{background:var(--ink-1); border:1px solid var(--line); border-radius:var(--radius-lg); padding:16px 18px; margin-bottom:14px}
+  label{display:block; font-size:12px; color:var(--txt-3); margin-bottom:7px}
+  textarea{
+    width:100%; min-height:56px; resize:vertical; font:inherit; font-size:14px; line-height:1.8;
+    color:var(--txt-1); background:var(--ink-2); border:1px solid var(--line);
+    border-radius:var(--radius-md); padding:10px 12px; outline:none;
+  }
+  textarea:focus{border-color:rgba(var(--tint),.55)}
+  .rowhead{display:flex; align-items:center; gap:9px; margin:14px 0 8px}
+  .rowhead h2{margin:0; font-size:13.5px; font-weight:600}
+  .badge{font-size:11px; padding:2px 9px; border-radius:99px; font-weight:600}
+  .badge.bad{background:rgba(217,112,95,.16); color:#f0a596}
+  .badge.good{background:rgba(80,190,140,.16); color:#93e3bb}
+  .track{
+    font-size:17px; line-height:2.05; letter-spacing:.02em;
+    color:var(--txt-2); user-select:none; cursor:pointer; word-break:break-all;
+  }
+  .track span{
+    display:inline-block; padding:0 1px; border-radius:4px;
+    transition:background .12s ease, color .12s ease;
+  }
+  .track.bad span.hit{background:rgba(217,112,95,.28); color:#ffd9d1}
+  .track.good span.hit{background:rgba(var(--tint),.4); color:#fff}
+  .track:hover span:not(.hit){color:var(--txt-1)}
+  .meta{margin-top:9px; font-size:12px; color:var(--txt-3); font-family:ui-monospace,Consolas,monospace}
+  .meta b{color:var(--txt-1); font-weight:600}
+  footer{margin-top:6px; font-size:11.5px; color:var(--txt-3); line-height:1.85}
+  footer b{color:var(--txt-2)}
+  .warn{display:none; margin-bottom:12px; font-size:12.5px; color:#f0a596}
+</style>
+</head>
+<body>
+  <h1>中文双击选词对照</h1>
+  <p class="sub">
+    编辑器原生双击按「空格 / 词字符」切分，而<b>中文词间没有空格</b>——于是双击中文常常整段选中。<br />
+    本页演示修复效果：<b>点下面任意一个字</b>，看「双击那里」会选中什么。上方是原生行为，下方是修复后。
+  </p>
+
+  <p class="warn" id="warn">当前浏览器不支持 Intl.Segmenter，无法演示。</p>
+
+  <div class="box">
+    <label for="src">示例文本（可改成你自己的句子）</label>
+    <textarea id="src" spellcheck="false">玉笺是一款跨平台开源Markdown编辑器，中文排版要考虑标点挤压与避头尾规则。</textarea>
+    <div class="track bad" id="trackOld"></div>
+    <div class="meta" id="metaOld"></div>
+  </div>
+
+  <div class="box">
+    <div class="rowhead"><h2>修复后（中文按词边界）</h2><span class="badge good">选中的是一个词，不是整段</span></div>
+    <div class="track good" id="trackNew"></div>
+    <div class="meta" id="metaNew"></div>
+  </div>
+
+  <footer>
+    <b>实现：</b>判定逻辑抽为纯函数 <b>src/utils/cjk-segment.ts</b>（<b>isCjkChar</b> / <b>segmentWords</b> / <b>wordRangeAt</b>），
+    编辑器侧由 <b>src/editor/wordSelect.ts</b> 接管双击。<br />
+    分词直接用浏览器原生 <b>Intl.Segmenter</b>（ICU），零依赖、与系统输入法同源 —— 不引第三方分词库。
+    ICU 对<b>未登录的双字词</b>常切成两个单字（「开源」→「开」+「源」），故加了一层<b>保守</b>回退：
+    长度为 1 的汉字词若紧邻下一个单字，则合并为双字；相邻段只要不是单字（更长、或标点 / 西文），就绝不跨过去合并
+    （所以「我」+「喜欢」不会被拼成「我喜」，「编」也不会粘上后面的逗号）。<br />
+    <b>只在 CJK 上接管</b>：拉丁字母、数字的双击仍走编辑器默认逻辑（它对西文更好）。
+    光标落在中文标点上时选中该标点本身。
+  </footer>
+
+<script>
+  const CJK = /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]/
+  const CJK_PUNCT = /[　-〿＀-￯]/
+  const isCjk = (ch) => !!ch && (CJK.test(ch) || CJK_PUNCT.test(ch))
+  const hasSeg = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+
+  const src = document.getElementById('src')
+  const trackOld = document.getElementById('trackOld')
+  const trackNew = document.getElementById('trackNew')
+  const metaOld = document.getElementById('metaOld')
+  const metaNew = document.getElementById('metaNew')
+  let picked = 0
+
+  function segmentWords(text){
+    const seg = new Intl.Segmenter('zh-CN', { granularity: 'word' })
+    const out = []
+    for (const p of seg.segment(text)) {
+      if (p.isWordLike) out.push({ start: p.index, end: p.index + p.segment.length, text: p.segment })
+    }
+    return mergeLoneHan(out, text)
+  }
+  /** 与 src/utils/cjk-segment.ts 的 mergeLoneHan 一致：未登录的单字汉字词，紧邻下一个单字时合并为双字 */
+  const HAN = /^[㐀-䶿一-鿿豈-﫿]$/
+  function mergeLoneHan(words, text){
+    const out = []
+    let i = 0
+    while (i < words.length){
+      const w = words[i], n = words[i + 1]
+      if (w.end - w.start === 1 && HAN.test(w.text) && n && n.start === w.end &&
+          n.end - n.start === 1 && HAN.test(n.text)){
+        out.push({ start: w.start, end: n.end, text: text.slice(w.start, n.end) })
+        i += 2
+        continue
+      }
+      out.push(w)
+      i++
+    }
+    return out
+  }
+  function wordRangeAt(text, offset){
+    if (offset < 0 || offset >= text.length) return null
+    for (const w of segmentWords(text)) if (offset >= w.start && offset < w.end) return w
+    return null
+  }
+
+  /** 与 src/editor/wordSelect.ts 的判定一致：CJK 用词边界，标点选自身，其余返回 null（表示交回默认） */
+  function fixedRange(text, offset){
+    if (!isCjk(text[offset])) return null
+    const w = wordRangeAt(text, offset)
+    if (w) return { start: w.start, end: w.end }
+    return { start: offset, end: offset + 1 }
+  }
+
+  /** 原生行为近似：连续 CJK 视为一整个「词」（这正是「整段选中」的来源） */
+  function nativeRange(text, offset){
+    if (!/[^\s]/.test(text[offset])) return null
+    let s = offset, e = offset + 1
+    const same = (ch) => /[^\s]/.test(ch) && (isCjk(ch) === isCjk(text[offset]))
+    while (s > 0 && same(text[s - 1])) s--
+    while (e < text.length && same(text[e])) e++
+    return { start: s, end: e }
+  }
+
+  function render(el, text, range){
+    el.textContent = ''
+    const frag = document.createDocumentFragment()
+    for (let i = 0; i < text.length; i++){
+      const span = document.createElement('span')
+      span.textContent = text[i]
+      span.dataset.i = String(i)
+      if (range && i >= range.start && i < range.end) span.className = 'hit'
+      frag.appendChild(span)
+    }
+    el.appendChild(frag)
+  }
+
+  function describe(el, text, range, fallback){
+    if (!range){ el.textContent = fallback; return }
+    const t = text.slice(range.start, range.end)
+    el.innerHTML = '选中：偏移 <b>' + range.start + '</b> – <b>' + range.end + '</b>　长度 <b>' +
+      (range.end - range.start) + '</b>　内容 <b>“' + t + '”</b>'
+  }
+
+  function update(){
+    const text = src.value
+    if (picked >= text.length) picked = Math.max(0, text.length - 1)
+    const nat = nativeRange(text, picked)
+    const fix = fixedRange(text, picked)
+    render(trackOld, text, nat)
+    render(trackNew, text, fix)
+    describe(metaOld, text, nat, '（空白处，无选中）')
+    describe(metaNew, text, fix, '非中文字符 → 交回编辑器默认选词（本演示不覆盖）')
+  }
+
+  for (const el of [trackOld, trackNew]){
+    el.addEventListener('click', (e) => {
+      const i = e.target && e.target.dataset ? e.target.dataset.i : undefined
+      if (i === undefined) return
+      picked = Number(i)
+      update()
+    })
+  }
+  src.addEventListener('input', () => { picked = 0; update() })
+
+  if (!hasSeg) document.getElementById('warn').style.display = 'block'
+  update()
+</script>
+</body>
+</html>

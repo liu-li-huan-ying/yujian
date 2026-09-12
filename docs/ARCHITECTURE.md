@@ -1544,6 +1544,24 @@ export interface SessionState {
   * **测试**：`test-core.mjs` `[P]` 段 8 条（百分比换算 / 越界夹紧 / 回流不采纳 / 真滚动采纳 / force 覆盖 / 死区 / 两端精确 / 不足一屏采纳）。
   * **效果预览**：`docs/preview/reading-progress-fix.html`（左右并排「修复前 / 修复后」，可点按钮滚动与触发一次模拟重排，直观看刻度是否被改写）。
 
+## 5.30 Phase 3 批次四（五）：中文分词 · 双击选词（2026-09-12，已落地）
+
+> 计划验收：**双击中文按词边界选中**（原行为是整段选中）；`src/editor/features/tag.ts` 里「彻底解决需中文分词，属批次四」的伏笔由此收口。
+
+* **问题**：ProseMirror 的双击选词按「词字符 / 空白」切分，而**中文词间没有空格** → 双击中文常常把整段选走（实测「玉笺是一款跨平台开源」10 字一次选中），`#标签` 识别、复制词、加粗某个词都因此不顺手。
+* **纯函数层** `src/utils/cjk-segment.ts`（可 Node 单测）：
+  * `isCjkChar(ch)`：汉字（含扩展 A / 兼容区）、日文假名、韩文谚文、CJK 标点与全角符号 → true；拉丁 / 数字 / 半角标点 → false（**西文交回编辑器默认逻辑**，它对西文更好）。
+  * `segmentWords(text)`：用 **`Intl.Segmenter('zh-CN', { granularity: 'word' })`** 分词，只返回 `isWordLike` 的段。
+  * `wordRangeAt(text, offset)`：取包含该偏移的词；落在空白 / 标点上返回 `null`。
+* **关键决策：不引第三方分词库、不自造词典。** `Intl.Segmenter` 是浏览器原生（ICU），**零依赖、跨平台一致、与系统输入法同源**，也正是 Obsidian / Typora 走的路径。代价是 ICU 中文切分偏保守，故补一层**保守**回退 `mergeLoneHan`：**长度为 1 的汉字词**若**紧邻的下一个词也是长度 1 的汉字**，则合并为双字（中文双字词占多数）。实测收益：「开源」「挤压」「玉笺」都能整词选出。保守之处：相邻段只要不是单字汉字（更长、或标点 / 西文 / 空白）就**绝不跨过去合并** → 「我」+「喜欢」不会被拼成「我喜」、「编」也不会粘上后面的逗号。
+  * 环境缺 `Intl.Segmenter` 时 `segmentWords` 返回空数组，双击自动退回默认行为，**不崩**。
+* **编辑器层** `src/editor/wordSelect.ts`：ProseMirror `props.handleDoubleClick` 插件。
+  * **只在单个文本节点内选词**，不跨 inline 节点（wikilink / 公式 / emoji）——既符合「选词不该跨节点」的直觉，也绕开「inline 节点占 1 个位置却对应多字符」导致的偏移错位。
+  * 光标处非 CJK → 返回 `false`，交回默认；光标落在 CJK 标点 / 全角符号上（不属于任何词）→ 选中**该字符本身**，比整段可预测得多。
+  * 三击选段落（`handleTripleClick`）保持默认，不动。`MilkdownEditor.vue` 于 `createHugeDocPlugin()` 之后注册。
+* **测试**：`test-core.mjs` `[Q]` 段 11 条。⚠️ **只断言不变量**（区间有效、`text === text.slice(start,end)`、按序不重叠、偏移必落在区间内、越界与空白返回 `null`、英文整词可切出、双字回退生效且不越界合并），**不断言具体中文切分结果**——ICU 版本升级会微调词典，硬断言会假红。
+* **效果预览**：`docs/preview/cjk-word-select.html`（可改示例文本、点任意字，上下对照「原生整段选中」与「按词选中」，含偏移 / 长度 / 内容读数）。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash

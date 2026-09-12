@@ -1200,6 +1200,105 @@ check('progress always lands exactly on 0% and 100%', (() => {
 // 内容不足一屏（max <= 1）→ 采纳（调用方据此回落 0 并隐藏进度条）
 check('non-scrollable (max <= 1) is accepted', P.acceptProgress({ top: 0, max: 0, lastTop: 0, lastMax: 0, prev: 40 }) === true)
 
+/* ── Q. 中文分词 / 双击选词（src/utils/cjk-segment.ts + src/editor/wordSelect.ts） ── */
+section('[Q] CJK word segmentation -- double-click selection (src/utils/cjk-segment.ts)')
+const Seg = await import((await bundle('src/utils/cjk-segment.ts', 'cjk-segment.mjs')).url)
+
+// CJK 判定：汉字 / 假名 / 谚文 / 全角标点 归中文，西文一律交回编辑器默认
+check('isCjkChar: CJK scripts and fullwidth punct', (() => {
+  return Seg.isCjkChar('中') === true
+    && Seg.isCjkChar('あ') === true           // 日文假名
+    && Seg.isCjkChar('한') === true           // 韩文谚文
+    && Seg.isCjkChar('，') === true           // 全角逗号
+    && Seg.isCjkChar('　') === true           // 全角空格
+})())
+
+// CJK 判定：拉丁 / 数字 / 半角标点 / 空串 不接管
+check('isCjkChar: latin, digits and halfwidth are not CJK', (() => {
+  return Seg.isCjkChar('a') === false
+    && Seg.isCjkChar('7') === false
+    && Seg.isCjkChar(' ') === false
+    && Seg.isCjkChar('.') === false
+    && Seg.isCjkChar('') === false
+})())
+
+// 空文本 / 不支持的环境：返回空数组而不是抛错
+check('segmentWords: empty input returns empty', Seg.segmentWords('').length === 0 && Seg.segmentWords('   ').length >= 0)
+
+// 西文整词必须能切出来（这部分 ICU 表现稳定，可硬断言）
+check('segmentWords: latin word kept whole', (() => {
+  const ws = Seg.segmentWords('open Markdown now')
+  return ws.some((w) => w.text === 'open') && ws.some((w) => w.text === 'Markdown') && ws.some((w) => w.text === 'now')
+})())
+
+// 不变量：区间有效、内容与切片一致、按序不重叠（中文切分结果不硬断言——ICU 升级会微调词典）
+check('segmentWords invariants: valid, consistent, ordered', (() => {
+  const text = '玉笺是一款跨平台开源Markdown编辑器，支持2026年的中文排版。'
+  const ws = Seg.segmentWords(text)
+  if (ws.length === 0) return false
+  let last = -1
+  for (const w of ws) {
+    if (!(w.start >= 0 && w.end <= text.length && w.start < w.end)) return false
+    if (w.text !== text.slice(w.start, w.end)) return false
+    if (w.start < last) return false
+    last = w.end
+  }
+  return true
+})())
+
+// 核心痛点：中文长句里取词**绝不能是整段**（这正是原生双击的行为）
+check('wordRangeAt on Chinese never selects the whole run', (() => {
+  const text = '中文排版需要考虑标点挤压和避头尾规则'
+  for (let off = 0; off < text.length; off++) {
+    const w = Seg.wordRangeAt(text, off)
+    if (w && w.end - w.start >= text.length) return false // 整段 = 未解决
+  }
+  return true
+})())
+
+// 定位不变量：返回非 null 时，偏移必落在区间内，且区间内容与切片一致
+check('wordRangeAt: offset inside range and slice matches', (() => {
+  const text = '研究人工智能在自然语言处理中的应用'
+  for (let off = 0; off < text.length; off++) {
+    const w = Seg.wordRangeAt(text, off)
+    if (w === null) continue
+    if (!(off >= w.start && off < w.end)) return false
+    if (w.text !== text.slice(w.start, w.end)) return false
+  }
+  return true
+})())
+
+// 越界与空白：返回 null（调用方据此回退默认 / 选中单个字符）
+check('wordRangeAt: out-of-range and spaces return null', (() => {
+  if (Seg.wordRangeAt('abc', -1) !== null) return false
+  if (Seg.wordRangeAt('abc', 3) !== null) return false
+  if (Seg.wordRangeAt('', 0) !== null) return false
+  return Seg.wordRangeAt(' ', 0) === null
+})())
+
+// 保守双字回退：ICU 把未登录双字词切成两个单字时（「开源」→「开」+「源」），应合并回双字
+check('segmentWords: lone Han fallback yields a two-char word', (() => {
+  const ws = Seg.segmentWords('开源')
+  return ws.some((w) => w.text === '开源' && w.end - w.start === 2)
+})())
+
+// 双字回退必须**保守**：相邻段不是单字汉字时绝不跨过去合并（否则「我」+「喜欢」→「我喜」）
+check('segmentWords: fallback never crosses a longer word', (() => {
+  const ws = Seg.segmentWords('我喜欢')
+  if (ws.some((w) => w.text.startsWith('我喜'))) return false
+  // 也不与标点粘连
+  const ws2 = Seg.segmentWords('编辑器，中文')
+  if (ws2.some((w) => /[，。、]/.test(w.text))) return false
+  return true
+})())
+
+// 插件结构：确实接管了双击（非 CJK 时返回 false 的分支见源码注释）
+const { createWordSelectPlugin } = await import((await bundle('src/editor/wordSelect.ts', 'wordSelect.mjs', {
+  '@milkdown/kit/prose/state':
+    'export class Plugin { constructor(spec) { this.spec = spec } }\nexport class PluginKey { constructor(name) { this.name = name } }\nexport class TextSelection { static create(d, a, b) { return { from: a, to: b } } }\n',
+})).url)
+check('createWordSelectPlugin handles double click', typeof createWordSelectPlugin().spec?.props?.handleDoubleClick === 'function')
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')
