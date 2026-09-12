@@ -1530,6 +1530,19 @@ export interface SessionState {
   * `src/editor/features/emoji.ts`：`props.decorations(state)` 每次渲染都调用，而**纯选区事务复用同一个 `doc` 对象**——原实现每次全量 `descendants` 扫 `:name:`，现按 **doc 对象身份记忆化**（模块级单槽缓存），仅文档真正变化才重算；行为不变，仅去掉随文档长度增长的重复扫描。
 * **测试**：`test-core.mjs` `[O]` 段 6 条（阈值 / 类名常量契约 / `isHugeDoc` 严格大于边界 / 自定义阈值 / 假 view+classList 的跨阈增删类 / 尺寸未变不重复 toggle）。
 
+## 5.29 Phase 3 批次四（四）：UI 缺陷修复 —— 命令面板高亮 / 阅读进度条抗回流（2026-09-12，已落地）
+
+> 用户实测反馈两项「体验失准」，均属渲染层缺陷，不触碰数据与控制流。
+
+* **命令面板「多行同时高亮」**（`src/components/CommandPalette.vue`）
+  * **根因**：模板内层 `v-for="(row, i) in block.rows"` 的 `i` 是**分组内局部下标**，而 `activeIndex` 是**跨分组全局序号**。以 `i === activeIndex` 判选中 → `activeIndex = 0` 时**每个分组的第一行同时命中**（同源缺陷还导致 `:id="cp-row-${i}"` 在不同分组间重复，破坏 `aria-activedescendant`）。
+  * **修复**：`commandGroups` 计算时预分配跨分组全局序号 `flat`（`let flat = 0` 逐行自增），模板的 `:id` / `:class` / `:aria-selected` / `@mouseenter` 一律改用 `flat`；`flatCommands` 直接 `flatMap` 复用同一批行，两者顺序天然一致。
+  * **验证**：用真实 `COMMANDS` + 真实 zh-CN 文案 + 真实 `fuzzyRank` 生成「修复前 / 修复后」对照页（临时产物，跑完即删）并以无头 Edge 截图确认——修复前 6 个分组首行同亮，修复后仅真·选中行亮。教训：**凡「分组渲染 + 全局键盘索引」，绑定必须统一到全局序号**。
+* **阅读进度条过于灵敏 / 莫名跳动**（`src/components/ReadingProgress.vue` + 新增 `src/utils/progress.ts`）
+  * **根因**：进度 = `scrollTop / (scrollHeight - clientHeight)`，分母随**布局回流**变化——开关侧栏 / 大纲、窗口缩放、字体变化都会让内容重排、`scrollHeight` 改变，而用户并未滚动；原实现对 `MutationObserver` 的每次内容变化都直接重算，于是「点个按钮 / 看眼大纲」进度条就跳一下。
+  * **修复**：抽出纯函数 `src/utils/progress.ts`（`progressPercent` 夹紧换算、`acceptProgress` 判定是否采纳），组件只负责采样。判定规则：**只有 `scrollTop` 变化才算用户滚动**；仅高度变化（纯回流）只更新锚点、不动刻度；另加 0.15% 死区滤掉亚像素抖动（两端 0% / 100% 永远精确）；`force` 用于换文档 / 拖拽跳转等显式意图。内容变化的复核加 200ms 防抖，避免打字时每帧读 `scrollHeight` 强制布局（配合 §5.28 的输入延迟目标）。
+  * **测试**：`test-core.mjs` `[P]` 段 8 条（百分比换算 / 越界夹紧 / 回流不采纳 / 真滚动采纳 / force 覆盖 / 死区 / 两端精确 / 不足一屏采纳）。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash

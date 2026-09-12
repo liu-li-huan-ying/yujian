@@ -1155,6 +1155,51 @@ check('createHugeDocPlugin no redundant toggle', (() => {
   return afterInit === 1 && toggles === 1
 })())
 
+/* ── P. 阅读进度判定（src/utils/progress.ts） ── */
+section('[P] reading progress -- user scroll vs layout reflow (src/utils/progress.ts)')
+const P = await import((await bundle('src/utils/progress.ts', 'progress.mjs')).url)
+
+// 百分比：0 / 中段 / 满 的正确换算
+check('progressPercent basic mapping', P.progressPercent(0, 100) === 0 && P.progressPercent(50, 100) === 50 && P.progressPercent(100, 100) === 100)
+
+// 越界夹紧 + 不可滚动归零
+check('progressPercent clamps out-of-range & zero max', (() => {
+  return P.progressPercent(-30, 100) === 0
+    && P.progressPercent(180, 100) === 100
+    && P.progressPercent(50, 0) === 0
+    && P.progressPercent(50, -10) === 0
+})())
+
+// 核心场景：开关侧栏/大纲致内容重排（高度变、位置没变）→ 不改刻度，进度条不莫名跳动
+check('reflow (height changed, scrollTop kept) does not move progress', P.acceptProgress({
+  top: 500, max: 2400, lastTop: 500, lastMax: 2000, prev: 25,
+}) === false)
+
+// 用户真滚动（位置变了）→ 采纳
+check('real scroll (position changed) is accepted', P.acceptProgress({
+  top: 600, max: 2000, lastTop: 500, lastMax: 2000, prev: 25,
+}) === true)
+
+// force（换文档 / 拖拽跳转等显式意图）→ 无视回流抑制
+check('force overrides reflow suppression', P.acceptProgress({
+  top: 500, max: 2400, lastTop: 500, lastMax: 2000, prev: 25, force: true,
+}) === true)
+
+// 死区：真实滚动中的亚像素抖动不重绘
+check('sub-pixel jitter within dead zone is ignored', P.acceptProgress({
+  top: 1001, max: 1000000, lastTop: 1000, lastMax: 1000000, prev: 0.1,
+}) === false)
+
+// 两端永远精确：滚到底必须显示 100%，回到顶必须显示 0%
+check('progress always lands exactly on 0% and 100%', (() => {
+  const atBottom = P.acceptProgress({ top: 1000000, max: 1000000, lastTop: 999000, lastMax: 1000000, prev: 99.95 })
+  const atTop = P.acceptProgress({ top: 0, max: 1000000, lastTop: 5000, lastMax: 1000000, prev: 0.4 })
+  return atBottom === true && atTop === true
+})())
+
+// 内容不足一屏（max <= 1）→ 采纳（调用方据此回落 0 并隐藏进度条）
+check('non-scrollable (max <= 1) is accepted', P.acceptProgress({ top: 0, max: 0, lastTop: 0, lastMax: 0, prev: 40 }) === true)
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')

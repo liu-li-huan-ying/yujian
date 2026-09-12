@@ -47,25 +47,25 @@ function commandLabel(id: string): string {
 
 const commandGroups = computed(() => {
   const q = query.value.trim()
-  const blocks: { group: CommandGroup; rows: { id: CommandId; keys?: string; positions: number[] }[] }[] = []
+  const blocks: { group: CommandGroup; rows: { id: CommandId; keys?: string; flat: number; positions: number[] }[] }[] = []
+  // flat = 跨分组的全局序号。高亮 / 键盘索引 / aria-activedescendant 一律以它为准——
+  // 若用分组内局部下标，则 `i === activeIndex` 会让**每个分组的第一项**同时命中（同一 bug 也导致
+  // DOM id 在不同分组间重复）。故这里预先算出全局序号，模板只做一次相等比较。
+  let flat = 0
   for (const group of GROUP_ORDER) {
     const specs = (COMMANDS as readonly CommandSpec[]).filter((s) => s.group === group)
     const ranked = fuzzyRank(q, specs, (s) => commandLabel(s.id), 50)
     if (ranked.length === 0) continue
     blocks.push({
       group,
-      rows: ranked.map((r) => ({ id: r.item.id as CommandId, keys: r.item.keys, positions: r.positions })),
+      rows: ranked.map((r) => ({ id: r.item.id as CommandId, keys: r.item.keys, positions: r.positions, flat: flat++ })),
     })
   }
   return blocks
 })
 
-/** 命令模式下的扁平行（跨分组），供 activeIndex 索引与滚动跟随 */
-const flatCommands = computed(() => {
-  const out: { id: CommandId; keys?: string; positions: number[] }[] = []
-  for (const b of commandGroups.value) for (const r of b.rows) out.push(r)
-  return out
-})
+/** 命令模式下的扁平行（跨分组），供 activeIndex 索引与滚动跟随；顺序与 group.rows 的 flat 一致 */
+const flatCommands = computed(() => commandGroups.value.flatMap((b) => b.rows))
 
 /* ── 文件模式：从索引拉笔记，标题/文件名双字段模糊 ── */
 const notes = ref<NoteTitleItem[]>([])
@@ -205,15 +205,15 @@ const emptyText = computed(() => (props.mode === 'commands' ? L.emptyCmd : L.emp
         <template v-for="block in commandGroups" :key="block.group">
           <p class="cp__group">{{ (t.palette.group as Record<string, string>)[block.group] }}</p>
           <button
-            v-for="(row, i) in block.rows"
-            :id="`cp-row-${i}`"
+            v-for="row in block.rows"
+            :id="`cp-row-${row.flat}`"
             :key="row.id"
             type="button"
             class="cp__row"
-            :class="{ 'cp__row--on': i === activeIndex }"
+            :class="{ 'cp__row--on': row.flat === activeIndex }"
             role="option"
-            :aria-selected="i === activeIndex"
-            @mouseenter="activeIndex = i"
+            :aria-selected="row.flat === activeIndex"
+            @mouseenter="activeIndex = row.flat"
             @mousedown.prevent="emit('run', row.id)"
           >
             <span class="cp__label">
