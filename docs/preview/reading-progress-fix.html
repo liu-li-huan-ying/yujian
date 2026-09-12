@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>阅读进度条修复对照 · 玉笺</title>
+<style>
+  :root{
+    --ink-0:#14131a; --ink-1:#1b1a23; --ink-2:#232230; --ink-3:#2d2c3c;
+    --txt-1:#eceaf3; --txt-2:#b7b4c6; --txt-3:#7d7a90;
+    --accent:#8f6dd6; --accent-2:#6fc8d8;
+    --tint:143,109,214;
+    --line:rgba(255,255,255,.08);
+    --radius-lg:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:radial-gradient(1200px 700px at 20% -10%, #241f33 0%, var(--ink-0) 60%);
+    color:var(--txt-1); font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    display:flex; flex-direction:column; min-height:100%;
+  }
+  header{padding:22px 26px 8px}
+  h1{margin:0 0 8px; font-size:19px; font-weight:600}
+  .sub{margin:0; font-size:12.5px; color:var(--txt-3); line-height:1.75}
+  .sub b{color:var(--txt-2); font-weight:600}
+  .bar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:14px 26px 4px}
+  button{
+    font:inherit; font-size:12.5px; color:var(--txt-1); cursor:pointer;
+    background:var(--ink-3); border:1px solid var(--line); border-radius:99px;
+    padding:7px 15px; transition:background .15s ease, border-color .15s ease;
+  }
+  button:hover{background:#3a3850; border-color:rgba(255,255,255,.16)}
+  button.primary{background:linear-gradient(135deg,var(--accent),#6f52b8); border-color:transparent}
+  button.primary:hover{filter:brightness(1.08)}
+  .hint{font-size:12px; color:var(--txt-3); margin-left:auto}
+  main{flex:1; display:flex; gap:20px; padding:10px 26px 20px; min-height:0}
+  .col{flex:1; display:flex; flex-direction:column; min-width:0}
+  .col > .head{display:flex; align-items:center; gap:8px; margin-bottom:8px}
+  .head h2{margin:0; font-size:13.5px; font-weight:600}
+  .badge{font-size:11px; padding:2px 9px; border-radius:99px; font-weight:600}
+  .badge.bad{background:rgba(220,90,90,.16); color:#f0a3a3}
+  .badge.good{background:rgba(80,190,140,.16); color:#93e3bb}
+  .pane{
+    position:relative; flex:1; min-height:0; display:flex;
+    background:var(--ink-1); border:1px solid var(--line);
+    border-radius:var(--radius-lg); overflow:hidden;
+  }
+  .scroll{flex:1; min-width:0; overflow-y:auto; padding:20px 26px; scrollbar-width:none}
+  .scroll::-webkit-scrollbar{display:none}
+  .doc h3{font-size:14px; margin:18px 0 7px; color:var(--txt-1)}
+  .doc h3:first-child{margin-top:0}
+  .doc p{margin:0 0 12px; font-size:13px; line-height:1.8; color:var(--txt-2)}
+  .rp{position:absolute; top:0; right:0; bottom:0; width:14px; z-index:6; cursor:pointer}
+  .rp::before{content:''; position:absolute; right:6px; top:9px; bottom:9px; width:3px; border-radius:2px; background:rgba(var(--tint),.16)}
+  .rp-fill{
+    position:absolute; right:6px; top:9px; width:3px; border-radius:2px;
+    background:linear-gradient(180deg,var(--accent) 0%, var(--accent-2) 100%);
+    box-shadow:0 0 8px rgba(var(--tint),.5);
+  }
+  .readout{display:flex; align-items:center; gap:12px; margin-top:9px; font-size:12px; color:var(--txt-3); flex-wrap:wrap}
+  .val{font-family:ui-monospace,Consolas,monospace; font-size:13.5px; color:var(--txt-1); min-width:62px}
+  .mock{font-family:ui-monospace,Consolas,monospace; font-size:11.5px}
+  .mock b{color:var(--txt-2); font-weight:600}
+  .jump{font-size:11px; padding:1px 8px; border-radius:99px; opacity:0; transition:opacity .25s ease}
+  .jump.on{opacity:1}
+  .jump.bad{background:rgba(220,90,90,.18); color:#f0a3a3}
+  .jump.good{background:rgba(80,190,140,.18); color:#93e3bb}
+  footer{padding:0 26px 20px; font-size:11.5px; color:var(--txt-3); line-height:1.85}
+  footer b{color:var(--txt-2)}
+</style>
+</head>
+<body>
+  <header>
+    <h1>阅读进度条修复对照</h1>
+    <p class="sub">
+      两侧共用同一个公式 <b>进度 = 滚动位置 ÷ 可滚动高度</b>，也都真的可以滚动。<br />
+      唯一区别：<b>当「可滚动高度」因为面板开合而变化、而你没有滚动时，要不要改写刻度</b>。<br />
+      为避免浏览器「滚动锚定」等干扰，本演示的<b>重排是数值模拟</b>（只改高度、位置不动），好让对照干净可复现。
+    </p>
+  </header>
+
+  <div class="bar">
+    <button id="mid">① 先滚到 55% 处</button>
+    <button class="primary" id="toggle">② 触发一次「正文重排」（可滚动高度 +25%）</button>
+    <button id="reset">回到顶部</button>
+    <span class="hint">也可以直接拖动右侧进度条跳转</span>
+  </div>
+
+  <main>
+    <section class="col">
+      <div class="head"><h2>修复前</h2><span class="badge bad">重排 → 刻度被改写</span></div>
+      <div class="pane" id="paneOld">
+        <div class="scroll" id="scrollOld"></div>
+        <div class="rp" id="rpOld"><div class="rp-fill" id="fillOld"></div></div>
+      </div>
+      <div class="readout">
+        <span>进度</span><span class="val" id="valOld">0.0%</span>
+        <span class="mock">位置 <b id="topOld">0</b>px · 可滚动高度 <b id="maxOld">0</b>px</span>
+        <span class="jump bad" id="jumpOld">重排改写了刻度</span>
+      </div>
+    </section>
+
+    <section class="col">
+      <div class="head"><h2>修复后</h2><span class="badge good">重排 → 刻度不动</span></div>
+      <div class="pane" id="paneNew">
+        <div class="scroll" id="scrollNew"></div>
+        <div class="rp" id="rpNew"><div class="rp-fill" id="fillNew"></div></div>
+      </div>
+      <div class="readout">
+        <span>进度</span><span class="val" id="valNew">0.0%</span>
+        <span class="mock">位置 <b id="topNew">0</b>px · 可滚动高度 <b id="maxNew">0</b>px</span>
+        <span class="jump good" id="jumpNew">已忽略这次重排</span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <b>怎么看：</b>点「① 滚到 55% 处」把两侧推到 55%，再点「② 触发重排」。<br />
+    左侧的刻度立刻被改写（约 55% × 原高度 ÷ 新高度 ≈ 44%）——这正是你反馈的「点按钮 / 看大纲，进度莫名变化」；
+    右侧保持 55.0% 纹丝不动，只把新的可滚动高度记了下来；继续滚动时它立刻按新布局给出准确位置。<br />
+    实现：判定逻辑抽为纯函数 <b>src/utils/progress.ts</b>（<b>progressPercent</b> / <b>acceptProgress</b>），
+    并有 8 条单测守护（<b>scripts/test-core.mjs</b> 的 <b>[P]</b> 段）。
+  </footer>
+
+<script>
+  const PARAS = [
+    ['一、为什么进度会跳', '进度条本该只反映「你读到哪了」。可它算的是一个比值——已滚过的像素 ÷ 还能滚的像素。分母一旦不是常量，刻度就会在用户没有动作时自行变化。'],
+    ['二、分母的麻烦', '开关侧栏或大纲会让正文栏变窄，文字重新折行，整篇文档因此变高。此时滚动位置一个像素都没动，比值却变了：面板一开，进度条自己往回缩一格。'],
+    ['三、把回流与滚动分开', '办法是给「滚动位置」和「可滚动高度」各记一个锚点：只有滚动位置发生变化，才认为这是用户的真实滚动、才改写刻度；仅有高度变化（纯布局回流）只更新锚点，刻度保持不动。'],
+    ['四、死区与两端', '真实滚动里也会有亚像素级的抖动，因此加了 0.15% 的死区：变化小于它就不重绘。但两端例外——回到顶部必须精确显示 0%，滚到底必须精确显示 100%。'],
+    ['五、防抖', '内容变化（载入、打字、组件挂载）不再每次重算，而是防抖 200ms 后复核一次。这既避免打字时每帧读取 scrollHeight 强制布局、拖慢输入，也顺带滤掉大量无意义的采样。'],
+    ['六、换文档与拖拽', '换文档、拖动进度条跳转属于用户的显式意图，用 force 直接采纳，不受「抑制回流」的约束，保证动作立刻有反馈。'],
+    ['七、为何不用 DOM 窗口化', '真正的虚拟滚动会把屏外内容从 DOM 里摘除，破坏编辑器的选区、输入法、查找与装饰。这里换用浏览器原生的 content-visibility，DOM 保持完整，只让浏览器跳过屏外块的绘制。'],
+    ['八、与长文性能的关系', '大文档启用分块渲染后，可滚动高度的估算本就会小幅波动。把「回流不改变刻度」写进判定里，长文下的进度条也才真正稳得住。'],
+    ['九、小结', '一句话：进度只跟「滚动」走，不跟「排版」走。做到这点，进度条才像一件可靠的仪表，而不是一个随时会误报的指针。']
+  ]
+  const docHtml = () => PARAS.map(([t, p]) => `<h3>${t}</h3><p>${p}</p>`).join('')
+
+  const MIN_STEP = 0.15
+  const progressPercent = (top, max) => (max <= 0 ? 0 : Math.min(100, Math.max(0, (top / max) * 100)))
+  function acceptProgress(a){
+    if (a.max <= 1) return true
+    if (a.force) return true
+    const topChanged = a.top !== a.lastTop
+    const maxChanged = a.max !== a.lastMax
+    if (!topChanged && maxChanged) return false
+    const next = progressPercent(a.top, a.max)
+    if (Math.abs(next - a.prev) < MIN_STEP && next > 0 && next < 100) return false
+    return true
+  }
+
+  function makeSide(id, old){
+    const scroll = document.getElementById('scroll' + id)
+    const fill = document.getElementById('fill' + id)
+    const val = document.getElementById('val' + id)
+    const topOut = document.getElementById('top' + id)
+    const maxOut = document.getElementById('max' + id)
+    const jump = document.getElementById('jump' + id)
+    const rp = document.getElementById('rp' + id)
+    scroll.innerHTML = docHtml()
+
+    let pct = 0, lastTop = -1, lastMax = -1, jumpTimer = null
+    /** 模拟的重排增量：真实滚动高度 + 这个量 = 采样用的「可滚动高度」 */
+    let simDelta = 0
+
+    const baseMax = () => scroll.scrollHeight - scroll.clientHeight
+    const sampleMax = () => baseMax() + simDelta
+
+    function compute(force){
+      const top = scroll.scrollTop
+      const max = sampleMax()
+      const prevTop = lastTop, prevMax = lastMax
+      topOut.textContent = String(Math.round(top))
+      maxOut.textContent = String(Math.max(0, max))
+      if (max <= 1) { pct = 0; lastTop = top; lastMax = max; paint(); return }
+      const topChanged = top !== prevTop
+      const maxChanged = max !== prevMax
+
+      if (old) {
+        // 修复前：任何一次采样都直接按当前 top / max 改写刻度（不区分滚动与重排）
+        lastTop = top; lastMax = max
+        pct = progressPercent(top, max)
+        if (maxChanged && !topChanged) flash(jump)
+      } else {
+        // 修复后：判定是否采纳；纯重排不采纳
+        const ok = acceptProgress({ top, max, lastTop: prevTop, lastMax: prevMax, prev: pct, force: !!force })
+        lastTop = top; lastMax = max
+        if (ok) pct = progressPercent(top, max)
+        else if (maxChanged) flash(jump)
+      }
+      paint()
+    }
+    function paint(){
+      fill.style.height = `calc((100% - 18px) * ${pct / 100})`
+      val.textContent = pct.toFixed(1) + '%'
+    }
+    function flash(el){
+      el.classList.add('on')
+      if (jumpTimer) clearTimeout(jumpTimer)
+      jumpTimer = setTimeout(() => el.classList.remove('on'), 1400)
+    }
+
+    let raf = 0
+    scroll.addEventListener('scroll', () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => { raf = 0; compute(false) })
+    })
+    // 拖拽进度条跳转：显式意图 → force
+    let dragging = false
+    const seek = (e) => {
+      const r = rp.getBoundingClientRect()
+      const ratio = Math.min(1, Math.max(0, (e.clientY - r.top - 9) / (r.height - 18)))
+      scroll.scrollTop = ratio * baseMax()
+      compute(true)
+    }
+    rp.addEventListener('pointerdown', (e) => { dragging = true; rp.setPointerCapture(e.pointerId); seek(e) })
+    rp.addEventListener('pointermove', (e) => { if (dragging) seek(e) })
+    rp.addEventListener('pointerup', (e) => { dragging = false; rp.releasePointerCapture(e.pointerId) })
+
+    return {
+      mid(){ scroll.scrollTop = baseMax() * 0.55; compute(false) },
+      reset(){ scroll.scrollTop = 0; compute(false) },
+      /** 模拟一次重排：只让「可滚动高度」变大 25%，位置不动。等价于观察者回调进来采一次样。 */
+      reflow(on){ simDelta = on ? Math.round(baseMax() * 0.25) : 0; compute(false) },
+      sync(){ compute(true) }
+    }
+  }
+
+  const oldSide = makeSide('Old', true)
+  const newSide = makeSide('New', false)
+  let reflowed = false
+
+  document.getElementById('mid').addEventListener('click', () => { oldSide.mid(); newSide.mid() })
+  document.getElementById('reset').addEventListener('click', () => { oldSide.reset(); newSide.reset() })
+  document.getElementById('toggle').addEventListener('click', () => {
+    reflowed = !reflowed
+    // 刻意不在这里「顺手重算」：差异恰恰在于两侧自己会不会因为这次重排而改写刻度。
+    oldSide.reflow(reflowed)
+    newSide.reflow(reflowed)
+  })
+  window.addEventListener('load', () => { oldSide.sync(); newSide.sync() })
+</script>
+</body>
+</html>

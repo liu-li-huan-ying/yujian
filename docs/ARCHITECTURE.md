@@ -1542,6 +1542,7 @@ export interface SessionState {
   * **根因**：进度 = `scrollTop / (scrollHeight - clientHeight)`，分母随**布局回流**变化——开关侧栏 / 大纲、窗口缩放、字体变化都会让内容重排、`scrollHeight` 改变，而用户并未滚动；原实现对 `MutationObserver` 的每次内容变化都直接重算，于是「点个按钮 / 看眼大纲」进度条就跳一下。
   * **修复**：抽出纯函数 `src/utils/progress.ts`（`progressPercent` 夹紧换算、`acceptProgress` 判定是否采纳），组件只负责采样。判定规则：**只有 `scrollTop` 变化才算用户滚动**；仅高度变化（纯回流）只更新锚点、不动刻度；另加 0.15% 死区滤掉亚像素抖动（两端 0% / 100% 永远精确）；`force` 用于换文档 / 拖拽跳转等显式意图。内容变化的复核加 200ms 防抖，避免打字时每帧读 `scrollHeight` 强制布局（配合 §5.28 的输入延迟目标）。
   * **测试**：`test-core.mjs` `[P]` 段 8 条（百分比换算 / 越界夹紧 / 回流不采纳 / 真滚动采纳 / force 覆盖 / 死区 / 两端精确 / 不足一屏采纳）。
+  * **效果预览**：`docs/preview/reading-progress-fix.html`（左右并排「修复前 / 修复后」，可点按钮滚动与触发一次模拟重排，直观看刻度是否被改写）。
 
 ## 附录 A：开工前必做的环境配置
 
