@@ -17,6 +17,7 @@ import BacklinksPanel from './components/BacklinksPanel.vue'
 import TagPanel from './components/TagPanel.vue'
 import MocPanel from './components/MocPanel.vue'
 import GraphView from './components/GraphView.vue'
+import CommandPalette from './components/CommandPalette.vue'
 import IntegrityPanel from './components/IntegrityPanel.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import ConflictDialog from './components/ConflictDialog.vue'
@@ -56,6 +57,7 @@ import { useSnapshotsStore } from './store/snapshots'
 import { usePkmPanels } from './composables/usePkmPanels'
 import { useVaultLinks } from './composables/useVaultLinks'
 import type { TextStats } from './utils/text-stats'
+import type { CommandId } from './utils/commands'
 
 const { t: L, getLocale } = useI18n()
 const U = L.ui
@@ -464,6 +466,8 @@ async function saveFileAs(): Promise<void> {
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  // 命令面板 / 快速打开是模态，开启时让位：其余全局快捷键不抢面板焦点（Esc 由面板自身处理）
+  if (paletteMode.value !== null) return
   // 无需修饰键的全局快捷键：F1 打开帮助/快捷键面板。
   // 必须放在修饰键守卫之前，否则 !(ctrlKey||metaKey) 会直接 return，F1 毫无反应。
   if (e.key === 'F1') {
@@ -639,6 +643,76 @@ function onActivityToggle(key: ViewKey): void {
 /** 图谱中双击节点 / 点击列表条目：打开该笔记并退出图谱，回到编辑器视图 */
 function onGraphOpen(path: string): void {
   graphActive.value = false
+  void openPath(path)
+}
+
+/* ── 命令面板 / 快速打开（批次四：面板增多后的统一入口，UI-DESIGN §3.4/§3.5）──
+ * 键位规划：Ctrl+Shift+P = 命令面板；Ctrl+K = 快速打开笔记。
+ * 不把命令面板放 Ctrl+K，是因为搜索框已显示该提示，抢键会让用户困惑。 */
+const paletteMode = ref<'commands' | 'files' | null>(null)
+
+/**
+ * 命令面板 / 快速打开的快捷键，捕获阶段拦截。
+ * 理由：ProseMirror/Milkdown 的 keymap 在冒泡阶段处理 Ctrl+K（插链接），若只在
+ * 冒泡监听里处理会抢不过或被 defaultPrevented；捕获阶段先到先得，stopPropagation
+ * 干净利落地接管，且不动现有 onKeydown（避免 Esc 等行为变更）。
+ * 面板已开时再按同键 = 关闭（VS Code 行为）。
+ */
+function onPaletteHotkey(e: KeyboardEvent): void {
+  if (!(e.ctrlKey || e.metaKey)) return
+  const k = e.key.toLowerCase()
+  const wantCommands = k === 'p' && e.shiftKey
+  const wantFiles = k === 'k' && !e.shiftKey
+  if (!wantCommands && !wantFiles) return
+  paletteMode.value = paletteMode.value === null ? (wantCommands ? 'commands' : 'files') : null
+  e.preventDefault()
+  e.stopPropagation()
+}
+
+/** 命令 → 动作映射。Record 用 CommandId 联合做穷尽校验，漏一个命令就编译不过 */
+const commandActions: Record<CommandId, () => void> = {
+  'file.new': () => void newDoc(),
+  'file.open': () => void openFile(),
+  'file.openVault': () => void openVault(),
+  'file.save': () => void saveFile(),
+  'file.saveAs': () => void saveFileAs(),
+  'view.sidebar': () => onToggleSidebar(),
+  'view.outline': () => onToggleOutline(),
+  'view.graph': () => (graphActive.value = !graphActive.value),
+  'view.focus': () => onToggleFocus(),
+  'view.toggleMode': () => (requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'),
+  'view.stats': () => onToggleStats(),
+  'knowledge.tags': () => onViewToggle('tags'),
+  'knowledge.moc': () => onToggleMoc(),
+  'knowledge.backlinks': () => onViewToggle('backlinks'),
+  'knowledge.snapshot': () => onViewToggle('snapshot'),
+  'knowledge.insertWikiLink': () => onInsertWikiLink(),
+  'tool.linkCheck': () => (linkCheckOpen.value = true),
+  'tool.integrity': () => onIntegrity(),
+  'tool.backup': () => onBackup(),
+  'tool.writingAids': () => (writingAidsOpen.value = true),
+  'tool.imgHost': () => onImgHost(),
+  'export.md': () => void doExport('md'),
+  'export.html': () => void doExport('html'),
+  'export.pdf': () => void doExport('pdf'),
+  'export.docx': () => void doExport('docx'),
+  'export.latex': () => void doExport('latex'),
+  'export.compile': () => (showCompile.value = true),
+  'export.publishImages': () => void onPublishImages(),
+  'settings.appearance': () => onAppearance(),
+  'settings.preferences': () => onPreferences(),
+  'settings.shortcuts': () => onHelp('shortcuts'),
+  'settings.guide': () => onHelp('guide'),
+  'settings.toggleLocale': () => toggleLocale(),
+}
+
+function onCommandRun(id: CommandId): void {
+  paletteMode.value = null
+  commandActions[id]()
+}
+
+function onPalettePick(path: string): void {
+  paletteMode.value = null
   void openPath(path)
 }
 
@@ -1086,6 +1160,8 @@ onMounted(async () => {
 
   window.api.onVaultChange(onVaultChange)
   window.addEventListener('keydown', onKeydown)
+  // 命令面板 / 快速打开：捕获阶段拦截，先于编辑器 keymap 拿到 Ctrl+K / Ctrl+Shift+P
+  window.addEventListener('keydown', onPaletteHotkey, true)
   window.addEventListener('resize', onResize)
 
   const session = await window.api.getSession()
@@ -1123,6 +1199,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keydown', onPaletteHotkey, true)
   window.removeEventListener('resize', onResize)
   if (treeTimer) clearTimeout(treeTimer)
   if (widthTimer) clearTimeout(widthTimer)
@@ -1461,6 +1538,16 @@ onBeforeUnmount(() => {
     :preview="exportPrefs.preview"
     @close="showCompile = false"
     @compile="onCompile"
+  />
+
+  <!-- 命令面板 / 快速打开笔记（Ctrl+Shift+P / Ctrl+K，批次四）-->
+  <CommandPalette
+    v-if="paletteMode"
+    :mode="paletteMode"
+    :vault-path="vaultPath ?? ''"
+    @close="paletteMode = null"
+    @run="onCommandRun"
+    @pick="onPalettePick"
   />
 </template>
 

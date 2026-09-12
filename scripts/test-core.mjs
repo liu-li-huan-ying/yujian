@@ -1002,6 +1002,60 @@ const { buildGraph } = await import(url)
   const gb2 = buildGraph(BIG)
   check('超限：采样确定性（两次结果完全一致）', pathsOf(gb).join(',') === pathsOf(gb2).join(','))
 
+
+/* ── M. 命令面板内核：模糊匹配 + 命令目录（src/utils/fuzzy.ts, src/utils/commands.ts） ── */
+section('[M] command palette core -- fuzzy match + command catalog (src/utils/fuzzy.ts, src/utils/commands.ts)')
+const { fuzzyMatch, fuzzyRank, highlightSegments } = await import((await bundle('src/utils/fuzzy.ts', 'fuzzy.mjs')).url)
+const { COMMANDS, GROUP_ORDER, groupCommands } = await import((await bundle('src/utils/commands.ts', 'commands.mjs')).url)
+
+// 模糊匹配：空查询恒为 0 分、无高亮
+check('fuzzy empty query -> score 0, no highlight', (() => { const r = fuzzyMatch('', 'arbitrary'); return r.score === 0 && r.positions.length === 0 })())
+
+// 模糊匹配：非子序列返回 null（跳着取不到）
+check('fuzzy non-subsequence -> null', fuzzyMatch('xyz', 'abc') === null)
+
+// 模糊匹配：子序列命中且下标正确（o p n 在 open 上，跳过 e）
+check('fuzzy subsequence -> positions correct', (() => { const r = fuzzyMatch('opn', 'open'); return r && r.positions.join(',') === '0,1,3' })())
+
+// 模糊匹配：前缀命中优于中间命中
+check('fuzzy prefix beats mid-match', (() => { const a = fuzzyMatch('op', 'open'); const b = fuzzyMatch('op', 'copy'); return !!a && !!b && a.score > b.score })())
+
+// 模糊匹配：连续命中优于分散命中
+check('fuzzy consecutive beats scattered', (() => { const a = fuzzyMatch('abc', 'abc'); const b = fuzzyMatch('abc', 'a1b1c'); return !!a && !!b && a.score > b.score })())
+
+// 模糊匹配：大小写不敏感
+check('fuzzy case-insensitive', (() => { const r = fuzzyMatch('OPEN', 'open'); return r && r.positions.join(',') === '0,1,2,3' })())
+
+// 高亮分段：命中/未命中正确切分
+check('highlightSegments splits hit runs', (() => {
+  const segs = highlightSegments('open', [0, 1])
+  return segs.length === 2 && segs[0].hit === true && segs[0].text === 'op' && segs[1].hit === false && segs[1].text === 'en'
+})())
+
+// 模糊排序：最佳匹配排第一
+check('fuzzyRank best match first', (() => {
+  const ranked = fuzzyRank('op', ['copy', 'open', 'scope'], (x) => x)
+  return ranked.length === 3 && ranked[0].item === 'open'
+})())
+
+// 模糊排序：空查询保持原始顺序并截断
+check('fuzzyRank empty query keeps order + limits', (() => {
+  const ranked = fuzzyRank('', ['a', 'b', 'c', 'd'], (x) => x, 2)
+  return ranked.length === 2 && ranked[0].item === 'a' && ranked[1].item === 'b'
+})())
+
+// 模糊排序：结果数量上限（5000 文件不至于全量）
+check('fuzzyRank respects limit', fuzzyRank('x', ['x1', 'x2', 'x3', 'x4', 'x5'], (x) => x, 3).length === 3)
+
+// 命令目录：id 全不重复
+check('commands ids unique', (() => { const s = new Set(COMMANDS.map((c) => c.id)); return s.size === COMMANDS.length })())
+
+// 命令目录：覆盖 6 个分组且顺序固定
+check('commands 6 groups in fixed order', GROUP_ORDER.join(',') === 'file,view,knowledge,tool,export,settings' && groupCommands().map((b) => b.group).join(',') === GROUP_ORDER.join(','))
+
+// 命令目录：每条都属已知分组
+check('commands every entry has known group', COMMANDS.every((c) => GROUP_ORDER.includes(c.group)))
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')
