@@ -31,14 +31,18 @@ export function createFocusBlockPlugin(): Plugin {
         wasZen = false
         if (!tr.docChanged && !tr.selectionSet && !zenJustEnded) return value
         const head = tr.selection.head
-        const decos: Decoration[] = []
-        tr.doc.descendants((node, pos) => {
-          if (node.isTextblock && pos <= head && head <= pos + node.nodeSize) {
-            decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'focus-block' }))
-            return false
+        // 从光标位置向上找最近的文本块（段落 / 标题 / 列表项段落…）——
+        // O(深度) 而非原实现的 O(块数)：大文档下避免每次事务遍历整篇文档。
+        const $head = tr.doc.resolve(head)
+        let block: { from: number; to: number } | null = null
+        for (let d = $head.depth; d > 0; d--) {
+          if ($head.node(d).isTextblock) {
+            block = { from: $head.before(d), to: $head.after(d) }
+            break
           }
-          return true
-        })
+        }
+        const decos: Decoration[] = []
+        if (block) decos.push(Decoration.node(block.from, block.to, { class: 'focus-block' }))
         return DecorationSet.create(tr.doc, decos)
       }
     },

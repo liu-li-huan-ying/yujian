@@ -43,6 +43,12 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 * **Non-italic CJK emphasis · punctuation squeezing · line-break rules** — emphasis uses the accent colour instead of the much-disliked Chinese italics; consecutive full-width punctuation tightens and line-start/end punctuation stays tidy; CJK paragraph spacing is 4px larger to offset the density of full-width punctuation.
 * **Pure render-layer implementation** — delegated to the layout engine via standard CSS (`text-autospace` / `text-spacing-trim`): zero performance cost, no export pollution; each option is toggleable in Preferences, all on by default.
 
+### Large-document performance
+
+* **No lag on 100k-character documents** — very long documents switch on chunked rendering automatically: only blocks near the viewport are painted, off-screen content is rendered on demand by the browser, so scrolling and typing stay smooth.
+* **Editor capabilities intact** — this uses a native browser capability rather than removing content from the DOM, so selection, IME, find, export and wikilinks all keep working; **the source file is never modified**.
+* **Adaptive and non-intrusive** — active only for very long documents, so ordinary notes are unaffected; scroll feel and the reading-progress bar stay stable without jumping.
+
 ### Title bar & help
 
 * **Icon toolbar (redesigned)** — three semantic groups: File / Vault (new · switch vault · open) ｜ View / Layout (WYSIWYG⇄source segmented · sidebar · outline) ｜ Share / Tools (export ⌄ · appearance · more ⌄ · help ?). Low-frequency actions live in dropdowns. Window controls are self-drawn on Windows only; macOS yields to native traffic lights.

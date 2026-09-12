@@ -1504,6 +1504,32 @@ export interface SessionState {
 * **测试**：`test-core.mjs` `[N]` 段 6 条（默认全开 / 合法布尔保留 / 非布尔回落 / 垃圾输入整体回落 / 注入存储的持久化往返 / 损坏存储不抛）。
 * **效果预览**：`docs/preview/cjk-typography.html`（可交互，逐项开关对照；内嵌 `text-autospace` / `text-spacing-trim` 原生支持检测徽标）。
 
+## 5.28 Phase 3 批次四（三）：大文档分块渲染（2026-09-12，已落地）
+
+> 计划验收：**10 万字文档输入延迟不随文档长度退化**（`PHASE3-PLAN.md` §2.3 / 批次四验收）。
+> 风险表第 12 条原担心「虚拟滚动与 Crepe 选区 / 装饰冲突」——本实现即对该风险的处置结论。
+
+* **关键决策：不做「真·虚拟滚动」（DOM 窗口化），改用 Chromium 原生 `content-visibility: auto`。**
+  ProseMirror 的选区 / IME / 装饰 / 查找依赖「文档全量在 DOM」这一前提；真正只渲染可视块、其余从 DOM 摘除，会破坏 DOM↔doc 的位置映射，属框架级对抗（需重写 `EditorView` 的节点映射），风险远大于收益，且与 Markdown 往返保真红线冲突。
+  `content-visibility: auto` 是 Chromium 为长文档设计的既定机制：**DOM 保持完整**，浏览器仅跳过屏外块的 layout / paint——选区、IME、装饰、查找、导出全部不受影响；纯 CSS、可整体回退、零 JS 开销。
+* **适配模块** `src/editor/hugeDoc.ts`：
+  * `HUGE_DOC_THRESHOLD = 20_000`（`doc.content.size` 阈值 ≈ 2 万字符，远超一屏）；`HUGE_DOC_CLASS = 'yj-huge-doc'`。
+  * 纯函数 `isHugeDoc(contentSize, threshold?)`——严格大于阈值，可 Node 单测、零 DOM 依赖。
+  * `createHugeDocPlugin()`：ProseMirror `view` 钩子按当前 `doc.content.size` 给 `view.dom`（即 `.ProseMirror`）切 `yj-huge-doc`；`update` 里用 **O(1)** 的 `content.size`（Fragment 缓存长度）判态，**跨阈才写 classList**，尺寸未变直接短路。
+* **样式** `src/styles/editor.css`「大文档分块渲染」段：
+  ```css
+  .milkdown .ProseMirror.yj-huge-doc > p,  /* …h1–h6 / ul / ol / blockquote / hr… */
+  { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+  ```
+  `contain-intrinsic-size: auto 64px` 的 **auto 前缀**让浏览器记住已渲染过的真实高度，避免滚动条（含阅读进度依赖的 `scrollHeight`）估算跳变。
+* **作用域刻意「白名单」而非 `> *`**：`content-visibility: auto` 会始终带上 layout / style / paint 包含，而 Crepe 代码块把 `.language-picker`（`position:absolute`、`z-index:999`）放在 `.milkdown-code-block` **内部** → 若整块纳入 paint 包含会被裁掉。故只取**不含内联绝对定位浮层**的块类型（段落 / 标题 / 列表 / 引用 / 分隔线），**组件块（代码块 / 图片块 / 表格块）一律排除**。
+  * 另注：Crepe 块操作手柄 `.milkdown-block-handle` 追加到 `view.dom.parentElement`（`.milkdown` 根，**非**块内），故块级包含不会裁切它。
+* **自适应**：仅大文档挂类，普通文档完全不受影响（规避 `content-visibility` 始终带包含的潜在副作用）。
+* **附带性能修复**（同源问题，一并处理）：
+  * `src/editor/focusBlock.ts`：当前块定位由 `doc.descendants` 全量遍历改为**从光标位置向上 O(深度) 上溯**最近的 `isTextblock` 祖先，大文档下避免每次事务扫全篇。
+  * `src/editor/features/emoji.ts`：`props.decorations(state)` 每次渲染都调用，而**纯选区事务复用同一个 `doc` 对象**——原实现每次全量 `descendants` 扫 `:name:`，现按 **doc 对象身份记忆化**（模块级单槽缓存），仅文档真正变化才重算；行为不变，仅去掉随文档长度增长的重复扫描。
+* **测试**：`test-core.mjs` `[O]` 段 6 条（阈值 / 类名常量契约 / `isHugeDoc` 严格大于边界 / 自定义阈值 / 假 view+classList 的跨阈增删类 / 尺寸未变不重复 toggle）。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash

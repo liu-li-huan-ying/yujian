@@ -1105,6 +1105,56 @@ check('typography corrupt storage -> defaults', (() => {
   return JSON.stringify(v) === JSON.stringify(DEFAULT_TYPOGRAPHY)
 })())
 
+/* ── O. 大文档分块渲染（src/editor/hugeDoc.ts） ── */
+section('[O] huge doc chunked rendering -- threshold / class toggle (src/editor/hugeDoc.ts)')
+const H = await import((await bundle('src/editor/hugeDoc.ts', 'hugeDoc.mjs', {
+  '@milkdown/kit/prose/state':
+    'export class Plugin { constructor(spec) { this.spec = spec } }\nexport class PluginKey { constructor(name) { this.name = name } }\n',
+})).url)
+
+// 常量契约：阈值与类名（CSS 依赖该精确值）
+check('hugeDoc threshold = 20000', H.HUGE_DOC_THRESHOLD === 20000)
+check('hugeDoc class name = yj-huge-doc', H.HUGE_DOC_CLASS === 'yj-huge-doc')
+
+// 纯函数：严格大于阈值才算大文档（边界不掉进/不掉出）
+check('isHugeDoc strict-greater boundary', (() => {
+  return H.isHugeDoc(0) === false
+    && H.isHugeDoc(20000) === false
+    && H.isHugeDoc(20001) === true
+})())
+
+// 纯函数：自定义阈值
+check('isHugeDoc honors custom threshold', H.isHugeDoc(100, 100) === false && H.isHugeDoc(101, 100) === true)
+
+// 插件行为：构造时按当前文档定态，尺寸跨阈时增删类（仿 view + classList）
+check('createHugeDocPlugin toggles class across threshold', (() => {
+  const spec = H.createHugeDocPlugin().spec
+  const classes = new Set()
+  const dom = { classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) } }
+  const view = { dom, state: { doc: { content: { size: 500 } } } }
+  const handle = spec.view(view)
+  const bootSmall = !classes.has('yj-huge-doc')        // 小文档：不挂类
+  view.state.doc.content.size = 30000
+  handle.update(view)
+  const grewBig = classes.has('yj-huge-doc')           // 变超大：挂类
+  view.state.doc.content.size = 100
+  handle.update(view)
+  const shrankSmall = !classes.has('yj-huge-doc')      // 再变小：摘类
+  return bootSmall && grewBig && shrankSmall
+})())
+
+// 插件行为：尺寸未跨阈时不重复 toggle（避免每次事务无谓写 classList）
+check('createHugeDocPlugin no redundant toggle', (() => {
+  const spec = H.createHugeDocPlugin().spec
+  let toggles = 0
+  const dom = { classList: { toggle: () => { toggles++ } } }
+  const view = { dom, state: { doc: { content: { size: 30000 } } } }
+  const handle = spec.view(view)
+  const afterInit = toggles
+  handle.update(view)                                   // 同尺寸：应短路
+  return afterInit === 1 && toggles === 1
+})())
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')

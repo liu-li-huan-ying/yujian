@@ -1004,3 +1004,31 @@
 [data-cjk='on'][data-cjk-gap='on'] .milkdown .ProseMirror p {
   margin-bottom: 18px;
 }
+
+/* ============================================================
+   大文档分块渲染（批次四 · 大文档性能）—— 浏览器级「虚拟滚动」的等效实现
+   仅对大文档生效：`doc.content.size` 超阈值时由 src/editor/hugeDoc.ts 挂 .yj-huge-doc。
+   `content-visibility: auto` 让浏览器跳过屏外块的布局与绘制；DOM 保持完整，故选区 /
+   IME / 装饰 / 查找 / 导出全部不受影响。`contain-intrinsic-size` 的 auto 前缀让浏览器
+   记住已渲染过的真实高度，避免滚动条（含阅读进度依赖的 scrollHeight）估算跳变。
+
+   ⚠️ 作用域刻意「白名单」而非 `> *`：`content-visibility: auto` 会始终带上
+   layout/style/paint 包含，而 Crepe 的代码块把 `.language-picker`（position:absolute、
+   z-index:999）放在 `.milkdown-code-block` 内部，若整块纳入包含会被 paint 裁掉。
+   故这里只取不含内联绝对定位浮层的块类型（段落 / 标题 / 列表 / 引用 / 分隔线），
+   组件块（代码块 / 图片块 / 表格块）一律排除。
+   ============================================================ */
+.milkdown .ProseMirror.yj-huge-doc > p,
+.milkdown .ProseMirror.yj-huge-doc > h1,
+.milkdown .ProseMirror.yj-huge-doc > h2,
+.milkdown .ProseMirror.yj-huge-doc > h3,
+.milkdown .ProseMirror.yj-huge-doc > h4,
+.milkdown .ProseMirror.yj-huge-doc > h5,
+.milkdown .ProseMirror.yj-huge-doc > h6,
+.milkdown .ProseMirror.yj-huge-doc > ul,
+.milkdown .ProseMirror.yj-huge-doc > ol,
+.milkdown .ProseMirror.yj-huge-doc > blockquote,
+.milkdown .ProseMirror.yj-huge-doc > hr {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
