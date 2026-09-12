@@ -37,6 +37,12 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 * **Jade scrollbars** — thin, rounded, translucent scrollbars everywhere, following skin & mode.
 * **Reading progress bar** — the editor's native scrollbar is hidden; a right-side jade progress bar (celadon gradient + soft glow, round thumb on hover/drag, click-to-jump) indicates position.
 
+### CJK typography
+
+* **Automatic ¼ em Han–Latin / Han–digit spacing** — a ¼ em visual gap is inserted between Han characters and Latin letters or digits (the engine-level behaviour recommended by W3C *Requirements for Chinese Text Layout* §3.2.2), but not next to full-width punctuation; disabled inside code blocks, kept for inline code. **The source file is never modified.**
+* **Non-italic CJK emphasis · punctuation squeezing · line-break rules** — emphasis uses the accent colour instead of the much-disliked Chinese italics; consecutive full-width punctuation tightens and line-start/end punctuation stays tidy; CJK paragraph spacing is 4px larger to offset the density of full-width punctuation.
+* **Pure render-layer implementation** — delegated to the layout engine via standard CSS (`text-autospace` / `text-spacing-trim`): zero performance cost, no export pollution; each option is toggleable in Preferences, all on by default.
+
 ### Title bar & help
 
 * **Icon toolbar (redesigned)** — three semantic groups: File / Vault (new · switch vault · open) ｜ View / Layout (WYSIWYG⇄source segmented · sidebar · outline) ｜ Share / Tools (export ⌄ · appearance · more ⌄ · help ?). Low-frequency actions live in dropdowns. Window controls are self-drawn on Windows only; macOS yields to native traffic lights.

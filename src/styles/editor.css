@@ -966,3 +966,41 @@
 .milkdown .katex a {
   color: var(--hue-accent);
 }
+
+/* ============================================================
+   中文排版（批次四）—— 纯渲染层，源文件零改写
+   依据 docs/PHASE3-UI-DESIGN.md §5；总开关 [data-cjk='on'] + 各子项 [data-cjk-*='on']。
+   text-autospace / text-spacing-trim 自 Chromium 140 起原生支持（Electron 44 已满足）：
+   由排版引擎直接插入间距、收紧标点，无 JS 装饰、零性能开销、导出天然不受影响
+   （渲染层装饰不进文档模型，Markdown 往返一字不改）。
+   ============================================================ */
+
+/* 中英 / 中数 ⇄ ¼ em 自动间距：汉字与拉丁字母、数字之间由引擎补白（规范建议行为）。
+   与全角标点相邻时不补——text-autospace 只在表意 / 非表意文字之间生效。 */
+[data-cjk='on'][data-cjk-space='on'] .milkdown .ProseMirror {
+  text-autospace: normal;
+}
+
+/* 代码块内不参与自动间距（行内代码仍补 ¼ em，符合规范）。 */
+[data-cjk='on'][data-cjk-space='on'] .milkdown .milkdown-code-block,
+[data-cjk='on'][data-cjk-space='on'] .milkdown .milkdown-code-block * {
+  text-autospace: no-autospace;
+}
+
+/* 标点挤压（连续全角标点收紧至半角宽度）+ 避头尾（行首禁止收尾标点）。
+   line-break: strict 启用严格禁则处理；text-spacing-trim 收紧行首与连续全角标点。 */
+[data-cjk='on'][data-cjk-punct='on'] .milkdown .ProseMirror {
+  text-spacing-trim: normal;
+  line-break: strict;
+}
+
+/* 中文强调：禁用斜体、改用强调色（中文斜体公认难看，规范建议以颜色 / 着重号替代）。 */
+[data-cjk='on'][data-cjk-emph='on'] .milkdown .ProseMirror em {
+  font-style: normal;
+  color: var(--hue-accent);
+}
+
+/* 中文段落间距比西文多 4px（补偿全角标点的视觉密度）。行高已由 .ProseMirror 统一为 1.75。 */
+[data-cjk='on'][data-cjk-gap='on'] .milkdown .ProseMirror p {
+  margin-bottom: 18px;
+}

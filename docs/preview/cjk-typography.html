@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-cjk="on" data-cjk-space="on" data-cjk-emph="on" data-cjk-punct="on" data-cjk-gap="on">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>玉笺 · 中文排版（批次四）效果预览</title>
+<style>
+  /* 取玉笺青瓷·深色皮肤的关键令牌，仅为还原观感 */
+  :root {
+    --hue-editor: #12201f;
+    --hue-surface: #17252400;
+    --hue-text-1: #e8f0ee;
+    --hue-text-2: #b6c6c3;
+    --hue-text-3: #7f938f;
+    --hue-accent: #5fa8a0;
+    --hue-border-subtle: rgba(232, 240, 238, 0.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0d1716; color: var(--hue-text-1);
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  .page { max-width: 1000px; margin: 0 auto; padding: 26px 22px 60px; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0 0 4px; letter-spacing: .01em; }
+  .sub { font-size: 12.5px; color: var(--hue-text-3); line-height: 1.7; margin: 0 0 18px; }
+  .sub code { font-family: Consolas, monospace; background: #22302f; padding: 1px 5px; border-radius: 4px; }
+
+  .badge { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 6px;
+    background: #22302f; color: var(--hue-text-2); font-family: Consolas, monospace; margin-bottom: 18px; }
+  .badge b { color: var(--hue-accent); }
+
+  /* 控制条 */
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .sw { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9px;
+    border: 1px solid var(--hue-border-subtle); background: #141f1e; color: var(--hue-text-2);
+    font-size: 13px; cursor: pointer; user-select: none; transition: border-color .15s, color .15s, background .15s; }
+  .sw:hover { border-color: var(--hue-accent); }
+  .sw.on { color: var(--hue-text-1); border-color: var(--hue-accent); background: rgba(95, 168, 160, .12); }
+  .sw.master.on { background: rgba(95, 168, 160, .22); font-weight: 600; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--hue-text-3); flex: none; }
+  .sw.on .dot { background: var(--hue-accent); box-shadow: inset 0 0 0 1px var(--hue-accent); }
+  .subToggles { display: flex; gap: 8px; flex-wrap: wrap; padding-left: 10px;
+    border-left: 2px solid var(--hue-border-subtle); transition: opacity .15s; }
+  .subToggles.off { opacity: .4; pointer-events: none; }
+
+  /* 正文示例 */
+  .milkdown { background: var(--hue-editor); border-radius: 12px; padding: 6px 30px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+  .ProseMirror { font-size: 16px; line-height: 1.75; max-width: 720px; color: var(--hue-text-1); }
+  .ProseMirror p { margin: 0 0 14px; }
+  .ProseMirror h3 { font-size: 17px; margin: 4px 0 12px; }
+  .ProseMirror code { font-family: 'Maple Mono', Consolas, monospace; font-size: .92em;
+    background: #22302f; padding: 1px 6px; border-radius: 5px; }
+  .bars { display: flex; gap: 3px; margin-top: 10px; opacity: .5; }
+  .bars i { height: 6px; border-radius: 2px; background: var(--hue-text-3); display: block; }
+  .hint { font-size: 12px; color: var(--hue-text-3); margin-top: 14px; line-height: 1.8; }
+
+  /* ===== 与 src/styles/editor.css 完全一致的中文排版规则（原样，供核对） ===== */
+  [data-cjk='on'][data-cjk-space='on'] .milkdown .ProseMirror { text-autospace: normal; }
+  [data-cjk='on'][data-cjk-space='on'] .milkdown .milkdown-code-block,
+  [data-cjk='on'][data-cjk-space='on'] .milkdown .milkdown-code-block * { text-autospace: no-autospace; }
+  [data-cjk='on'][data-cjk-punct='on'] .milkdown .ProseMirror { text-spacing-trim: normal; line-break: strict; }
+  [data-cjk='on'][data-cjk-emph='on'] .milkdown .ProseMirror em { font-style: normal; color: var(--hue-accent); }
+  [data-cjk='on'][data-cjk-gap='on'] .milkdown .ProseMirror p { margin-bottom: 18px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>中文排版（批次四）· 效果预览</h1>
+  <p class="sub">
+    纯渲染层实现，<b>源文件一字不改</b>。优先用标准 CSS —— <code>text-autospace</code>（中英/中数 ¼ em 间距）
+    与 <code>text-spacing-trim</code>（标点挤压）由排版引擎原生完成，无 JS 装饰、零性能开销。
+    依据 W3C《中文排版需求》§3.2.2 与 GB/T 15834—2011。
+  </p>
+  <div class="badge" id="sup">正在检测…</div>
+
+  <div class="bar">
+    <span class="sw master on" id="m">中文排版优化：开</span>
+  </div>
+  <div class="bar subToggles" id="subs">
+    <span class="sw on" data-k="cjk-space"><i class="dot"></i>中英 / 中数间距</span>
+    <span class="sw on" data-k="cjk-emph"><i class="dot"></i>中文强调（禁用斜体）</span>
+    <span class="sw on" data-k="cjk-punct"><i class="dot"></i>标点挤压与避头尾</span>
+    <span class="sw on" data-k="cjk-gap"><i class="dot"></i>中文段落间距</span>
+  </div>
+
+  <div class="milkdown">
+    <div class="ProseMirror">
+      <h3>为什么是渲染层</h3>
+      <p>用 Vue 3 与 Electron 构建的 Markdown 编辑器，支持 100% 离线、WYSIWYG 与源码双模式；导出 HTML / PDF / Word 皆可。</p>
+      <p class="mixed">连续全角标点测试：「引号」、逗号，句号。（括号）《书名》！？—— 引擎会收紧行首与连续标点。</p>
+      <p class="mixed">中文<em>强调内容</em>用强调色而非斜体；English <em>emphasis</em> also recoloured.</p>
+      <p class="mixed">行内代码如 <code>const x = 1</code> 与汉字混排时同样补 ¼ em；而代码块内部不参与，避免变量名被撑开。</p>
+      <p class="mixed" style="margin-bottom:0">关掉上面的开关，段落间距、字距与强调样式会立刻回退到浏览器默认，对照一眼可辨。</p>
+    </div>
+  </div>
+
+  <div class="hint">
+    · 逐项开关对照：<b>中英 / 中数间距</b>关掉后「Vue 3」会重新贴紧汉字；<b>中文强调</b>关掉后「强调内容」变回斜体；<br />
+    · <b>段落间距</b>关掉后段落行距收紧 4px；<b>标点挤压</b>影响全角标点的行首/连续收紧。<br />
+    · 该预览页复制了 <code>src/styles/editor.css</code> 的中文排版规则原文，仅换用静态示例文本。
+  </div>
+</div>
+
+<script>
+  var root = document.documentElement;
+
+  // 原生支持检测（Electron 44 = Chromium ≫140，两者均应支持）
+  var ok = false, ok2 = false;
+  try { ok = CSS.supports('text-autospace', 'normal'); } catch (e) {}
+  try { ok2 = CSS.supports('text-spacing-trim', 'normal'); } catch (e) {}
+  document.getElementById('sup').innerHTML =
+    'text-autospace = <b>' + ok + '</b>　text-spacing-trim = <b>' + ok2 + '</b>　（本机 ' +
+    (navigator.userAgent.match(/Edg\/[\d.]+/) || [navigator.userAgent])[0] + '）';
+
+  var enabled = true;
+  function sync() {
+    root.dataset.cjk = enabled ? 'on' : 'off';
+    document.getElementById('m').className = 'sw master' + (enabled ? ' on' : '');
+    document.getElementById('m').textContent = '中文排版优化：' + (enabled ? '开' : '关');
+    document.getElementById('subs').className = 'bar subToggles' + (enabled ? '' : ' off');
+  }
+  document.getElementById('m').addEventListener('click', function () { enabled = !enabled; sync(); });
+
+  document.querySelectorAll('#subs .sw').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var k = el.dataset.k, on = root.dataset[k] === 'on';
+      root.dataset[k] = on ? 'off' : 'on';
+      el.className = 'sw' + (on ? '' : ' on');
+    });
+  });
+  sync();
+</script>
+</body>
+</html>

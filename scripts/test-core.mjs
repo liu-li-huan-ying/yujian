@@ -20,6 +20,8 @@
  *  J. frontmatter 解析 / 回写 —— 正文逐字保留（src/editor/frontmatter.ts）
  *  K. 标签页重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）
  *  L. 关系图谱派生 —— 节点 / 边由索引派生，本地子图 BFS / 全局度降序截断（electron/main/vaultIndex.ts）
+ *  M. 命令面板内核 —— 模糊匹配 + 命令目录（src/utils/fuzzy.ts, src/utils/commands.ts）
+ *  N. 中文排版状态 —— 默认 / 收敛 / 持久化（src/typography.ts）
  *
  * 运行：npm test
  * 退出码：0 = 全部通过；1 = 存在失败。
@@ -1055,6 +1057,53 @@ check('commands 6 groups in fixed order', GROUP_ORDER.join(',') === 'file,view,k
 
 // 命令目录：每条都属已知分组
 check('commands every entry has known group', COMMANDS.every((c) => GROUP_ORDER.includes(c.group)))
+
+/* ── N. 中文排版状态（src/typography.ts） ── */
+section('[N] CJK typography state -- defaults / normalize / persistence (src/typography.ts)')
+const Typo = await import((await bundle('src/typography.ts', 'typography.mjs')).url)
+const { normalizeTypography, DEFAULT_TYPOGRAPHY, loadTypography, saveTypography, setTypographyStorage } = Typo
+
+// 默认：五个开关全开
+check('typography defaults all on (5 keys)', Object.keys(DEFAULT_TYPOGRAPHY).length === 5 && Object.values(DEFAULT_TYPOGRAPHY).every((v) => v === true))
+
+// normalize：合法布尔原样保留
+check('normalize keeps valid booleans', (() => {
+  const s = normalizeTypography({ enabled: false, space: true, emphasis: false, punct: false, paraGap: true })
+  return s.enabled === false && s.space === true && s.emphasis === false && s.punct === false && s.paraGap === true
+})())
+
+// normalize：非布尔值一律回落默认（不信任外部存储）
+check('normalize coerces non-boolean to default', (() => {
+  const s = normalizeTypography({ enabled: 'yes', space: 1, emphasis: null })
+  return s.enabled === true && s.space === true && s.emphasis === true
+})())
+
+// normalize：垃圾输入 → 全默认，且不缺键
+check('normalize garbage -> full defaults', (() => {
+  const d = JSON.stringify(DEFAULT_TYPOGRAPHY)
+  return JSON.stringify(normalizeTypography(null)) === d
+    && JSON.stringify(normalizeTypography('nope')) === d
+    && JSON.stringify(normalizeTypography(42)) === d
+})())
+
+// 持久化往返：注入假存储，保存后读回一致
+check('typography persists & reloads (injected storage)', (() => {
+  const mem = new Map()
+  setTypographyStorage({ getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) })
+  const next = { enabled: true, space: false, emphasis: true, punct: false, paraGap: true }
+  saveTypography(next)
+  const back = loadTypography()
+  setTypographyStorage(null)
+  return JSON.stringify(back) === JSON.stringify(next)
+})())
+
+// 损坏的存储值 → 回落默认，绝不抛
+check('typography corrupt storage -> defaults', (() => {
+  setTypographyStorage({ getItem: () => '{not json', setItem: () => {} })
+  const v = loadTypography()
+  setTypographyStorage(null)
+  return JSON.stringify(v) === JSON.stringify(DEFAULT_TYPOGRAPHY)
+})())
 
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {

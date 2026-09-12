@@ -29,6 +29,7 @@ import ExportPreview from './components/ExportPreview.vue'
 import CompilePanel from './components/CompilePanel.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
+import { initTypography } from './typography'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type {
   FileNode,
@@ -1157,6 +1158,8 @@ watch(sidebarWidth, (width) => {
 onMounted(async () => {
   // 应用持久化的皮肤 / 明暗（index.html 已有青瓷+深默认值兜底）
   initAppearance()
+  // 应用持久化的中文排版开关（纯渲染层，落到根节点 data-cjk-* 供 CSS 消费）
+  initTypography()
 
   window.api.onVaultChange(onVaultChange)
   window.addEventListener('keydown', onKeydown)

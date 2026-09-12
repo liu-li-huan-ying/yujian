@@ -1,6 +1,13 @@
 <script setup lang="ts">
+import { computed, reactive } from 'vue'
 import { useI18n } from '../i18n'
 import { loadAppearance, resolveMode } from '../appearance'
+import {
+  loadTypography,
+  saveTypography,
+  applyTypography,
+  type TypographyState
+} from '../typography'
 import type { StartupMode } from '../../electron/shared/ipc-channels'
 
 const props = defineProps<{ value: StartupMode }>()
@@ -18,6 +25,26 @@ const previewMode = resolveMode(loadAppearance().mode)
 
 function pick(mode: StartupMode): void {
   if (mode !== props.value) emit('change', mode)
+}
+
+/* ── 中文排版（批次四）：纯渲染层开关，改动即生效并持久化 ── */
+type SubKey = 'space' | 'emphasis' | 'punct' | 'paraGap'
+const typo = reactive<TypographyState>(loadTypography())
+const subRows = computed<{ key: SubKey; label: string; desc: string }[]>(() => [
+  { key: 'space', label: L.cjkSpace, desc: L.cjkSpaceDesc },
+  { key: 'emphasis', label: L.cjkEmphasis, desc: L.cjkEmphasisDesc },
+  { key: 'punct', label: L.cjkPunct, desc: L.cjkPunctDesc },
+  { key: 'paraGap', label: L.cjkGap, desc: L.cjkGapDesc }
+])
+
+function commitTypo(): void {
+  applyTypography(typo)
+  saveTypography({ ...typo })
+}
+
+function toggle(key: keyof TypographyState): void {
+  typo[key] = !typo[key]
+  commitTypo()
 }
 </script>
 
@@ -55,6 +82,42 @@ function pick(mode: StartupMode): void {
             <span class="opt__txt">
               <span class="opt__label">{{ L.startupFresh }}</span>
               <span class="opt__desc">{{ L.startupFreshDesc }}</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h3 class="sec__title">{{ L.cjkTitle }}</h3>
+        <div class="opts">
+          <button
+            class="opt"
+            type="button"
+            :class="{ 'opt--on': typo.enabled }"
+            @click="toggle('enabled')"
+          >
+            <span class="switch" :class="{ 'switch--on': typo.enabled }" />
+            <span class="opt__txt">
+              <span class="opt__label">{{ L.cjkEnabled }}</span>
+              <span class="opt__desc">{{ L.cjkEnabledDesc }}</span>
+            </span>
+          </button>
+        </div>
+
+        <div class="subopts" :class="{ 'subopts--off': !typo.enabled }">
+          <button
+            v-for="r in subRows"
+            :key="r.key"
+            class="subopt"
+            type="button"
+            :class="{ 'subopt--on': typo[r.key] }"
+            :disabled="!typo.enabled"
+            @click="toggle(r.key)"
+          >
+            <span class="subopt__box" :class="{ 'subopt__box--on': typo[r.key] }" />
+            <span class="opt__txt">
+              <span class="opt__label">{{ r.label }}</span>
+              <span class="opt__desc">{{ r.desc }}</span>
             </span>
           </button>
         </div>
@@ -194,6 +257,107 @@ function pick(mode: StartupMode): void {
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--hue-text-3);
+}
+
+/* ── 开关（总开关用）：胶囊底 + 圆钮，与 .opt 行同款描边 ── */
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 17px;
+  margin-top: 2px;
+  border-radius: 9px;
+  background: var(--hue-highlight);
+  box-shadow: inset 0 0 0 1px var(--hue-border-subtle);
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--hue-text-2);
+  transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.switch--on {
+  background: var(--hue-accent);
+  box-shadow: inset 0 0 0 1px var(--hue-accent);
+}
+
+.switch--on::after {
+  transform: translateX(13px);
+  background: var(--hue-editor);
+}
+
+/* ── 子项：缩进、更轻量，总开关关闭时整体弱化且不可点 ── */
+.subopts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--hue-border-subtle);
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.subopts--off {
+  opacity: 0.4;
+}
+
+.subopt {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hue-text-1);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.subopt:hover:not(:disabled) {
+  background: var(--hue-highlight);
+}
+
+.subopt:disabled {
+  cursor: not-allowed;
+}
+
+.subopt__box {
+  position: relative;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--hue-border-strong, var(--hue-border-subtle));
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.subopt__box--on {
+  background: var(--hue-accent);
+  box-shadow: inset 0 0 0 1px var(--hue-accent);
+}
+
+.subopt__box--on::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--hue-editor);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 /* 浅色模式：面板改用柔和浅色玻璃，与外观面板一致 */

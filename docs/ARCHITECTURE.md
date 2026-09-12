@@ -1487,6 +1487,23 @@ export interface SessionState {
 * 测试：`test-core.mjs` `[M]` 段 10 条（命令规格完整性 / `fuzzyRank` 命中·排序·大小写 / 分组归并）。
 * 防复发：`.git/hooks/commit-msg` 自动剥离 `Co-Authored-By:` 行（GitHub 贡献者仅计真实 author，详见 2026-09-11 日志「GitHub 署名清洗」）。
 
+## 5.27 Phase 3 批次四（二）：中文排版（渲染层）（2026-09-12，已落地）
+
+> 规格见 `docs/PHASE3-UI-DESIGN.md` §5；依据 W3C《中文排版需求》§3.2.2、GB/T 15834—2011。
+> **红线**：纯渲染层，保存时绝不改写源文件（Markdown 往返保真，见 §1 红线 4）。
+
+* **状态模块** `src/typography.ts`：`TypographyState` = `enabled`（总开关）+ `space` / `emphasis` / `punct` / `paraGap` 四子项，**默认全开**。持久化到 `localStorage['yujian.typography']`；`normalizeTypography` 为纯函数（非布尔回落默认、垃圾输入整体回落、不缺键）；存储后端可注入（`setTypographyStorage`，同 `trash.ts` 的 `setTrashImpl` 手法，Node 可测）。`applyTypography` 把状态落到根节点 `data-cjk` / `data-cjk-space` / `data-cjk-emph` / `data-cjk-punct` / `data-cjk-gap`（总开关关闭时子项属性一律 `off`）。
+* **样式** `src/styles/editor.css`「中文排版」段，按 `[data-cjk='on']` + 子项属性生效：
+  * **中英 / 中数 ¼ em 间距**：`text-autospace: normal`（引擎自动在表意 / 非表意文字间补白，与全角标点相邻不补）；代码块内 `text-autospace: no-autospace`，行内代码仍补。
+  * **标点挤压 + 避头尾**：`text-spacing-trim: normal`（收紧行首与连续全角标点）+ `line-break: strict`（严格禁则）。
+  * **中文强调**：`em { font-style: normal; color: var(--hue-accent) }`（中文斜体公认难看，规范建议以颜色 / 着重号替代；英文斜体一并变色，子项可关）。
+  * **中文段落间距**：`p { margin-bottom: 18px }`（比西文多 4px，补偿全角标点的视觉密度）。正文行高已由 `.ProseMirror` 统一 1.75。
+* **关键决策：不做 JS 装饰回退。** 规格原拟「CSS 不支持时用 ProseMirror Decoration 插零宽元素」；实测 `text-autospace` / `text-spacing-trim` 自 **Chromium 140** 起原生支持，Electron 44（Chromium ≫140）已满足 → **纯 CSS 即可，免去装饰插件**（零性能开销、零 DOM 污染、渲染层装饰不进文档模型故导出天然不受影响）。若未来运行环境回退到 <140，间距仅静默不生效，不会破坏排版。
+* **设置界面**：`PreferencesSettings.vue` 新增「中文排版」小节——总开关 + 四子项开关（总开关关闭时子项整体弱化且不可点），改动即 `applyTypography` + `saveTypography`；`App.vue` `onMounted` 调 `initTypography()`（紧随 `initAppearance()`）。
+* **i18n**：zh-CN / en-US 各加 11 键（`cjkTitle` / `cjkEnabled(+Desc)` / `cjkSpace(+Desc)` / `cjkEmphasis(+Desc)` / `cjkPunct(+Desc)` / `cjkGap(+Desc)`），由 `[E]` 双语对齐守护。
+* **测试**：`test-core.mjs` `[N]` 段 6 条（默认全开 / 合法布尔保留 / 非布尔回落 / 垃圾输入整体回落 / 注入存储的持久化往返 / 损坏存储不抛）。
+* **效果预览**：`docs/preview/cjk-typography.html`（可交互，逐项开关对照；内嵌 `text-autospace` / `text-spacing-trim` 原生支持检测徽标）。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash
