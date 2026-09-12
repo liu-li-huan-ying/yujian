@@ -304,10 +304,10 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 
 ## 📦 安装包
 
-### 本地构建（v1.1.0）
+### 本地构建（v2.0.0）
 
 * **构建命令**：`npm run dist`（先 `electron-vite build` 再 `electron-builder --win`）；发布到 GitHub Release 用 `npm run release`（需先打 `v*` tag）。
-* **Windows**：产出 `release/yujian-1.1.0-setup.exe`（NSIS 安装包，约 140MB）——可自定义目录、默认创建桌面与开始菜单快捷方式「玉笺」。
+* **Windows**：产出 `release/yujian-2.0.0-setup.exe`（NSIS 安装包，约 140MB）——可自定义目录、默认创建桌面与开始菜单快捷方式「玉笺」。
 * **跨平台**：macOS `dmg`、Linux `AppImage` 目标已配置；**需在对应平台构建**（见下）。
 * **体积策略**：`asar` 归档 + 最大压缩 + 仅保留中英 locale；移除未用依赖 `@codemirror/theme-one-dark`。
 * **体积说明**：安装包主要由 Electron 运行时与 Mermaid 图表引擎占据；Mermaid 为懒加载（仅渲染图表时载入）、离线可用。若需进一步瘦身，可改为 CDN 加载 Mermaid。
@@ -328,8 +328,8 @@ Electron 44 内置 Node 24.18.1 + Chrome 152，`--version` 报的是 Node 版本
 
 ```bash
 # 本地打标签
-git tag v1.1.0
-git push origin v1.1.0
+git tag v2.0.0
+git push origin v2.0.0
 # → GitHub Actions 自动构建三平台安装包并归入 draft release
 # → 在 GitHub Releases 页面检查无误后点 Publish 发布
 ```

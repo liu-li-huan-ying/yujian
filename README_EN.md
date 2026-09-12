@@ -313,8 +313,8 @@ Pushing a `v*` tag triggers [`.github/workflows/release.yml`](./.github/workflow
 Release flow:
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v2.0.0
+git push origin v2.0.0
 # → GitHub Actions builds the three-platform installers into a draft release
 # → review on the GitHub Releases page, then click Publish
 ```

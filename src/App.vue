@@ -562,7 +562,7 @@ function onPreferences(): void {
 const showHelp = ref(false)
 const helpTab = ref<'shortcuts' | 'guide'>('shortcuts')
 /** 应用版本号（来自主进程，动态显示，避免「关于」面板硬编码过时版本） */
-const appVersion = ref('1.0.0')
+const appVersion = ref('2.0.0')
 
 function onHelp(tab: 'shortcuts' | 'guide' = 'shortcuts'): void {
   helpTab.value = tab
