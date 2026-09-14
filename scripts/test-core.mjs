@@ -1597,6 +1597,57 @@ check('regex mode: \\d+ matches digits', (() => {
   return !!m && m[0] === '123' && re.flags.includes('g')
 })())
 
+section('[T] export meta -- frontmatter 取值与回退 (src/export/exportMeta.ts)')
+// 复用 [J] 段的 grayStub：gray-matter 在 ESM 产物里做动态 require('fs') 会炸
+const Em = await import(
+  (await bundle('src/export/exportMeta.ts', 'exportMeta.mjs', { 'gray-matter': grayStub })).url
+)
+const { pickExportMeta } = Em
+
+// 有 frontmatter 时优先取它
+check('picks title/author/date from frontmatter', (() => {
+  const md = '---\ntitle: 季度小结\nauthor: 张三\ndate: 2026-09-14\n---\n\n正文'
+  const m = pickExportMeta(md, 'fallback')
+  return m.title === '季度小结' && m.author === '张三' && m.date === '2026-09-14'
+})())
+
+// 无 frontmatter / 缺字段 → 标题回退文档名，作者日期留空
+check('title falls back to base, author/date omitted', (() => {
+  const m = pickExportMeta('# 只有正文\n', '我的文档')
+  return m.title === '我的文档' && m.author === undefined && m.date === undefined
+})())
+
+// 键的优先级与别名：author 缺失取 authors，date 缺失依次取 updated / created
+check('alias keys: authors, updated/created', (() => {
+  const a = pickExportMeta('---\nauthors: 李四\n---\n', 'x')
+  const b = pickExportMeta('---\nupdated: 2026-01-02\n---\n', 'x')
+  const c = pickExportMeta('---\ncreated: 2026-03-04\n---\n', 'x')
+  return a.author === '李四' && b.date === '2026-01-02' && c.date === '2026-03-04'
+})())
+
+// 显式 title 优先于别名顺序：title 存在时不该被 base 覆盖
+check('explicit title wins over base', (() => {
+  return pickExportMeta('---\ntitle: 真标题\n---\n', '基名').title === '真标题'
+})())
+
+// 空串 / 纯空白视为「没有」，不能把空白当值交出去
+check('blank values are treated as absent', (() => {
+  const m = pickExportMeta('---\ntitle: "   "\nauthor: ""\n---\n', '基名')
+  return m.title === '基名' && m.author === undefined
+})())
+
+// YAML 会把日期解析成 Date 对象：必须归一成 YYYY-MM-DD，不能吐出 ISO 时间戳
+check('Date object normalizes to YYYY-MM-DD', (() => {
+  const m = pickExportMeta('---\ndate: 2026-05-06\n---\n', 'x')
+  return m.date === '2026-05-06' && !String(m.date).includes('T')
+})())
+
+// 空文档也不能抛
+check('empty markdown does not throw', (() => {
+  const m = pickExportMeta('', '空')
+  return m.title === '空'
+})())
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')

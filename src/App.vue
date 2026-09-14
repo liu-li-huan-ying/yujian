@@ -44,26 +44,16 @@ import type {
   StartupMode,
   ZenPrefs,
   BrokenLinkItem,
-  ExportResult,
-  ExportPayload,
   IntegrityReport,
 } from '../electron/shared/ipc-channels'
-import { inlineImages } from './export/imageInline'
 import { parseFrontmatter, serializeFrontmatter } from './editor/frontmatter'
-import { type ExportKind } from './export/types'
-import {
-  buildExportContent,
-  kindLabel,
-  bytesToBase64,
-  type BuiltExport,
-  type ExportContext,
-} from './export/buildExport'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
 import { useTabsStore } from './store/tabs'
 import { useSnapshotsStore } from './store/snapshots'
 import { usePkmPanels } from './composables/usePkmPanels'
 import { useVaultLinks } from './composables/useVaultLinks'
+import { useExport, type ExportHostLike } from './composables/useExport'
 import type { TextStats } from './utils/text-stats'
 import type { CommandId } from './utils/commands'
 
@@ -906,225 +896,29 @@ async function onPublishImages(): Promise<void> {
   }
 }
 
-/**
- * 导出选项（导出菜单里逐项切换）：
- * - toc 自动目录（PDF 恒为是——纸质阅读需要导航）
- * - cover 封面页（标题 / 作者 / 日期，取自 frontmatter）
- * - inline 图片与图表内联为 data URL（自包含、离线可读；PDF 恒为内联，代价是体积变大）
- * - selection 仅导出选中内容（无选区时回退整篇）
- */
-const exportPrefs = ref({
-  toc: false,
-  cover: false,
-  inline: true,
-  selection: false,
-  preview: false,
+/* ── 导出（单文档 / 多文件合订 / 预览 / 写盘）──
+   整块能力已抽到 `composables/useExport.ts`：既是给 App.vue 瘦身（约 220 行），
+   也让其中的「frontmatter 取值回退」纯逻辑可测（`export/exportMeta.ts`）。
+   这里只负责把 App 级上下文以 getter 注入，模板绑定名保持不变。 */
+const {
+  exportPrefs,
+  toggleExportPref,
+  showPreview,
+  previewState,
+  doExport,
+  confirmExport,
+  cancelExport,
+  showCompile,
+  onCompile,
+} = useExport({
+  filePath: () => filePath.value,
+  vaultPath: () => vaultPath.value,
+  host: () => host.value as unknown as ExportHostLike | null,
+  showToast,
+  clearToast: () => {
+    toast.value = null
+  },
 })
-
-/** 导出菜单切换一个选项 */
-function toggleExportPref(key: 'toc' | 'cover' | 'inline' | 'selection' | 'preview'): void {
-  exportPrefs.value = { ...exportPrefs.value, [key]: !exportPrefs.value[key] }
-}
-
-/**
- * 取导出元信息：优先用属性面板写入的 frontmatter，回退到文档名。
- * 日期既可能是字符串也可能是 YAML 解析出的 Date，统一取年月日。
- */
-function readExportMeta(base: string): { title?: string; author?: string; date?: string } {
-  const md = host.value?.getMarkdown?.() ?? ''
-  const { data } = parseFrontmatter(md)
-  const pick = (...keys: string[]): string | undefined => {
-    for (const k of keys) {
-      const v = data[k]
-      if (typeof v === 'string' && v.trim()) return v.trim()
-      if (v instanceof Date) return v.toISOString().slice(0, 10)
-    }
-    return undefined
-  }
-  return {
-    title: pick('title') ?? base,
-    author: pick('author', 'authors'),
-    date: pick('date', 'updated', 'created'),
-  }
-}
-
-/** 读取绝对路径图片为 data URL（导出内联用）；失败返回 null，保留原 src 不破坏文档 */
-async function readAsDataUrl(absPath: string): Promise<string | null> {
-  const res = await window.api.readFileBase64(absPath)
-  return res.ok && res.dataUrl ? res.dataUrl : null
-}
-
-/** 导出前预览状态 */
-const showPreview = ref(false)
-const previewState = ref<BuiltExport | null>(null)
-
-/** 写盘 / 打印：与构建分离，预览确认后直接复用已构建的内容 */
-async function writeExport(built: BuiltExport): Promise<void> {
-  const payload: ExportPayload = {
-    content: built.content,
-    defaultName: built.defaultName,
-    filters: built.filters,
-    binaryBase64: built.binary ? bytesToBase64(built.binary) : undefined,
-    mime: built.mime,
-  }
-  let res: ExportResult
-  try {
-    res =
-      built.kind === 'pdf'
-        ? await window.api.exportPdf(payload)
-        : await window.api.exportFile(payload)
-  } catch (e) {
-    console.error('[export] 写盘 IPC 失败：', e)
-    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
-    return
-  }
-  if (res.ok && res.path) {
-    // 成功：保留路径较长时间，让用户明确看到「导出到了哪里」
-    showToast(`${U.toastExportHtmlOk}${res.path}`, 'ok', 4500)
-  } else if (res.canceled) {
-    showToast(U.toastExportCanceled, 'info')
-  } else {
-    showToast(`${U.toastExportErr}${res.error ?? ''}`, 'err', 5000)
-  }
-}
-
-/** 把 App 级导出环境打包成 ExportContext，注入给纯构建逻辑 */
-function exportContext(): ExportContext {
-  return {
-    filePath: filePath.value,
-    exportPrefs: exportPrefs.value,
-    host: host.value,
-    readExportMeta,
-    readAsDataUrl,
-    showToast,
-    U,
-  }
-}
-
-/**
- * 导出当前文档。三种产物共用一条管道：取正文 → 变换 → 预览（可选）→ 通用写盘 / 打印。
- * @param kind  html 网页 / pdf 文档 / latex 源文件
- * @param scope all 整篇 / selection 当前选中（无选区时回退整篇）
- */
-async function doExport(kind: ExportKind, scope: 'all' | 'selection' = 'all'): Promise<void> {
-  if (!filePath.value) {
-    showToast(U.toastNoDoc, 'err')
-    return
-  }
-  const label = kindLabel(kind, U)
-  showToast(`${U.toastExporting}${label}…`, 'info')
-
-  try {
-    const built = await buildExportContent(kind, scope, undefined, exportContext())
-    if (!built) return // buildExportContent 内部已给出原因提示（无内容 / 无选区等）
-
-    // 开启「导出前预览」：先呈现产物，用户确认后再落盘（落盘时会弹出系统保存对话框）
-    if (exportPrefs.value.preview) {
-      previewState.value = built
-      showPreview.value = true
-      toast.value = null // 预览界面已接管，清掉「导出中」提示，避免其悬在浮层之后
-      return
-    }
-    await writeExport(built)
-  } catch (e) {
-    // 任何一步（取正文 / 内联图片 / 渲染图表 / 序列化）抛错都不该静默——明确告诉用户
-    console.error('[export] 生成导出内容失败：', e)
-    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
-  }
-}
-
-/** 预览面板确认：把已构建的内容落盘 / 打印 */
-async function confirmExport(): Promise<void> {
-  const built = previewState.value
-  showPreview.value = false
-  previewState.value = null
-  if (!built) return
-  try {
-    await writeExport(built)
-  } catch (e) {
-    console.error('[export] 写盘失败：', e)
-    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
-  }
-}
-
-/** 预览面板取消：丢弃已构建内容 */
-function cancelExport(): void {
-  showPreview.value = false
-  previewState.value = null
-}
-
-/* ── 多文件合订（CompilePanel → 共用 buildExportContent override）── */
-
-const showCompile = ref(false)
-
-/**
- * 多文件合订：逐文件读取 → markdownToHtml 渲染 → 按各自文档目录内联图片 → 拼接，
- * 再交给与单文档完全相同的导出管道（含预览 / 写盘 / 自包含内联）。
- * 图片必须在拼接前按文档所在目录分别内联，合订后无法再用单一基准路径解析。
- */
-async function onCompile(payload: {
-  files: string[]
-  title: string
-  newPagePerDoc: boolean
-  kind: ExportKind
-  preview: boolean
-}): Promise<void> {
-  if (!vaultPath.value) {
-    showToast(U.toastNoDoc, 'err')
-    return
-  }
-  if (!payload.files.length) {
-    showToast(U.compileNoSelection, 'info')
-    return
-  }
-  showCompile.value = false
-  const label = kindLabel(payload.kind, U)
-  showToast(`${U.toastExporting}${label}…`, 'info')
-
-  try {
-    let combinedHtml = ''
-    let combinedMd = ''
-    for (const file of payload.files) {
-      const md = await window.api.readFile(file)
-      if (!md.trim()) continue
-      const html = host.value?.markdownToHtml(md) ?? ''
-      // 按该文档所在目录把相对图片内联为 data URL（合订后无法用单一基准）
-      const inlined = await inlineImages(html, file, readAsDataUrl)
-      combinedHtml += payload.newPagePerDoc
-        ? `<section class="yj-compile-page">${inlined}</section>`
-        : inlined
-      combinedMd += `\n\n${md}\n`
-    }
-    if (!combinedHtml && !combinedMd.trim()) {
-      showToast(U.toastNoContent, 'err')
-      return
-    }
-
-    const built = await buildExportContent(
-      payload.kind,
-      'all',
-      {
-        title: payload.title,
-        bodyHtml: combinedHtml,
-        markdown: combinedMd,
-        forceInline: true,
-      },
-      exportContext(),
-    )
-    if (!built) return
-
-    if (payload.preview) {
-      previewState.value = built
-      showPreview.value = true
-      toast.value = null
-      return
-    }
-    await writeExport(built)
-  } catch (e) {
-    console.error('[export] 合订导出失败：', e)
-    showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
-  }
-}
 
 /* ── 语言切换（key 驱动 Vue 重挂 Crepe）── */
 
