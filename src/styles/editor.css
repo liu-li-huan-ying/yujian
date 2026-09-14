@@ -421,6 +421,19 @@
 }
 /* 菜单项 hover/选中沿用玉质令牌（Crepe 默认用 --crepe-color-*，已重映射） */
 
+/* ── 行内公式编辑：隐藏 Crepe 自带文本框，改由玉笺公式浮层接管 ──
+   Crepe 的 Latex 特性会在 math_inline 被整块选中时弹出 .milkdown-latex-inline-edit，
+   那是个**纯文本框、没有预览** —— 作者改 LaTeX 只能盲改；且它按 KaTeX 口径渲染，
+   而文档里的公式由 MathJax 渲染（mathjax.ts），两者对 \require / \ce / \label
+   支持不同，预览与最终成品会不一致。
+   故隐藏它，由 MathEditPanel 以**完全相同的触发条件**接管：MathJax 实时预览 +
+   符号工具条 + \label 状态（见 src/editor/mathSelect.ts）。
+   触发与收起语义不变，只是换了个更好的编辑器；用 !important 是因为要压过
+   Crepe 组件自身对 display 的内联样式。 */
+.milkdown .milkdown-latex-inline-edit {
+  display: none !important;
+}
+
 /* ── BlockEdit 浮动工具栏图标可见性 ──
    Crepe 内置的块编辑工具条（B/I/引用/代码/数学等）SVG 图标默认用
    --crepe-color-on-surface-variant（= --hue-text-3）着色，在玻璃暗底上对比度不足。

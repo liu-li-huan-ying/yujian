@@ -31,6 +31,9 @@ import { INDEX_DIR_NAME } from './vaultIndex'
 import { HISTORY_DIR_NAME } from './snapshots'
 import * as Snap from './snapshots'
 import { reportSoftError } from './softError'
+// 搜索正则构造收敛到渲染层单一来源，避免「中文全词匹配」在库级搜索与编辑器内搜索行为不一致。
+// regex.ts 为零依赖纯函数（仅 RegExp），可安全被主进程引用。
+import { buildRegex } from '../../src/utils/regex'
 
 // 回收站实现可注入：生产用 Electron 系统回收站（trash.ts 惰性加载），测试可换假实现。
 // 必须从本模块也导出——打包会把 ./trash 内联成独立副本，只在外层模块设注入是无效的。
@@ -891,38 +894,16 @@ async function searchInFile(
   }
   const hits: SearchLineHit[] = []
   const lines = content.split('\n')
-  const re = buildSearchRegex(query, opts)
+  // buildRegex 始终返回带 'g' 的正则；用 String.search()（忽略 g 标志、每次从行首匹配）
+  // 而非 re.test()，避免全局正则 lastIndex 在多行复用时残留导致漏匹配。
+  const re = buildRegex(query, opts?.caseSensitive ?? false, opts?.wholeWord ?? false, opts?.regex ?? false)
   for (let i = 0; i < lines.length; i++) {
-    if (re.test(lines[i])) {
+    if (lines[i].search(re) !== -1) {
       hits.push({ line: i + 1, text: lines[i].trim().slice(0, 240) })
       if (hits.length >= PER_FILE_HIT_CAP) break
     }
   }
   return hits
-}
-
-/**
- * 构造匹配正则。默认仅判定命中（非全局标志）；global=true 时带 'g' 供 replaceInVault 整文替换。
- * - 默认模式：转义 query + 全词边界 + 大小写开关；
- * - regex 模式：query 直接作为正则表达式（非法时降级为转义字面量，避免整次搜索失败）。
- */
-function buildSearchRegex(query: string, opts?: SearchOptions, global = false): RegExp {
-  const flags = (opts?.caseSensitive ? '' : 'i') + (global ? 'g' : '')
-  if (opts?.regex) {
-    try {
-      return new RegExp(query, flags)
-    } catch {
-      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      return new RegExp(escaped, flags)
-    }
-  }
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pattern = opts?.wholeWord ? `\\b${escaped}\\b` : escaped
-  try {
-    return new RegExp(pattern, flags)
-  } catch {
-    return new RegExp(escaped, flags)
-  }
 }
 
 /**
@@ -1005,8 +986,8 @@ export async function replaceInVault(
     targets = results.results.map((r) => r.path)
   }
 
-  // 复用主搜索正则构造（含 regex 模式支持），全局标志供整文替换
-  const re = buildSearchRegex(q, opts, true)
+  // 复用主搜索正则构造（含 regex 模式支持）；buildRegex 始终带 'g'，正好供整文替换
+  const re = buildRegex(q, opts?.caseSensitive ?? false, opts?.wholeWord ?? false, opts?.regex ?? false)
 
   let replaced = 0
   let files = 0

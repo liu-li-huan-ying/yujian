@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>玉笺 · 公式编辑器浮层演示</title>
+<script>
+  // MathJax v3 配置：ams 编号 + 全包，与编辑器内 mathjax.ts 对齐
+  // ignoreDuplicateLabels：编辑时每敲一下就重渲，\label 会命中「Label multiply defined」
+  // 抛错，必须允许重复登记（与编辑器 mathjax.ts 的 TeX 配置一致）。
+  window.MathJax = {
+    tex: { tags: 'ams', ignoreDuplicateLabels: true, packages: { '[+]': ['ams', 'boldsymbol', 'mhchem', 'color'] } },
+    svg: { fontCache: 'none' },
+    startup: { typeset: false }
+  }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+<style>
+  :root {
+    --hue-bg: #1b1f1f;
+    --hue-surface: rgba(32, 37, 38, 0.66);
+    --hue-surface-light: rgba(245, 248, 246, 0.78);
+    --hue-accent: #5fa8a0;
+    --hue-text-1: #e8e9e7;
+    --hue-text-2: #b9bebb;
+    --hue-text-3: #8b908e;
+    --hue-danger: #f2685f;
+    --hue-shadow-2: 0 18px 48px rgba(0, 0, 0, 0.38);
+    --radius-lg: 8px;
+    --material-blur: 18px;
+    --material-saturate: 1.4;
+    --mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 48px 24px;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(95,168,160,0.18), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, rgba(146,167,180,0.14), transparent 55%),
+      var(--hue-bg);
+    color: var(--hue-text-1);
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    display: flex; flex-direction: column; align-items: center; gap: 22px;
+  }
+  .hint { color: var(--hue-text-3); font-size: 13px; max-width: 760px; text-align: center; line-height: 1.7; }
+  .hint b { color: var(--hue-accent); font-weight: 600; }
+
+  /* 被编辑的「目标块」：打开浮层时加 2px accent 外描边 */
+  .target-block {
+    width: 760px; max-width: 92vw;
+    border: 2px solid var(--hue-accent);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    background: rgba(255,255,255,0.03);
+    box-shadow: 0 0 0 4px rgba(95,168,160,0.12);
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    font-size: 15px;
+  }
+  .target-block .label { color: var(--hue-text-3); font-size: 12px; }
+
+  /* 玻璃浮层：与玉笺 .glass 一致 */
+  .glass-pop {
+    width: 760px; max-width: 92vw;
+    background: var(--hue-surface);
+    backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+    -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--hue-shadow-2);
+    padding: 16px;
+    color: var(--hue-text-1);
+  }
+  .pop-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .pop-title { font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+  .pop-title .dot { color: var(--hue-accent); margin-right: 6px; }
+  .pop-close {
+    width: 28px; height: 28px; border-radius: 6px; border: none; cursor: pointer;
+    background: transparent; color: var(--hue-text-3); font-size: 16px;
+  }
+  .pop-close:hover { background: rgba(255,255,255,0.08); color: var(--hue-text-1); }
+
+  /* 符号工具条：4 组，每组 ≤8，按钮 28×28 */
+  .sym-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; }
+  .sym-group { display: flex; gap: 4px; padding-right: 10px; border-right: 1px solid rgba(255,255,255,0.08); }
+  .sym-group:last-child { border-right: none; }
+  .sym-btn {
+    min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px; cursor: pointer;
+    background: transparent; color: var(--hue-text-3); border: 1px solid transparent;
+    font-family: var(--mono); font-size: 13px; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background .12s, color .12s;
+  }
+  .sym-btn:hover { background: rgba(255,255,255,0.08); color: var(--hue-text-1); }
+  .sym-btn:active, .sym-btn.on { color: var(--hue-accent); background: rgba(95,168,160,0.14); border-color: rgba(95,168,160,0.4); }
+
+  .editor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px){ .editor-row { grid-template-columns: 1fr; } }
+  .pane { display: flex; flex-direction: column; gap: 6px; }
+  .pane-label { font-size: 12px; color: var(--hue-text-3); }
+  textarea#src {
+    width: 100%; min-height: 150px; resize: vertical;
+    background: rgba(0,0,0,0.28); color: var(--hue-text-1);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+    padding: 10px 12px; font-family: var(--mono); font-size: 14px; line-height: 1.6;
+    outline: none;
+  }
+  textarea#src:focus { border-color: var(--hue-accent); box-shadow: 0 0 0 3px rgba(95,168,160,0.18); }
+  .preview {
+    min-height: 150px; border-radius: 6px; padding: 12px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center; overflow: auto;
+  }
+  .preview.error { color: var(--hue-danger); font-size: 13px; }
+  .preview svg { max-width: 100%; height: auto; }
+
+  .pop-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 12px; }
+  .status { font-size: 12px; color: var(--hue-text-2); }
+  .status .tag {
+    display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+    background: rgba(95,168,160,0.16); color: var(--hue-accent); font-family: var(--mono); font-size: 11px;
+  }
+  .status .tag.none { background: rgba(255,255,255,0.06); color: var(--hue-text-3); }
+  .actions { display: flex; gap: 8px; }
+  .btn {
+    height: 30px; padding: 0 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); color: var(--hue-text-1);
+  }
+  .btn.primary { background: var(--hue-accent); border-color: transparent; color: #08201d; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.06); }
+</style>
+</head>
+<body>
+  <div class="hint">
+    玉笺「复杂元素临时编辑界面」· <b>公式编辑器</b> 视觉规格与交互演示。<br/>
+    上半输入 LaTeX 源码，下半实时预览；符号工具条按 4 组分类插入；底部显示 <b>\label</b> 与编号状态。
+    点击「打开公式浮层」模拟在文档中点中一个公式块，浮层打开时目标块加 2px 强调描边。
+  </div>
+
+  <!-- 目标块：模拟被编辑的公式（打开浮层时加描边） -->
+  <div class="target-block" id="target">
+    <span class="label">目标块（公式）：</span>
+    <span id="targetRender">E = mc²</span>
+  </div>
+
+  <!-- 玻璃浮层 -->
+  <div class="glass-pop" id="pop" style="display:none">
+    <div class="pop-head">
+      <div class="pop-title"><span class="dot">◆</span>编辑公式</div>
+      <button class="pop-close" id="closeBtn" title="Esc 关闭并应用">×</button>
+    </div>
+
+    <div class="sym-bar" id="symBar"></div>
+
+    <div class="editor-row">
+      <div class="pane">
+        <div class="pane-label">LaTeX 源码</div>
+        <textarea id="src" spellcheck="false">E = mc^2 \label{eq:mass}</textarea>
+      </div>
+      <div class="pane">
+        <div class="pane-label">实时预览</div>
+        <div class="preview" id="preview"></div>
+      </div>
+    </div>
+
+    <div class="pop-foot">
+      <div class="status" id="status"></div>
+      <div class="actions">
+        <button class="btn" id="cancelBtn">取消</button>
+        <button class="btn primary" id="applyBtn">应用</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const GROUPS = [
+    { name: '希腊/字母', items: ['\\alpha','\\beta','\\gamma','\\delta','\\theta','\\lambda','\\mu','\\pi'] },
+    { name: '运算',     items: ['\\times','\\div','\\pm','\\cdot','\\leq','\\geq','\\neq','\\approx'] },
+    { name: '结构',     items: ['^{}','_{}','\\frac{}{}','\\sqrt{}','\\sum','\\int','\\lim','\\prod'] },
+    { name: '标注/矩阵', items: ['\\left(','\\right)','\\begin{matrix}','\\hline','\\text{}','\\label{}','\\eqref{}','\\tag{}'] },
+  ]
+  const symBar = document.getElementById('symBar')
+  GROUPS.forEach(g => {
+    const grp = document.getElementById('symBar').appendChild(document.createElement('div'))
+    grp.className = 'sym-group'
+    g.items.forEach(s => {
+      const b = document.createElement('button')
+      b.className = 'sym-btn'; b.textContent = s; b.title = s
+      b.onclick = () => insertAtCursor(document.getElementById('src'), s)
+      grp.appendChild(b)
+    })
+  })
+
+  function insertAtCursor(ta, text) {
+    const s = ta.selectionStart, e = ta.selectionEnd
+    ta.value = ta.value.slice(0, s) + text + ta.value.slice(e)
+    const pos = s + text.length
+    ta.focus(); ta.setSelectionRange(pos, pos)
+    render()
+  }
+
+  const src = document.getElementById('src')
+  const preview = document.getElementById('preview')
+  const status = document.getElementById('status')
+  let mjReady = false
+  // 就绪探测：必须等真实 MathJax 的 startup.promise 与 tex2svg 同时就位，
+  // 不能只看 window.MathJax（本文件头部自设了 config，会让误判提前为 true）。
+  function whenReady(cb){
+    if (window.MathJax && typeof window.MathJax.tex2svg === 'function') { cb(); return }
+    setTimeout(() => whenReady(cb), 150)
+  }
+  whenReady(() => {
+    (window.MathJax.startup && window.MathJax.startup.promise ? window.MathJax.startup.promise : Promise.resolve())
+      .then(() => { mjReady = true; render() })
+      .catch(() => { mjReady = true; render() })
+  })
+
+  function extractLabels(s){ const o=[]; for(const m of s.matchAll(/\\label\s*\{([^{}]*)\}/g)){ const n=m[1].trim(); if(n&&!o.includes(n)) o.push(n) } return o }
+
+  /** 与编辑器 mathjax.ts 的 ensureNumberedEnv 同款：有 \label、无环境、无 \tag 时自动套编号环境，
+      否则套 equation*（行间但不编号），保证 \label 演示有意义且不触发 MathJax 报错。 */
+  function wrap(tex) {
+    if (tex.includes('\\begin{')) return tex
+    const numbered = /\\label\s*\{/.test(tex) && !/\\tag\s*\{/.test(tex)
+    if (!numbered) return '\\begin{equation*}' + tex + '\\end{equation*}'
+    const env = /\\\\|&/.test(tex) ? 'align' : 'equation'
+    return '\\begin{' + env + '}' + tex + '\\end{' + env + '}'
+  }
+
+  function render() {
+    const tex = src.value.trim()
+    if (!tex) { preview.textContent = '（空）'; preview.className='preview'; updateStatus(''); return }
+    if (!mjReady || typeof window.MathJax?.tex2svg !== 'function') { preview.textContent = '渲染引擎加载中…'; preview.className='preview'; return }
+    try {
+      // 只取容器内的 <svg> 单节点：避免把 mjx-container / 辅助节点一并塞入 flex 布局产生残影
+      const container = window.MathJax.tex2svg(wrap(tex), { display: true })
+      const svg = container.querySelector('svg')
+      preview.innerHTML = ''
+      if (svg) preview.appendChild(svg)
+      preview.className = 'preview'
+    } catch (err) {
+      preview.textContent = '语法错误：' + (err.message || err)
+      preview.className = 'preview error'
+    }
+    updateStatus(tex)
+  }
+  function updateStatus(tex){
+    const labels = extractLabels(tex)
+    if (labels.length === 0) {
+      status.innerHTML = '未定义 \\label <span class="tag none">无编号</span>'
+    } else {
+      status.innerHTML = '\\label: ' + labels.map(l=>`<span class="tag">${l}</span>`).join('')
+    }
+  }
+  src.addEventListener('input', render)
+
+  // ── 浮层开关：模拟点击公式块 ──
+  const pop = document.getElementById('pop')
+  const target = document.getElementById('target')
+  function openPop(){ pop.style.display='block'; target.style.borderColor='var(--hue-accent)'; if (mjReady) render() }
+  function closePop(){ pop.style.display='none' }
+  target.addEventListener('click', openPop)
+  document.getElementById('closeBtn').onclick = closePop
+  document.getElementById('cancelBtn').onclick = closePop
+  document.getElementById('applyBtn').onclick = () => {
+    document.getElementById('targetRender').textContent = src.value.trim() || '（空公式）'
+    closePop()
+  }
+  document.addEventListener('keydown', e => { if(e.key==='Escape') closePop() })
+  // 初始即打开以方便截图
+  openPop()
+</script>
+</body>
+</html>

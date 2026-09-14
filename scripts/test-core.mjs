@@ -1533,6 +1533,70 @@ check('stored non-bindable override (bare letter) is dropped on load', (() => {
   return got === undefined && table.has('A') === false
 })())
 
+section('[S] search regex -- Chinese whole-word matching (src/utils/regex.ts)')
+const Rx = await import((await bundle('src/utils/regex.ts', 'regex.mjs')).url)
+const { buildRegex } = Rx
+
+// 中文全词匹配（wholeWord）不开：子串命中（与旧 \b 行为一致，纯拉丁也如此）
+check('CJK substring match when wholeWord off', (() => {
+  const re = buildRegex('开', false, false)
+  return '开源'.search(re) !== -1 && '开心'.search(re) !== -1
+})())
+
+// 中文全词匹配开：不命中「开源」——开被源夹住，二者都是词字符，Unicode 词边界不成立
+// （这是旧 \b 实现的失效点：\b 只认 ASCII 词，把 源 当非词，于是「开」两侧都被当成边界 → 误命中）
+check('CJK wholeWord does NOT match inside 开源', (() => {
+  const re = buildRegex('开', false, true)
+  return '开源'.search(re) === -1
+})())
+
+// 中文全词匹配开：不命中「开会」（两词字符相连，无边界）
+check('CJK wholeWord does NOT match inside 开会', (() => {
+  const re = buildRegex('开', false, true)
+  return '开会'.search(re) === -1
+})())
+
+// 中文全词匹配开：被非词字符（句号 / 空格 / 行首行尾）包围时命中
+check('CJK wholeWord matches when surrounded by non-word chars', (() => {
+  const re = buildRegex('开', false, true)
+  return '开。'.search(re) !== -1      // 开 + 句号
+    && '我 开 会'.search(re) !== -1   // 开 + 空格
+    && '开'.search(re) !== -1         // 单独成词（行首行尾）
+})())
+
+// 拉丁全词匹配保持既有语义：cat 命中 cat，不命中 category
+check('Latin wholeWord matches cat but not category', (() => {
+  const re = buildRegex('cat', false, true)
+  return 'cat'.search(re) !== -1 && 'category'.search(re) === -1
+})())
+
+// 中英混合词边界：code 命中 "my code."，不命中 decode / codex（相邻词字符无边界）
+check('Mixed boundary: code vs decode/codex', (() => {
+  const re = buildRegex('code', false, true)
+  return 'my code.'.search(re) !== -1
+    && 'decode'.search(re) === -1
+    && 'codex'.search(re) === -1
+})())
+
+// 大小写不敏感（默认）
+check('case-insensitive by default', (() => {
+  const re = buildRegex('Cat', false, true)
+  return 'CAT'.search(re) !== -1 && 'scat'.search(re) === -1
+})())
+
+// wholeWord 正则必须带 u 标志，否则 \p{L} 语法解析失败 → 中文边界完全不生效
+check('wholeWord regex carries the u flag', (() => {
+  const re = buildRegex('开', false, true)
+  return re.flags.includes('u')
+})())
+
+// regex 模式：\d+ 命中数字串（flags 含 g 供装饰层逐次 exec）
+check('regex mode: \\d+ matches digits', (() => {
+  const re = buildRegex('\\d+', false, false, true)
+  const m = 'abc123'.match(re)
+  return !!m && m[0] === '123' && re.flags.includes('g')
+})())
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')

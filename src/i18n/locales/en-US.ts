@@ -71,6 +71,26 @@ const enUS = {
     insertWikilink: 'Insert link',
   },
 
+  /* ── Temporary edit overlay · formula editor ── */
+  mathEdit: {
+    titleInline: 'Edit inline formula',
+    titleBlock: 'Edit formula',
+    source: 'LaTeX source',
+    preview: 'Live preview',
+    cancel: 'Cancel',
+    apply: 'Apply',
+    rendering: 'Rendering…',
+    empty: '(empty formula)',
+    noLabel: 'No \\label defined',
+    noNumber: 'Unnumbered',
+    groups: {
+      greek: 'Greek/letters',
+      operators: 'Operators',
+      structure: 'Structure',
+      markup: 'Markup/matrix',
+    },
+  },
+
   /* ── App UI ── */
   ui: {
     open: 'Open',

@@ -40,6 +40,8 @@ import {
   setFindState,
   type WysiwygFindState,
 } from './find-wysiwyg'
+import { createMathSelectPlugin, type MathSelectionInfo } from './mathSelect'
+import MathEditPanel from '../components/MathEditPanel.vue'
 
 /**
  * 悬浮工具条「插入双链」按钮的图标（Crepe 的 Icon 组件以 innerHTML 渲染该 SVG 字符串，
@@ -198,6 +200,68 @@ watch(
     dismissedFrom = null
   },
 )
+
+/* ── 复杂元素临时编辑界面 · 公式 ─────────────────
+ * 触发条件与 Crepe 自带行内公式文本框一致（整块选中 math_inline），但 Crepe 那个是
+ * **纯文本框、没有预览**——改 LaTeX 只能盲改，且文档里的公式是 MathJax 渲染的，
+ * 与 Crepe 默认 KaTeX 口径不同。故在 CSS 里隐藏它，改由 MathEditPanel 接管：
+ * 同一触发语义 + MathJax 实时预览 + 符号工具条（详见 mathSelect.ts）。
+ * 另补「点击公式即打开」：整块已选中时再点击不会触发 selection 更新，
+ * 光靠选中监听会导致「取消后点不回来」。
+ */
+const mathEdit = ref<{ pos: number; value: string; dom: HTMLElement } | null>(null)
+
+function openMathEdit(pos: number, value: string, dom: HTMLElement): void {
+  // 同一公式会被 selection 更新反复上报；保持不动，避免浮层被重建、草稿丢失
+  if (mathEdit.value && mathEdit.value.pos === pos) return
+  mathEdit.value = { pos, value, dom }
+}
+
+function onMathSelect(info: MathSelectionInfo | null): void {
+  if (!info) return
+  openMathEdit(info.pos, info.value, info.dom)
+}
+
+/** 点击行内公式即打开编辑浮层（覆盖「已选中时再点击不产生 selection 更新」的情形） */
+function onMathClick(e: MouseEvent): void {
+  if (props.readonly) return
+  const target = e.target as HTMLElement | null
+  const el = target?.closest('.math-inline') as HTMLElement | null
+  if (!el) return
+  const view = getEditorView()
+  if (!view) return
+  let pos: number
+  try {
+    pos = view.posAtDOM(el, 0)
+  } catch {
+    return
+  }
+  const node = view.state.doc.resolve(pos).nodeAfter ?? view.state.doc.nodeAt(pos)
+  if (node?.type.name !== 'math_inline') return
+  openMathEdit(pos, String(node.attrs.value ?? ''), el)
+}
+
+/**
+ * 应用：写回 node.value，并让出 NodeSelection。
+ * 若沿用 NodeSelection，事务一更新就会再次判定「公式被选中」→ 浮层立刻重开，
+ * 表现为「点应用没反应」。故把光标移到公式之后。
+ */
+function applyMathEdit(value: string): void {
+  const info = mathEdit.value
+  const view = getEditorView()
+  mathEdit.value = null
+  if (!info || !view) return
+  const node = view.state.doc.nodeAt(info.pos)
+  if (node?.type.name !== 'math_inline') return
+  const tr = view.state.tr.setNodeMarkup(info.pos, null, { value })
+  const after = Math.min(info.pos + node.nodeSize, tr.doc.content.size)
+  tr.setSelection(TextSelection.near(tr.doc.resolve(after)))
+  view.dispatch(tr)
+}
+
+function cancelMathEdit(): void {
+  mathEdit.value = null
+}
 
 /* ── 图片粘贴落盘 ─────────────────────────────── */
 
@@ -482,6 +546,8 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.editor.use($prose(() => createWordSelectPlugin()))
   // 所见即所得搜索命中高亮插件：与源码模式对称，由统一搜索 query/选项驱动。
   crepe.editor.use($prose(() => createFindDecoPlugin()))
+  // 行内公式「整块选中」上报：由 MathEditPanel 接管编辑（替换 Crepe 无预览的文本框）
+  crepe.editor.use($prose(() => createMathSelectPlugin(onMathSelect)))
   // Emoji 短代码：输入 `:smile:` 自动转 emoji + 已有短代码只读显示为 emoji
   crepe.editor.use($inputRule(() => emojiInputRule))
   crepe.editor.use($prose(() => emojiDecorationPlugin()))
@@ -542,6 +608,8 @@ async function init(defaultValue?: string): Promise<void> {
   host.value?.addEventListener('click', onFootnoteClick)
   // 双向链接芯片点击跳转
   host.value?.addEventListener('click', onWikilinkClick)
+  // 点击行内公式打开临时编辑浮层
+  host.value?.addEventListener('click', onMathClick)
   // 视图就绪后补发可能在就绪前到达的高亮请求（首次搜索早于 crepe.create 完成时）
   flushPendingFind()
   emit('ready')
@@ -557,6 +625,7 @@ onBeforeUnmount(() => {
   host.value?.removeEventListener('click', onEditorClick)
   host.value?.removeEventListener('click', onFootnoteClick)
   host.value?.removeEventListener('click', onWikilinkClick)
+  host.value?.removeEventListener('click', onMathClick)
   void crepe?.destroy()
   crepe = null
 })
@@ -806,6 +875,15 @@ defineExpose({
       @close="closeSuggest"
     />
   </Teleport>
+  <!-- 复杂元素临时编辑界面 · 公式：关闭即销毁，不常驻（UI-DESIGN §9） -->
+  <MathEditPanel
+    v-if="mathEdit"
+    :value="mathEdit.value"
+    :display="false"
+    :anchor="mathEdit.dom"
+    @update="applyMathEdit"
+    @cancel="cancelMathEdit"
+  />
 </template>
 
 <style scoped>

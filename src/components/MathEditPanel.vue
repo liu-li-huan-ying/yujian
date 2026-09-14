@@ -1,0 +1,321 @@
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import ElementEditPopover from './ElementEditPopover.vue'
+import { renderLatexContent, renderMathToSvg } from '../editor/features/mathjax'
+import { i18n } from '../i18n'
+
+/**
+ * 复杂元素临时编辑界面 · 公式（UI-DESIGN §4.4）。
+ *
+ * 上半 LaTeX 源码输入（等宽 14px）、下半实时预览、常用符号工具条（4 组，每组 ≤8）、
+ * 底部显示 `\label` 与编号状态。
+ *
+ * 关键取舍：**渲染直接复用 `mathjax.ts`**（`renderMathToSvg` / `renderLatexContent`），
+ * 于是「编辑时看到的预览」与「文档里最终渲染的公式」是同一个 MathJax 实例、同一套
+ * `tags:'ams'` 编号语义——不另起预览渲染器，杜绝两套引擎结果打架（KaTeX 与 MathJax
+ * 对 `\require` / `\ce` / `\label` 的支持本就不同）。
+ *
+ * 值的所有权在本面板：草稿先留在 `draft`，`dismiss('apply')` 时才 `emit('update')`；
+ * 取消则直接丢弃，文档一个字节都不动。
+ */
+const props = withDefaults(
+  defineProps<{
+    /** 初始 LaTeX 源码 */
+    value: string
+    /** true = 行间公式（参与 \label 编号），false = 行内公式 */
+    display?: boolean
+    /** 目标块元素（定位 + 打开期间加强调描边） */
+    anchor?: HTMLElement | null
+  }>(),
+  { display: false, anchor: null },
+)
+
+const emit = defineEmits<{
+  (e: 'update', value: string): void
+  (e: 'cancel'): void
+}>()
+
+const L = i18n.mathEdit
+const draft = ref(props.value)
+const input = ref<HTMLTextAreaElement | null>(null)
+const preview = ref<HTMLDivElement | null>(null)
+
+/* ── 符号工具条：4 组，每组 ≤8（规格 §4.4） ──
+   片段里写 `{}` 表示「插入后光标落进括号里」，见 insertSymbol。 */
+const GROUPS = [
+  {
+    label: L.groups.greek,
+    items: ['\\alpha', '\\beta', '\\gamma', '\\delta', '\\theta', '\\lambda', '\\mu', '\\pi'],
+  },
+  {
+    label: L.groups.operators,
+    items: ['\\times', '\\div', '\\pm', '\\cdot', '\\leq', '\\geq', '\\neq', '\\approx'],
+  },
+  {
+    label: L.groups.structure,
+    items: ['^{}', '_{}', '\\frac{}{}', '\\sqrt{}', '\\sum', '\\int', '\\lim', '\\prod'],
+  },
+  {
+    label: L.groups.markup,
+    items: ['\\left(', '\\right)', '\\begin{matrix}', '\\hline', '\\text{}', '\\label{}', '\\eqref{}', '\\tag{}'],
+  },
+]
+
+/** 插入符号并把光标落到第一个 `{}` 内 —— 少一次手动移光标，手感差很多 */
+function insertSymbol(snippet: string): void {
+  const ta = input.value
+  if (!ta) return
+  const start = ta.selectionStart
+  const end = ta.selectionEnd
+  const slot = snippet.indexOf('{}')
+  draft.value = draft.value.slice(0, start) + snippet + draft.value.slice(end)
+  const caret = slot >= 0 ? start + slot + 1 : start + snippet.length
+  // 等 Vue 把 draft 刷回 textarea 再设选区，否则 setSelectionRange 会被随后的一次渲染冲掉
+  requestAnimationFrame(() => {
+    ta.focus()
+    ta.setSelectionRange(caret, caret)
+  })
+  scheduleRender()
+}
+
+/* ── 实时预览 ──
+   MathJax 体积大且渲染有开销，输入防抖 180ms；用自增令牌丢弃过期结果，
+   避免慢渲染覆盖新渲染（与 mathjax.ts 的 nodeView 同一套守卫）。 */
+let timer: number | undefined
+let renderToken = 0
+
+function scheduleRender(): void {
+  window.clearTimeout(timer)
+  timer = window.setTimeout(() => void runRender(), 180)
+}
+
+async function runRender(): Promise<void> {
+  const src = draft.value.trim()
+  const el = preview.value
+  if (!el) return
+  if (!src) {
+    el.innerHTML = ''
+    return
+  }
+  const mine = ++renderToken
+  // 行间走 renderLatexContent（支持整篇 LaTeX 文档 / \label 编号），行内走 renderMathToSvg
+  const html = props.display
+    ? await renderLatexContent(src)
+    : await renderMathToSvg(src, false)
+  if (mine !== renderToken) return
+  // MathJax 输出（SVG / 转义后的文本段）不含用户可控 HTML，直接写入与 nodeView 行为一致
+  el.innerHTML = html
+}
+
+watch(draft, scheduleRender)
+
+/* ── \label 状态 ── */
+const labels = ref<string[]>([])
+function refreshLabels(): void {
+  const out: string[] = []
+  for (const m of draft.value.matchAll(/\\label\s*\{([^{}]*)\}/g)) {
+    const name = m[1].trim()
+    if (name && !out.includes(name)) out.push(name)
+  }
+  labels.value = out
+}
+watch(draft, refreshLabels, { immediate: true })
+
+/* ── 打开期间给目标块加 2px accent 描边（规格 §4.4「打开时对应块加描边」）──
+   存下旧 outline 再覆盖，关闭时原样还原，避免污染行内样式。 */
+let savedOutline = ''
+function markTarget(): void {
+  const el = props.anchor
+  if (!el) return
+  savedOutline = el.style.outline
+  el.style.outline = '2px solid var(--hue-accent)'
+  el.style.outlineOffset = '1px'
+}
+function unmarkTarget(): void {
+  const el = props.anchor
+  if (!el) return
+  el.style.outline = savedOutline
+  el.style.outlineOffset = ''
+}
+
+function onDismiss(reason: 'apply' | 'cancel'): void {
+  if (reason === 'apply') emit('update', draft.value)
+  else emit('cancel')
+}
+
+onMounted(() => {
+  markTarget()
+  void runRender()
+  requestAnimationFrame(() => {
+    const ta = input.value
+    if (!ta) return
+    ta.focus()
+    ta.setSelectionRange(ta.value.length, ta.value.length)
+  })
+})
+
+onBeforeUnmount(() => {
+  window.clearTimeout(timer)
+  unmarkTarget()
+})
+</script>
+
+<template>
+  <ElementEditPopover
+    :title="display ? L.titleBlock : L.titleInline"
+    :anchor="anchor"
+    :width="560"
+    @dismiss="onDismiss"
+  >
+    <div class="yj-me-syms">
+      <div v-for="g in GROUPS" :key="g.label" class="yj-me-group">
+        <button
+          v-for="s in g.items"
+          :key="s"
+          type="button"
+          class="yj-me-sym"
+          :title="s"
+          @click="insertSymbol(s)"
+        >
+          {{ s }}
+        </button>
+      </div>
+    </div>
+
+    <div class="yj-me-row">
+      <div class="yj-me-pane">
+        <div class="yj-me-label">{{ L.source }}</div>
+        <textarea ref="input" v-model="draft" class="yj-me-input" spellcheck="false" />
+      </div>
+      <div class="yj-me-pane">
+        <div class="yj-me-label">{{ L.preview }}</div>
+        <div ref="preview" class="yj-me-preview" />
+      </div>
+    </div>
+
+    <div class="yj-me-status">
+      <template v-if="labels.length">
+        <span class="yj-me-labels">\label</span>
+        <span v-for="l in labels" :key="l" class="yj-me-tag">{{ l }}</span>
+      </template>
+      <template v-else>
+        <span class="yj-me-none">{{ L.noLabel }}</span>
+        <span class="yj-me-tag dim">{{ L.noNumber }}</span>
+      </template>
+    </div>
+  </ElementEditPopover>
+</template>
+
+<style scoped>
+.yj-me-syms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-bottom: 12px;
+}
+.yj-me-group {
+  display: flex;
+  gap: 4px;
+  padding-right: 10px;
+  border-right: 1px solid var(--hue-border-subtle);
+}
+.yj-me-group:last-child {
+  border-right: none;
+}
+/* 工具条按钮 28×28（规格 §4.4 状态） */
+.yj-me-sym {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--hue-text-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.yj-me-sym:hover {
+  background: rgba(127, 127, 127, 0.14);
+  color: var(--hue-text-1);
+}
+.yj-me-sym:active {
+  color: var(--hue-accent);
+  border-color: var(--hue-accent);
+}
+
+.yj-me-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.yj-me-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--hue-text-3);
+}
+.yj-me-input {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--hue-text-1);
+  /* 等宽 14px（规格 §4.4） */
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+}
+.yj-me-input:focus {
+  border-color: var(--hue-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue-accent) 22%, transparent);
+}
+.yj-me-preview {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: 6px;
+  background: rgba(127, 127, 127, 0.08);
+}
+.yj-me-preview :deep(svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+.yj-me-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--hue-text-2);
+}
+.yj-me-labels {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--hue-text-3);
+}
+.yj-me-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hue-accent) 18%, transparent);
+  color: var(--hue-accent);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+.yj-me-tag.dim {
+  background: rgba(127, 127, 127, 0.14);
+  color: var(--hue-text-3);
+}
+.yj-me-none {
+  color: var(--hue-text-3);
+}
+</style>

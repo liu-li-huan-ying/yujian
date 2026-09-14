@@ -71,6 +71,26 @@ const zhCN = {
     insertWikilink: '插入双链',
   },
 
+  /* ── 复杂元素临时编辑界面 · 公式编辑器 ── */
+  mathEdit: {
+    titleInline: '编辑行内公式',
+    titleBlock: '编辑公式',
+    source: 'LaTeX 源码',
+    preview: '实时预览',
+    cancel: '取消',
+    apply: '应用',
+    rendering: '渲染中…',
+    empty: '（空公式）',
+    noLabel: '未定义 \\label',
+    noNumber: '无编号',
+    groups: {
+      greek: '希腊/字母',
+      operators: '运算',
+      structure: '结构',
+      markup: '标注/矩阵',
+    },
+  },
+
   /* ── 应用 UI ── */
   ui: {
     open: '打开',
