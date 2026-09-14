@@ -9,7 +9,7 @@
  * 纯展示 + 键盘：候选、高亮、分组全部本地算；执行交给父组件（emit run / pick），
  * 这样命令动作仍集中在 App.vue（不在这散落业务逻辑）。
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
 import {
@@ -20,6 +20,7 @@ import {
   type CommandSpec,
 } from '../utils/commands'
 import { fuzzyMatch, fuzzyRank, highlightSegments } from '../utils/fuzzy'
+import { getBinding, getShortcutsVersion, onShortcutsChange } from '../shortcuts'
 
 const props = defineProps<{
   mode: 'commands' | 'files'
@@ -37,6 +38,12 @@ const L = t.palette
 
 const query = ref('')
 const activeIndex = ref(0)
+/** 键位版本：让键帽显示随「快捷键设置」的改动实时刷新 */
+const scVer = ref(getShortcutsVersion())
+const unsubSc = onShortcutsChange(() => {
+  scVer.value = getShortcutsVersion()
+})
+onBeforeUnmount(unsubSc)
 const inputEl = ref<HTMLInputElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
 
@@ -46,6 +53,8 @@ function commandLabel(id: string): string {
 }
 
 const commandGroups = computed(() => {
+  // 依赖键位版本：面板开着时在「快捷键设置」改了键，显示的键帽也要跟着变
+  void scVer.value
   const q = query.value.trim()
   const blocks: { group: CommandGroup; rows: { id: CommandId; keys?: string; flat: number; positions: number[] }[] }[] = []
   // flat = 跨分组的全局序号。高亮 / 键盘索引 / aria-activedescendant 一律以它为准——
@@ -58,7 +67,13 @@ const commandGroups = computed(() => {
     if (ranked.length === 0) continue
     blocks.push({
       group,
-      rows: ranked.map((r) => ({ id: r.item.id as CommandId, keys: r.item.keys, positions: r.positions, flat: flat++ })),
+      // 键位取**当前生效值**（用户可在「快捷键设置」里改），而非命令表里的默认值
+      rows: ranked.map((r) => ({
+        id: r.item.id as CommandId,
+        keys: getBinding(r.item.id as CommandId),
+        positions: r.positions,
+        flat: flat++,
+      })),
     })
   }
   return blocks

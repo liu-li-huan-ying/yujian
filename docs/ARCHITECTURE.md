@@ -1562,6 +1562,31 @@ export interface SessionState {
 * **测试**：`test-core.mjs` `[Q]` 段 11 条。⚠️ **只断言不变量**（区间有效、`text === text.slice(start,end)`、按序不重叠、偏移必落在区间内、越界与空白返回 `null`、英文整词可切出、双字回退生效且不越界合并），**不断言具体中文切分结果**——ICU 版本升级会微调词典，硬断言会假红。
 * **效果预览**：`docs/preview/cjk-word-select.html`（可改示例文本、点任意字，上下对照「原生整段选中」与「按词选中」，含偏移 / 长度 / 内容读数）。
 
+## 5.31 Phase 3 批次四（六）：快捷键自定义（2026-09-12，已落地）
+
+> 规格：`PHASE3-UI-DESIGN.md` §4.7。计划验收：**命令面板可搜到全部功能，且键位可自定义**。
+
+* **单一事实来源（本批次的核心决策）**：默认键位**只写在 `src/utils/commands.ts` 的 `keys` 字段**，不再有第二份表。
+  * 原先 `App.vue` 的 `onKeydown` 是一串 `if (k === 's') / 'o' / '\\' / '/'` 硬编码分支，HelpPanel 里还手抄了一份键位表 —— 键位一旦可配，手抄表必然过期，两处必然打架。**故 HelpPanel 的「快捷键」标签页整体删除**（连同其 i18n 键），键位只在「快捷键设置」一处展示。
+  * `src/shortcuts.ts` 的 `DEFAULT_BINDINGS` 由 `COMMANDS` **派生**（只取能解析的，写错的默认值不会让应用起不来），不另存一份默认表。
+  * 搜索三件套（`Ctrl+F` / `F3` / `Shift+F3`）此前也硬编码在 `onKeydown`，现提成正式命令 `view.search` / `view.nextHit` / `view.prevHit`，与其它命令一视同仁可配。
+* **纯函数层** `src/utils/keymap.ts`（零依赖，可 Node 单测）：`parseCombo` / `formatCombo` / `normalizeCombo` / `normalizeKey` / `isBindable` / `eventToCombo` / `eventMatches`。
+  * **为什么必须先归一**：键位可配之后必须有一个**唯一标准形**，否则 `Ctrl+Shift+P`、`shift+ctrl+p`、`Ctrl+P+Shift` 会存成三条互相冲突的记录，匹配时还会漏。规范串固定 `Ctrl+Alt+Shift+Key` 顺序，可直接当 Map 键 / 存储值 / 相等比较。
+  * **`isBindable` 是安全底线**：只按一个字母（如 `A`）不能作为全局快捷键 —— 那会让人打不出字。要求**带 Ctrl 或 Alt，或本身是 F1~F12**；单独 Shift 不算修饰（避免 `Shift+A`＝大写 A 被当成快捷键）。
+  * 两个刻意的简化：**Ctrl 与 Cmd 归一**（`ctrlKey || metaKey`，与既有实现一致，显示统一为 `Ctrl`）；**主键取 `e.key` 而非 `e.code`**（与既有 `onKeydown` 一致，不引入键盘布局差异的第二套语义）。
+* **状态层** `src/shortcuts.ts`：默认值 + 用户覆盖 + 冲突判定 + 持久化。
+  * **只存覆盖**（`localStorage: yujian.shortcuts`）：默认值改了、用户没碰过的命令会跟着走，不会出现「升级后旧键位被钉死」。覆盖值 `''` 表示**显式解绑**，区别于「未设置 = 用默认值」。
+  * **冲突三态** `Conflict`：撞到别的命令（`command`）→ **默认不生效**并报出占用者，由 UI 问过用户后再以 `steal: true` 抢占（抢占时把原主人的键位清空，保证一条键位只有一个主人，不留两个主人）；撞到 `reserved` → **steal 也抢不走**。
+  * `RESERVED` 分三类原因：`app`（打开设置本身的入口 `Ctrl+K` / `Ctrl+Shift+P`，放出去会出现「把入口键改掉就再也进不来」的死锁）、`system`（Electron / 浏览器 / 系统先手，拦不到或拦了会破坏基本操作）、`editor`（编辑器正文正在用，占用后正文里该键失效）。
+  * **读盘与写入同标准**：`localStorage` 是用户可手改的，故 `loadShortcuts` 除「可解析」外还要 `isBindable` —— 否则塞一个裸字母进来就会进派发表，正文里每按该字母都触发命令且 `preventDefault`。未知命令 / 非字符串 / 不可解析 / 不可绑定一律丢弃。
+  * **零 Vue 依赖**：状态变更走 `onShortcutsChange` 订阅 + `getShortcutsVersion()` 版本号，组件把版本号顶进 `ref` 触发 `computed` 重算；存储后端可注入（`setShortcutsStorage`）以便单测。
+* **接线** `src/App.vue`：`onKeydown` 改为**查表派发** —— `eventToCombo(e)` → `buildDispatchTable()` 取命令 id → `commandActions[id]()`，不再有任何 `if (k === …)`。派发表是 `computed`，随键位改动实时重建（改完立刻生效，**无需重启**）。
+  * `Esc` 不进键位表：它是**上下文相关的「退出」动作**（关面板 / 掀帘 / 退出凝神），不是一条命令。
+  * 命令面板 / 快速打开（`onPaletteHotkey`）仍走硬编码捕获路径，与 `RESERVED` 的 `app` 类一致。
+* **UI** `src/components/ShortcutsSettings.vue`：命令名（左）· 键位胶囊（中）· 重置（右）；点胶囊进入录入态（**捕获阶段接管并 `stopPropagation`**，免得被全局快捷键抢走；`Tab` 放行不困住键盘用户；`Esc` 取消、`Delete` / `Backspace` 清除绑定）；命中冲突在行下方给 `--hue-danger` 红字 + 「替换 / 取消」；可按命令名 / 命令 id 过滤；分组与命令面板同源（`groupCommands`）。底部「全部恢复默认」带二次确认，并单列「固定键位」（只列 `app` 类）。
+  * 入口：`F1` 以及命令 `settings.shortcuts`。帮助面板（`HelpPanel.vue`）缩为**使用指南 + 关于**，`?` 与「关于」都指向它。
+* **测试**：`test-core.mjs` `[R]` 段 21 条（归一化顺序/大小写/Cmd≡Ctrl、F 键与命名键、非法输入一律 `null`、`isBindable` 边界、只按修饰键不成键、匹配只认相等、默认键位来自命令目录且避开保留键位、覆盖/冲突/抢占/保留键位抢不走、解绑 ≠ 默认、重置单个与全部、派发表随覆盖变化、持久化往返、脏数据清洗、订阅通知，以及 3 条**安全不变量**：默认键位全部可绑定、派发表只含可绑定组合、存储里的裸字母会被丢弃）。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash

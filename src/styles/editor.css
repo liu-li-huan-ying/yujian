@@ -798,8 +798,10 @@
 .milkdown .ProseMirror .yj-wikilink__label:hover {
   background-image: linear-gradient(
     180deg,
-    rgba(var(--hue-accent), 0.22) 0%,
-    rgba(var(--hue-accent), 0.1) 100%
+    /* ⚠️ 必须用三元组令牌：`--hue-accent` 是完整色值（#5fa8a0），
+       写成 rgba(var(--hue-accent), .22) 整条声明会被浏览器丢弃 —— 悬停底色一直是失效的。 */
+    rgba(var(--hue-tint-2), 0.22) 0%,
+    rgba(var(--hue-tint-2), 0.1) 100%
   );
   border-color: var(--hue-accent);
   color: var(--hue-accent);

@@ -53,8 +53,9 @@ Visually, YuJian speaks the language of **jade** — a jade-textured framework, 
 ### Title bar & help
 
 * **Icon toolbar (redesigned)** — three semantic groups: File / Vault (new · switch vault · open) ｜ View / Layout (WYSIWYG⇄source segmented · sidebar · outline) ｜ Share / Tools (export ⌄ · appearance · more ⌄ · help ?). Low-frequency actions live in dropdowns. Window controls are self-drawn on Windows only; macOS yields to native traffic lights.
-* **Help panel** — title-bar "?" or `F1` opens a glass panel with **Shortcuts** and **Guide** tabs: shortcuts grouped by File / View / Commands / Search / General as `kbd` capsules; a 10-step illustrated quick start.
-* **Command palette (unified entry)** — `Ctrl/Cmd+Shift+P` opens the command palette, `Ctrl/Cmd+K` quick-opens a note: almost any action is a keystroke away (open vault, toggle outline / graph, enter focus, export, switch skin…) — the fastest entry now that panels have multiplied; the activity bar triggers it too.
+* **Customizable shortcuts (settings panel)** — press `F1` or the command palette's "Shortcuts" to open a dedicated settings panel: every command is listed with its current key-cap on the right; click a cap to capture the next key combo (`Esc` cancels, `Delete`/`Backspace` unbinds). A clash with another command can be stolen in one click; clashes with reserved system keys (`Ctrl+N/T/W`, print, `F5/F11/F12`, dev tools…) or editor keys (`Ctrl+C/V/Z/B/I`…) are blocked so basic operations stay intact. Default bindings live in exactly one place (the `keys` field of the command registry in `commands.ts`); the command-palette caps and the runtime dispatch both read from it, so the two can never drift; only overrides are stored and `''` means an explicit unbind, so defaults follow upgrades.
+* **Help panel (Guide + About)** — the title-bar "?" opens a glass panel with **Guide** and **About** tabs: the Guide is a 10-step illustrated quick start; the About page shows the version and a short intro. **The keybinding list has moved to the Shortcuts settings panel above** (a hand-written list would go stale the moment bindings become customizable, so it was removed to keep a single source of truth).
+* **Command palette (unified entry)** — `Ctrl/Cmd+Shift+P` opens the command palette, `Ctrl/Cmd+K` quick-opens a note: almost any action is a keystroke away (open vault, toggle outline / graph, enter focus, export, switch skin, open the shortcuts settings…) — the fastest entry now that panels have multiplied; the activity bar triggers it too.
 
 ### Personal knowledge management (PKM) · new in v2.0.0
 
@@ -152,9 +153,9 @@ v1 collapses the earlier fragmentation (export dropdown, more dropdown, and abou
 
 No more "shove a text button wherever". Three semantic icon groups: File / Vault ｜ View / Layout ｜ Share / Tools. Dividers mark group boundaries; 28×28 icon targets meet touch; active state uses accent + jade highlight echoing the segmented control's "on". The whole bar is draggable (`-webkit-app-region: drag`); self-drawn window buttons render on Windows only (macOS yields 78px to native lights).
 
-### ② F1 help panel — shortcuts + guide
+### ② F1 opens the Shortcuts settings · "?" opens Help
 
-`F1` opens it directly (a prior key-guard bug that swallowed F1 is fixed). Glass panel with Shortcuts / Guide tabs; ↑↓ to choose, Enter to run, Esc to close; keys fixed, descriptions localized, bilingual.
+`F1` opens the **Shortcuts settings panel** directly (a prior key-guard bug that swallowed F1 is fixed): it lists every command and lets you rebind each one — the entry point for keyboard users to review and remap. Help (Guide + About) moved to the title-bar "?" button: a glass panel with two tabs, ↑↓ to choose, Enter to run, Esc to close, bilingual. The hand-written keybinding list that used to live in Help is gone (it would go stale once bindings are customizable; the Shortcuts panel is now the single source of truth).
 
 ### ③ Block handles — consistent left rail, never covers text
 

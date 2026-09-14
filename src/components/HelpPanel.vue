@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+/**
+ * 帮助面板：使用指南 + 关于。
+ *
+ * 原「快捷键」标签页已移除 —— 那里是一份手抄的键位表，键位可自定义后它必然过期，
+ * 且与「快捷键设置」面板重复。键位的唯一真相现在只在 `src/shortcuts.ts`，
+ * 展示也统一在 `ShortcutsSettings.vue`（F1 直达）。
+ */
+import { ref } from 'vue'
 import { useI18n } from '../i18n'
 import Icon from './Icon.vue'
 
@@ -7,16 +14,12 @@ const { t } = useI18n()
 const L = t.ui
 const H = t.help
 
-const props = defineProps<{
-  /** 初始标签页：shortcuts（快捷键）| guide（使用指南） */
-  initial?: 'shortcuts' | 'guide'
+defineProps<{
   /** 应用版本号（来自主进程，动态显示，避免硬编码过时版本） */
   version?: string
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
-
-const tab = ref<'shortcuts' | 'guide'>(props.initial ?? 'shortcuts')
 
 /** 浅色模式下切换为柔和浅色玻璃（与 AppearanceSettings 同款），避免深玻璃压在亮色界面上 */
 const rootMode = ref(
@@ -24,44 +27,6 @@ const rootMode = ref(
     ? (document.documentElement.dataset.mode as 'light' | 'dark' | undefined)
     : undefined
 )
-
-/** 快捷键分组：键位写死（非本地化），描述为本地化文案 */
-const groups = computed(() => [
-  {
-    title: H.scFile,
-    items: [
-      { keys: ['Ctrl', 'O'], desc: H.scOpen },
-      { keys: ['Ctrl', 'S'], desc: H.scSave }
-    ]
-  },
-  {
-    title: H.scView,
-    items: [
-      { keys: ['Ctrl', '\\'], desc: H.scSidebar },
-      { keys: ['Ctrl', 'Shift', '\\'], desc: H.scOutline },
-      { keys: ['Ctrl', '/'], desc: H.scMode }
-    ]
-  },
-  {
-    title: H.scCmd,
-    items: [
-      { keys: ['Ctrl', 'Shift', 'P'], desc: H.scPalette },
-      { keys: ['Ctrl', 'K'], desc: H.scQuickOpen }
-    ]
-  },
-  {
-    title: H.scSearch,
-    items: [{ keys: ['Ctrl', 'F'], desc: H.scFind }]
-  },
-  {
-    title: H.scFocus,
-    items: [{ keys: ['Esc'], desc: H.scFocusEsc }]
-  },
-  {
-    title: H.scGeneral,
-    items: [{ keys: ['F1'], desc: H.scHelp }]
-  }
-])
 </script>
 
 <template>
@@ -74,44 +39,8 @@ const groups = computed(() => [
         </button>
       </header>
 
-      <!-- 标签页 -->
-      <div class="tabs" role="tablist">
-        <button
-          class="tabs__item"
-          :class="{ 'tabs__item--on': tab === 'shortcuts' }"
-          role="tab"
-          :aria-selected="tab === 'shortcuts'"
-          @click="tab = 'shortcuts'"
-        >
-          {{ H.tabShortcuts }}
-        </button>
-        <button
-          class="tabs__item"
-          :class="{ 'tabs__item--on': tab === 'guide' }"
-          role="tab"
-          :aria-selected="tab === 'guide'"
-          @click="tab = 'guide'"
-        >
-          {{ H.tabGuide }}
-        </button>
-      </div>
-
       <div class="hp__scroll">
-        <!-- 快捷键 -->
-        <div v-if="tab === 'shortcuts'" class="hp__body">
-          <section v-for="g in groups" :key="g.title" class="scgrp">
-            <h4 class="scgrp__title">{{ g.title }}</h4>
-            <div v-for="it in g.items" :key="it.desc" class="scrow">
-              <span class="scrow__desc">{{ it.desc }}</span>
-              <span class="scrow__keys">
-                <kbd v-for="k in it.keys" :key="k" class="kbd">{{ k }}</kbd>
-              </span>
-            </div>
-          </section>
-        </div>
-
-        <!-- 使用指南 -->
-        <div v-else class="hp__body">
+        <div class="hp__body">
           <h3 class="guide__title">{{ H.guideTitle }}</h3>
           <p class="guide__intro">{{ H.guideIntro }}</p>
           <section v-for="(s, i) in H.guideSections" :key="i" class="guide__sec">
@@ -184,36 +113,6 @@ const groups = computed(() => [
   color: var(--hue-text-1);
 }
 
-/* ── 标签页 ── */
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
-  padding: 3px;
-  border-radius: 8px;
-  background: var(--hue-highlight);
-  border: 1px solid var(--hue-border-subtle);
-}
-
-.tabs__item {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: 12.5px;
-  padding: 6px 0;
-  color: var(--hue-text-3);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
-}
-
-.tabs__item--on {
-  background: var(--hue-accent);
-  color: var(--hue-on-accent);
-  font-weight: 500;
-}
-
 /* ── 内容滚动区 ── */
 .hp__scroll {
   min-height: 0;
@@ -223,63 +122,6 @@ const groups = computed(() => [
 
 .hp__body {
   padding: 2px 2px 4px;
-}
-
-/* ── 快捷键 ── */
-.scgrp {
-  margin-bottom: 16px;
-}
-
-.scgrp__title {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--hue-text-3);
-}
-
-.scrow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  color: var(--hue-text-1);
-}
-
-.scrow:hover {
-  background: var(--bg-hover);
-}
-
-.scrow__desc {
-  flex: 1;
-}
-
-.scrow__keys {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 5px;
-  background: var(--hue-surface-2);
-  border: 1px solid var(--hue-border-subtle);
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.12);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--hue-text-2);
-  line-height: 1;
 }
 
 /* ── 使用指南 ── */

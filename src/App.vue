@@ -8,6 +8,7 @@ import EditorHost from './editor/EditorHost.vue'
 import ImgHostSettings from './components/ImgHostSettings.vue'
 import AppearanceSettings from './components/AppearanceSettings.vue'
 import PreferencesSettings from './components/PreferencesSettings.vue'
+import ShortcutsSettings from './components/ShortcutsSettings.vue'
 import Outline from './components/Outline.vue'
 import HelpPanel from './components/HelpPanel.vue'
 import TabBar from './components/TabBar.vue'
@@ -30,6 +31,12 @@ import CompilePanel from './components/CompilePanel.vue'
 import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import { initTypography } from './typography'
+import { eventToCombo, formatCombo } from './utils/keymap'
+import {
+  buildDispatchTable,
+  getShortcutsVersion,
+  onShortcutsChange,
+} from './shortcuts'
 import type { EditorMode } from './editor/EditorHost.vue'
 import type {
   FileNode,
@@ -466,30 +473,26 @@ async function saveFileAs(): Promise<void> {
   void window.api.patchSession({ activePath: picked, openTabs: tabs.paths })
 }
 
+/**
+ * 键位 → 命令 的派发表，随「快捷键设置」的改动实时重建。
+ * 键位的真相只在 `src/shortcuts.ts`（默认表在 `utils/commands.ts` 的 `keys`），
+ * 这里不再写任何 `if (k === 's')` 式的硬编码分支 —— 那种写法既不可配，也会随命令增多失控。
+ */
+const scVersion = ref(getShortcutsVersion())
+const dispatch = computed(() => {
+  void scVersion.value
+  return buildDispatchTable()
+})
+let unsubShortcuts: (() => void) | null = null
+
 function onKeydown(e: KeyboardEvent): void {
   // 命令面板 / 快速打开是模态，开启时让位：其余全局快捷键不抢面板焦点（Esc 由面板自身处理）
   if (paletteMode.value !== null) return
-  // 无需修饰键的全局快捷键：F1 打开帮助/快捷键面板。
-  // 必须放在修饰键守卫之前，否则 !(ctrlKey||metaKey) 会直接 return，F1 毫无反应。
-  if (e.key === 'F1') {
-    e.preventDefault()
-    onHelp('shortcuts')
-    return
-  }
-  // Ctrl/Cmd+F：聚焦左侧搜索框（顶栏搜索已移除，统一在侧栏搜索，支持全库 / 本文档双范围）
-  if (e.key.toLowerCase() === 'f' && (e.ctrlKey || e.metaKey)) {
-    e.preventDefault()
-    sidebarRef.value?.focusSearch()
-    return
-  }
-  // F3 / Shift+F3：上一处 / 下一处搜索命中（侧栏搜索循环导航）
-  if (e.key === 'F3') {
-    e.preventDefault()
-    if (e.shiftKey) sidebarRef.value?.prevHit()
-    else sidebarRef.value?.nextHit()
-    return
-  }
+  // 快捷键设置正在录入键位：一切交给面板（它在捕获阶段接管，这里是兜底）
+  if (showShortcuts.value) return
+
   // Esc 状态机（凝神 2.0）：设置面板开着先关面板；否则凝神中 Esc = 掀帘/收帘（轻退栏可在设置中关闭）。
+  // Esc 是上下文相关的「退出」动作（关面板 / 掀帘 / 退出凝神），不是一条命令，故不进键位表、不可自定义。
   if (e.key === 'Escape') {
     if (zenSettingsOpen.value) {
       zenSettingsOpen.value = false
@@ -503,23 +506,13 @@ function onKeydown(e: KeyboardEvent): void {
       return
     }
   }
-  if (!(e.ctrlKey || e.metaKey)) return
-  const k = e.key.toLowerCase()
-  if (k === 's') {
-    e.preventDefault()
-    void saveFile()
-  } else if (k === 'o') {
-    e.preventDefault()
-    void openFile()
-  } else if (k === '\\') {
-    e.preventDefault()
-    // Ctrl+\ 切左侧笔记库；Ctrl+Shift+\ 切右侧大纲
-    if (e.shiftKey) onToggleOutline()
-    else onToggleSidebar()
-  } else if (e.key === '/') {
-    e.preventDefault()
-    requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'
-  }
+
+  const combo = eventToCombo(e)
+  if (!combo) return
+  const id = dispatch.value.get(formatCombo(combo))
+  if (!id) return
+  e.preventDefault()
+  commandActions[id]()
 }
 
 /* ── 导出（HTML / PDF）── */
@@ -558,17 +551,18 @@ function onPreferences(): void {
   showPreferences.value = true
 }
 
-/* ── 帮助面板（快捷键 + 使用指南）── */
+/* ── 帮助面板（使用指南与关于；键位清单在「快捷键设置」）── */
 
 const showHelp = ref(false)
-const helpTab = ref<'shortcuts' | 'guide'>('shortcuts')
 /** 应用版本号（来自主进程，动态显示，避免「关于」面板硬编码过时版本） */
 const appVersion = ref('2.1.0')
 
-function onHelp(tab: 'shortcuts' | 'guide' = 'shortcuts'): void {
-  helpTab.value = tab
+function onHelp(): void {
   showHelp.value = true
 }
+
+/* ── 快捷键设置（批次四：键位可配，UI-DESIGN §4.7）── */
+const showShortcuts = ref(false)
 
 /** 切换启动偏好并持久化（下次启动生效） */
 function onStartupMode(next: StartupMode): void {
@@ -660,6 +654,8 @@ const paletteMode = ref<'commands' | 'files' | null>(null)
  * 面板已开时再按同键 = 关闭（VS Code 行为）。
  */
 function onPaletteHotkey(e: KeyboardEvent): void {
+  // 快捷键设置正在录入键位：Ctrl+K / Ctrl+Shift+P 也照常被录进去，不抢
+  if (showShortcuts.value) return
   if (!(e.ctrlKey || e.metaKey)) return
   const k = e.key.toLowerCase()
   const wantCommands = k === 'p' && e.shiftKey
@@ -683,6 +679,9 @@ const commandActions: Record<CommandId, () => void> = {
   'view.focus': () => onToggleFocus(),
   'view.toggleMode': () => (requestedMode.value = requestedMode.value === 'wysiwyg' ? 'source' : 'wysiwyg'),
   'view.stats': () => onToggleStats(),
+  'view.search': () => sidebarRef.value?.focusSearch(),
+  'view.nextHit': () => sidebarRef.value?.nextHit(),
+  'view.prevHit': () => sidebarRef.value?.prevHit(),
   'knowledge.tags': () => onViewToggle('tags'),
   'knowledge.moc': () => onToggleMoc(),
   'knowledge.backlinks': () => onViewToggle('backlinks'),
@@ -702,8 +701,8 @@ const commandActions: Record<CommandId, () => void> = {
   'export.publishImages': () => void onPublishImages(),
   'settings.appearance': () => onAppearance(),
   'settings.preferences': () => onPreferences(),
-  'settings.shortcuts': () => onHelp('shortcuts'),
-  'settings.guide': () => onHelp('guide'),
+  'settings.shortcuts': () => (showShortcuts.value = true),
+  'settings.guide': () => onHelp(),
   'settings.toggleLocale': () => toggleLocale(),
 }
 
@@ -1162,6 +1161,10 @@ onMounted(async () => {
   initTypography()
 
   window.api.onVaultChange(onVaultChange)
+  // 键位改动后重建派发表（「快捷键设置」里改完立刻生效，无需重启）
+  unsubShortcuts = onShortcutsChange(() => {
+    scVersion.value = getShortcutsVersion()
+  })
   window.addEventListener('keydown', onKeydown)
   // 命令面板 / 快速打开：捕获阶段拦截，先于编辑器 keymap 拿到 Ctrl+K / Ctrl+Shift+P
   window.addEventListener('keydown', onPaletteHotkey, true)
@@ -1201,6 +1204,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  unsubShortcuts?.()
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('keydown', onPaletteHotkey, true)
   window.removeEventListener('resize', onResize)
@@ -1249,8 +1253,8 @@ onBeforeUnmount(() => {
       @writing-aids="writingAidsOpen = true"
       @save="saveFile"
       @save-as="saveFileAs"
-      @help="onHelp('shortcuts')"
-      @about="onHelp('guide')"
+      @help="onHelp()"
+      @about="onHelp()"
       :focus-active="focusMode"
       @toggle-focus="onToggleFocus"
     />
@@ -1521,7 +1525,8 @@ onBeforeUnmount(() => {
   />
 
   <!-- 帮助面板（快捷键 + 使用指南）-->
-  <HelpPanel v-if="showHelp" :initial="helpTab" :version="appVersion" @close="showHelp = false" />
+  <HelpPanel v-if="showHelp" :version="appVersion" @close="showHelp = false" />
+  <ShortcutsSettings v-if="showShortcuts" @close="showShortcuts = false" />
 
   <!-- 导出前预览（玻璃浮层；HTML/PDF 渲染真实排版，LaTeX 显示源码）-->
   <ExportPreview

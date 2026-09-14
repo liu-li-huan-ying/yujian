@@ -37,6 +37,10 @@ export const COMMANDS = [
   { id: 'view.focus', group: 'view' },
   { id: 'view.toggleMode', group: 'view', keys: 'Ctrl+/' },
   { id: 'view.stats', group: 'view' },
+  // 搜索三件套：此前硬编码在 App.vue 的 onKeydown 里，用户无法改键；提成命令后一视同仁可配
+  { id: 'view.search', group: 'view', keys: 'Ctrl+F' },
+  { id: 'view.nextHit', group: 'view', keys: 'F3' },
+  { id: 'view.prevHit', group: 'view', keys: 'Shift+F3' },
 
   // ── 知识 ──
   { id: 'knowledge.tags', group: 'knowledge' },

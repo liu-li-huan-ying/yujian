@@ -1299,6 +1299,240 @@ const { createWordSelectPlugin } = await import((await bundle('src/editor/wordSe
 })).url)
 check('createWordSelectPlugin handles double click', typeof createWordSelectPlugin().spec?.props?.handleDoubleClick === 'function')
 
+/* ── R. 快捷键可配（src/utils/keymap.ts, src/shortcuts.ts） ── */
+section('[R] custom shortcuts -- combo normalization / conflict / persistence (src/utils/keymap.ts, src/shortcuts.ts)')
+const Km = await import((await bundle('src/utils/keymap.ts', 'keymap.mjs')).url)
+const Sc = await import((await bundle('src/shortcuts.ts', 'shortcuts.mjs')).url)
+const { normalizeCombo, parseCombo, isBindable, eventToCombo, eventMatches, normalizeKey, formatCombo } = Km
+
+// 假存储：状态隔离，测完不影响真实 localStorage
+function makeStore() {
+  const m = new Map()
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, String(v)),
+    removeItem: (k) => m.delete(k),
+    _m: m,
+  }
+}
+const store = makeStore()
+Sc.setShortcutsStorage(store)
+
+// 规范化：修饰键顺序 / 大小写 / Cmd 与 Ctrl 归一
+check('normalizeCombo: order + case + Cmd==Ctrl', (() => {
+  return normalizeCombo('shift+ctrl+p') === 'Ctrl+Shift+P'
+    && normalizeCombo('CTRL+S') === 'Ctrl+S'
+    && normalizeCombo('cmd+k') === 'Ctrl+K'
+    && normalizeCombo(' alt + / ') === 'Alt+/'
+})())
+
+// 规范化：F 键与命名键
+check('normalizeKey: F-keys and named keys', (() => {
+  return normalizeKey('f1') === 'F1'
+    && normalizeKey(' ') === 'Space'
+    && normalizeKey('Escape') === 'Esc'
+    && normalizeKey('/') === '/'
+})())
+
+// 非法输入一律 null：绝不让「半截键位」进存储
+check('parseCombo rejects malformed input', (() => {
+  return parseCombo('') === null
+    && parseCombo('Ctrl+') === null          // 只有修饰键
+    && parseCombo('Ctrl+Shift') === null     // 主键段是修饰键名
+    && parseCombo('Ctrl+Foo+Bar') === null   // 未知修饰键
+    && normalizeCombo('Ctrl++') === null
+})())
+
+// 可绑定性：光一个字母键不能当全局快捷键（否则打不出字）
+check('isBindable: bare letter no, Ctrl/F-key yes', (() => {
+  const a = parseCombo('A')
+  const b = parseCombo('Ctrl+A')
+  const f = parseCombo('F1')
+  const s = parseCombo('Shift+A')
+  return !!a && !!b && !!f && !!s
+    && isBindable(a) === false
+    && isBindable(b) === true
+    && isBindable(f) === true
+    && isBindable(s) === false
+})())
+
+// 事件 → 组合：只按修饰键不成键；meta 与 ctrl 同归一
+check('eventToCombo: modifiers-only null, meta==ctrl', (() => {
+  if (eventToCombo({ key: 'Shift', ctrlKey: false, metaKey: false, shiftKey: true, altKey: false }) !== null) return false
+  const a = eventToCombo({ key: 'p', ctrlKey: false, metaKey: true, shiftKey: true, altKey: false })
+  const b = eventToCombo({ key: 'p', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false })
+  return a !== null && b !== null && formatCombo(a) === formatCombo(b) && formatCombo(a) === 'Ctrl+Shift+P'
+})())
+
+// 匹配：同一组合不同写法都命中；不同修饰不命中
+check('eventMatches: matches equal combo only', (() => {
+  const c = parseCombo('Ctrl+Shift+P')
+  const yes = { key: 'P', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }
+  const no = { key: 'P', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false }
+  return eventMatches(c, yes) === true && eventMatches(c, no) === false
+})())
+
+// 默认键位来自命令目录（单一事实来源），且**不与保留键位相撞**
+check('default bindings come from command catalog and avoid reserved', (() => {
+  const reserved = new Set(Sc.RESERVED.map((r) => r.combo))
+  const vals = Object.values(Sc.DEFAULT_BINDINGS)
+  if (vals.length === 0) return false
+  if (vals.some((v) => reserved.has(v))) return false
+  // 默认表里不应有两条命令抢同一个键
+  return new Set(vals).size === vals.length
+    && Sc.DEFAULT_BINDINGS['file.open'] === 'Ctrl+O'
+    && Sc.DEFAULT_BINDINGS['view.search'] === 'Ctrl+F'
+})())
+
+// 默认 → 覆盖 → 读回：覆盖优先
+check('setBinding overrides default', (() => {
+  Sc.resetAllBindings()
+  if (Sc.getBinding('view.stats') !== undefined) return false
+  Sc.setBinding('view.stats', 'Ctrl+Shift+S')
+  return Sc.getBinding('view.stats') === 'Ctrl+Shift+S' && Sc.isCustomized('view.stats') === true
+})())
+
+// 冲突：撞别人的键默认不生效，并报出占用者
+check('setBinding refuses conflict and reports owner', (() => {
+  Sc.resetAllBindings()
+  Sc.setBinding('view.stats', 'Ctrl+Shift+S')
+  const r = Sc.setBinding('tool.backup', 'Ctrl+Shift+S')
+  if (r.ok !== false || r.conflict.kind !== 'command' || r.conflict.id !== 'view.stats') return false
+  return Sc.getBinding('tool.backup') === undefined
+})())
+
+// 抢占：steal 后新主人拿到键，原主人被清空（不留两个主人）
+check('setBinding steal moves the combo', (() => {
+  const r = Sc.setBinding('tool.backup', 'Ctrl+Shift+S', { steal: true })
+  return r.ok === true
+    && Sc.getBinding('tool.backup') === 'Ctrl+Shift+S'
+    && Sc.getBinding('view.stats') === undefined
+})())
+
+// 保留键位：即便 steal 也不能占（否则会锁死入口 / 破坏系统键）
+check('reserved combos cannot be taken even with steal', (() => {
+  const a = Sc.setBinding('view.stats', 'Ctrl+K', { steal: true })
+  const b = Sc.setBinding('view.stats', 'Ctrl+Shift+P', { steal: true })
+  const c = Sc.setBinding('view.stats', 'Ctrl+B', { steal: true })
+  return a.ok === false && b.ok === false && c.ok === false
+    && a.conflict.kind === 'reserved' && a.conflict.entry.reason === 'app'
+    && c.conflict.entry.reason === 'editor'
+})())
+
+// 不可绑定的输入被拒（只按一个字母键）
+check('setBinding rejects non-bindable combo', Sc.setBinding('view.stats', 'A').ok === false)
+
+// 解绑：显式清空 ≠ 用默认值
+check('unbind is distinct from default', (() => {
+  Sc.resetAllBindings()
+  Sc.setBinding('file.save', '')
+  return Sc.getBinding('file.save') === undefined
+    && Sc.isCustomized('file.save') === true
+    && Sc.getBinding('file.open') === 'Ctrl+O'
+})())
+
+// 重置：单个与全部
+check('resetBinding / resetAllBindings', (() => {
+  Sc.resetBinding('file.save')
+  if (Sc.getBinding('file.save') !== 'Ctrl+S' || Sc.isCustomized('file.save') !== false) return false
+  Sc.setBinding('view.stats', 'Ctrl+Shift+S')
+  Sc.resetAllBindings()
+  return Sc.getBinding('view.stats') === undefined && Sc.hasAnyCustomization() === false
+})())
+
+// 派发表：只含已绑定键位，且覆盖后立刻生效
+check('buildDispatchTable reflects overrides', (() => {
+  Sc.resetAllBindings()
+  const t1 = Sc.buildDispatchTable()
+  if (t1.get('Ctrl+O') !== 'file.open' || t1.get('F1') !== 'settings.shortcuts') return false
+  Sc.setBinding('file.open', 'Ctrl+Alt+O')
+  const t2 = Sc.buildDispatchTable()
+  Sc.resetAllBindings()
+  return t2.get('Ctrl+O') === undefined && t2.get('Ctrl+Alt+O') === 'file.open'
+})())
+
+// 持久化：写入后重新加载，覆盖仍在
+check('overrides persist across reload (injected storage)', (() => {
+  Sc.resetAllBindings()
+  Sc.setBinding('view.stats', 'Ctrl+Shift+S')
+  const raw = store.getItem('yujian.shortcuts')
+  if (!raw || !raw.includes('Ctrl+Shift+S')) return false
+  // 换一个等价存储喂回去（模拟重启后重新读盘）
+  const store2 = makeStore()
+  store2.setItem('yujian.shortcuts', raw)
+  Sc.setShortcutsStorage(store2)
+  const ok = Sc.getBinding('view.stats') === 'Ctrl+Shift+S'
+  Sc.resetAllBindings()
+  Sc.setShortcutsStorage(store)
+  return ok
+})())
+
+// 脏数据清洗：未知命令 / 非法键位 / 非字符串一律丢弃，不污染运行时
+check('dirty stored data is dropped on load', (() => {
+  const s = makeStore()
+  s.setItem('yujian.shortcuts', JSON.stringify({
+    'not.a.command': 'Ctrl+1',
+    'view.stats': 'Ctrl++',
+    'tool.backup': 42,
+    'file.save': 'Ctrl+Alt+S',
+  }))
+  Sc.setShortcutsStorage(s)
+  const ok = Sc.getBinding('file.save') === 'Ctrl+Alt+S'
+    && Sc.getBinding('view.stats') === undefined
+    && Sc.getBinding('tool.backup') === undefined
+  Sc.setShortcutsStorage(store)
+  Sc.resetAllBindings()
+  return ok
+})())
+
+// 变更订阅：改键位会通知（命令面板 / App 靠它刷新）
+check('onShortcutsChange notifies subscribers', (() => {
+  let n = 0
+  const off = Sc.onShortcutsChange(() => n++)
+  Sc.setBinding('view.stats', 'Ctrl+Shift+S')
+  off()
+  Sc.setBinding('view.stats', '')
+  Sc.resetAllBindings()
+  return n === 1
+})())
+
+// ⚠️ 最危险的失效面：默认表里若混进一个「裸字母」键位，全局派发会在正文里被每一次按键命中，
+// 既触发命令又 preventDefault，正文直接打不出字。故默认键位必须逐个满足 isBindable。
+check('every default binding is bindable (no bare letters)', (() => {
+  const ids = Object.keys(Sc.DEFAULT_BINDINGS)
+  if (ids.length === 0) return false
+  for (const id of ids) {
+    const c = Km.parseCombo(Sc.DEFAULT_BINDINGS[id])
+    if (!c || !Km.isBindable(c)) return false
+  }
+  return true
+})())
+
+// 派发表同理：它是 onKeydown 唯一的数据来源，里面必须只有可绑定的组合
+check('dispatch table only contains bindable combos', (() => {
+  Sc.resetAllBindings()
+  const table = Sc.buildDispatchTable()
+  if (table.size === 0) return false
+  for (const combo of table.keys()) {
+    const c = Km.parseCombo(combo)
+    if (!c || !Km.isBindable(c)) return false
+  }
+  return true
+})())
+
+// 存储可被手改：塞一个「可解析但不可绑定」的裸字母进去，必须被丢弃——
+// 否则它会进派发表，于是正文里按 a 就触发命令（还 preventDefault，字都打不出来）
+check('stored non-bindable override (bare letter) is dropped on load', (() => {
+  const s = makeStore()
+  s.setItem('yujian.shortcuts', JSON.stringify({ 'view.stats': 'A' }))
+  Sc.setShortcutsStorage(s)
+  const got = Sc.getBinding('view.stats')
+  const table = Sc.buildDispatchTable()
+  Sc.setShortcutsStorage(store)
+  Sc.resetAllBindings()
+  return got === undefined && table.has('A') === false
+})())
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')
