@@ -32,6 +32,7 @@ import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import { initTypography } from './typography'
 import { eventToCombo, formatCombo } from './utils/keymap'
+import { resolvePaletteHotkey } from './utils/paletteHotkey'
 import {
   buildDispatchTable,
   getShortcutsVersion,
@@ -646,12 +647,9 @@ const paletteMode = ref<'commands' | 'files' | null>(null)
 function onPaletteHotkey(e: KeyboardEvent): void {
   // 快捷键设置正在录入键位：Ctrl+K / Ctrl+Shift+P 也照常被录进去，不抢
   if (showShortcuts.value) return
-  if (!(e.ctrlKey || e.metaKey)) return
-  const k = e.key.toLowerCase()
-  const wantCommands = k === 'p' && e.shiftKey
-  const wantFiles = k === 'k' && !e.shiftKey
-  if (!wantCommands && !wantFiles) return
-  paletteMode.value = paletteMode.value === null ? (wantCommands ? 'commands' : 'files') : null
+  const next = resolvePaletteHotkey(e, paletteMode.value)
+  if (next === undefined) return // 不归命令面板管，放行给编辑器
+  paletteMode.value = next
   e.preventDefault()
   e.stopPropagation()
 }

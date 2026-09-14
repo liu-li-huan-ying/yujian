@@ -1,13 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import {
-  SIDEBAR_MAX,
-  SIDEBAR_MIN,
-  type FileNode,
-  type SearchFileResult,
-  type SearchResult,
-} from '../../electron/shared/ipc-channels'
+import { computed, ref, watch } from 'vue'
+import { SIDEBAR_MAX, SIDEBAR_MIN, type FileNode } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
+import { useSidebarSearch } from '../composables/useSidebarSearch'
 import { markProgrammatic, assetsPathOf } from '../refreshGuard'
 import { baseName } from '../utils/path'
 import FileTree from './FileTree.vue'
@@ -84,224 +79,54 @@ const moveState = ref<{ node: FileNode } | null>(null)
 const toast = ref<{ msg: string } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-/* ── 搜索：双范围（全部 / 本文档）共用同一套逻辑 ──
-   两种范围共用一个搜索框与「区分大小写 / 全词匹配」选项，且复用主进程同一套
-   searchVault / replaceInVault：区别只在范围——「本文档」把当前文档路径作为
-   file 参数传入（只搜该单文件、不递归），「全部」则递归全库。结果统一用
-   SearchResults 渲染、点击跳转定位行，无需为两种范围各写一套 UI。 */
+/* ── 搜索 + 替换（双范围：全部 / 本文档共用一套）──
+   两种范围共用一个搜索框与「区分大小写 / 全词匹配 / 正则」选项，且复用主进程同一套
+   searchVault / replaceInVault：区别只在范围——「本文档」把当前文档路径作为 file 参数
+   传入（只搜该单文件、不递归），「全部」则递归全库。结果统一用 SearchResults 渲染、
+   点击跳转定位行，无需为两种范围各写一套 UI。
+   状态与交互（防抖、跨文件扁平化、循环导航、替换后行号重推导）已抽到
+   `useSidebarSearch`：既给本文件减重，也让这部分逻辑可被断言。此处只做依赖注入。 */
 
-const searchScope = ref<'vault' | 'doc'>('vault')
-const searchQuery = ref('')
-const isSearching = ref(false)
-/** 搜索整体响应（命中列表 + 是否因过多被截断）；searchResults 取其中的命中列表供 UI 渲染 */
-const searchResponse = ref<SearchResult>({ results: [], truncated: false })
-const searchResults = computed<SearchFileResult[]>(() => searchResponse.value.results)
-const searchTruncated = computed<boolean>(() => searchResponse.value.truncated)
-const caseSensitive = ref(false)
-const wholeWord = ref(false)
-const useRegex = ref(false)
+/** 搜索输入框的 DOM 引用：由本组件持有（模板 `ref="searchInput"` 绑定），聚焦动作注入给 composable */
+const searchInput = ref<HTMLInputElement | null>(null)
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null
-
-/** 当前结果高亮所在行（点结果时更新，用于源码模式强化当前命中）；undefined 表示无 */
-const currentFindLine = ref<number | undefined>(undefined)
-
-/** 跨文件扁平化全部命中，供「第 N / 共 M」计数与循环导航 */
-const flatHits = computed<{ path: string; line: number }[]>(() =>
-  searchResults.value.flatMap((f) => f.hits.map((h) => ({ path: f.path, line: h.line }))),
-)
-/** 当前选中的命中序号（-1 表示未选）；导航与计数据此推进 */
-const currentIndex = ref(-1)
-
-/** 跳到指定命中并定位（打开文档 + 滚动到行 + 高亮当前命中），序号按列表长度取模实现循环 */
-function gotoHit(i: number): void {
-  const list = flatHits.value
-  if (!list.length) return
-  const idx = ((i % list.length) + list.length) % list.length
-  currentIndex.value = idx
-  const hit = list[idx]
-  currentFindLine.value = hit.line
-  syncFindHighlight()
-  onOpenResult(hit.path, hit.line)
-}
-
-/** 下一处 / 上一处（循环） */
-function nextHit(): void {
-  if (!flatHits.value.length) return
-  gotoHit(currentIndex.value < 0 ? 0 : currentIndex.value + 1)
-}
-function prevHit(): void {
-  if (!flatHits.value.length) return
-  gotoHit(currentIndex.value < 0 ? flatHits.value.length - 1 : currentIndex.value - 1)
-}
-
-/** 当前范围对应的检索文件：本文档范围传 activePath，全库范围不传（递归全库） */
-function scopeFile(): string | undefined {
-  return searchScope.value === 'doc' ? (props.activePath ?? undefined) : undefined
-}
-
-/**
- * 驱动两端命中高亮：只要有查询且已打开文档，就把 query/选项/当前行抛给编辑器
- * （EditorHost 同时转发给源码模式 CodeMirror 装饰 + 所见即所得 ProseMirror 装饰，
- * 两种范围都高亮——全库范围也会高亮当前打开文档内的全部命中）；
- * 其余情况（无查询 / 无文档）抛 null 清空高亮。本地计算无需等 IPC 结果，即时生效。
- */
-function syncFindHighlight(): void {
-  if (searchQuery.value.trim() && props.activePath) {
-    emit('find-highlight', {
-      query: searchQuery.value.trim(),
-      opts: {
-        caseSensitive: caseSensitive.value,
-        wholeWord: wholeWord.value,
-        regex: useRegex.value,
-      },
-      currentLine: currentFindLine.value,
-    })
-  } else {
-    emit('find-highlight', null)
-  }
-}
-
-/** 执行真正的 IPC 搜索（无防抖，供输入防抖与替换后即时刷新复用） */
-async function executeSearch(): Promise<void> {
-  const query = searchQuery.value.trim()
-  if (!query || (searchScope.value === 'doc' && !props.activePath) || !props.vaultPath) {
-    searchResponse.value = { results: [], truncated: false }
-    isSearching.value = false
-    return
-  }
-  isSearching.value = true
-  try {
-    searchResponse.value = await window.api.searchVault(
-      props.vaultPath,
-      query,
-      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
-      scopeFile(),
-    )
-  } catch (e) {
-    showToast(errMsg(e))
-    searchResponse.value = { results: [], truncated: false }
-  } finally {
-    isSearching.value = false
-  }
-}
-
-/** 输入防抖搜索：连续输入不每次重扫整个库 */
-function runSearch(): void {
-  if (searchTimer) clearTimeout(searchTimer)
-  // 防抖：连续输入不每次重扫整个库
-  searchTimer = setTimeout(() => void executeSearch(), 300)
-}
-
-/** 搜索输入 / 选项 / 范围 / 当前文档 任一变化 → 重跑搜索并同步源码高亮 */
-watch(
-  [
-    searchQuery,
-    caseSensitive,
-    wholeWord,
-    useRegex,
-    searchScope,
-    () => props.activePath,
-    () => props.vaultPath,
-  ],
-  () => {
-    currentIndex.value = -1
-    runSearch()
-    syncFindHighlight()
+const {
+  searchScope,
+  searchQuery,
+  isSearching,
+  searchResponse,
+  searchResults,
+  searchTruncated,
+  caseSensitive,
+  wholeWord,
+  useRegex,
+  currentIndex,
+  showReplace,
+  replaceQuery,
+  confirming,
+  replacing,
+  totalHits,
+  nextHit,
+  prevHit,
+  clearSearch,
+  askReplace,
+  doReplace,
+  onOpenResult,
+  focusSearch,
+  onSearchEnter,
+} = useSidebarSearch(
+  {
+    vaultPath: () => props.vaultPath,
+    activePath: () => props.activePath,
+    showToast,
+    focusInput: () => searchInput.value?.focus(),
+  },
+  {
+    findHighlight: (p) => emit('find-highlight', p),
+    openResult: (p) => emit('open-result', p),
+    replaced: (p) => emit('replaced', p),
   },
 )
-
-/* ── 替换（双范围共用一套：file 参数决定范围）── */
-const showReplace = ref(false)
-const replaceQuery = ref('')
-const confirming = ref<number | null>(null)
-const replacing = ref(false)
-
-const totalHits = computed(() => searchResults.value.reduce((n, f) => n + f.hits.length, 0))
-
-/** 点击「替换全部」：先确认（展示将影响的匹配数），避免误伤 */
-function askReplace(): void {
-  if (!replaceQuery.value || replacing.value) return
-  confirming.value = totalHits.value
-}
-
-/** 确认执行：在搜索命中文件范围内做字面量替换（选项与搜索一致），写回磁盘；
-    file 参数随范围走——本文档只改当前文档，全库改全部命中文件 */
-async function doReplace(): Promise<void> {
-  const n = confirming.value
-  confirming.value = null
-  if (n == null || !props.vaultPath || !replaceQuery.value) return
-  replacing.value = true
-  try {
-    const res = await window.api.replaceInVault(
-      props.vaultPath,
-      searchQuery.value,
-      replaceQuery.value,
-      { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
-      scopeFile(),
-    )
-    showToast(
-      L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)),
-    )
-    emit('replaced', res.paths)
-    // 立即刷新结果（不走输入防抖），反映替换后状态
-    await executeSearch()
-    // 替换可能引发行号偏移 → 让 currentLine 跟随到替换后仍有效的命中，避免残留过期行号
-    rederiveCurrentLine()
-    replaceQuery.value = ''
-    showReplace.value = false
-  } catch {
-    showToast(L.replaceFail)
-  } finally {
-    replacing.value = false
-  }
-}
-
-function clearSearch(): void {
-  searchQuery.value = ''
-  searchResponse.value = { results: [], truncated: false }
-  isSearching.value = false
-  showReplace.value = false
-  replaceQuery.value = ''
-  confirming.value = null
-  currentFindLine.value = undefined
-  syncFindHighlight()
-}
-
-/**
- * 替换后重新推导当前命中行：替换可能引发行号整体偏移，旧的 currentLine 已不可靠。
- * 优先取当前活动文档的首个命中行；否则取首个文件的首个命中行；都没有则清空。
- * 确保 currentLine 指向替换后仍有效的命中，高亮 current 标记不残留过期位置。
- */
-function rederiveCurrentLine(): void {
-  const path = props.activePath
-  const fileRes = path ? searchResults.value.find((r) => r.path === path) : undefined
-  const target = fileRes ?? searchResults.value[0]
-  currentFindLine.value = target && target.hits.length ? target.hits[0].line : undefined
-  syncFindHighlight()
-}
-
-function onOpenResult(path: string, line: number): void {
-  // 双范围都记录当前结果行，供源码模式 + 所见即所得对称高亮强化该命中
-  currentFindLine.value = line
-  syncFindHighlight()
-  emit('open-result', { path, line })
-}
-
-/** 聚焦搜索框（Ctrl+F 等快捷键调用）：有打开的文档则默认切到「本文档」范围，
-    契合 Ctrl+F = 在当前文档查找的通用语义；否则落到「全部」 */
-function focusSearch(): void {
-  searchScope.value = props.activePath ? 'doc' : 'vault'
-  void nextTick(() => searchInput.value?.focus())
-}
-
-/* ── 本文件内回车：有结果则跳到首个命中行 ── */
-function onSearchEnter(): void {
-  const first = searchResults.value[0]
-  if (first?.hits.length) onOpenResult(first.path, first.hits[0].line)
-}
-
-const searchInput = ref<HTMLInputElement | null>(null)
 
 defineExpose({ focusSearch, nextHit, prevHit })
 

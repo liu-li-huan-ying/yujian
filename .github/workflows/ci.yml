@@ -50,6 +50,10 @@ jobs:
       - name: Verify markdown corpus (byte-exact round-trip)
         run: npm run verify:corpus
 
+      # 防劣化：巨石文件复发 / any 逃逸越界与回涨 / 遗留标记
+      - name: Structure health
+        run: npm run check:structure
+
       - name: Index performance baseline
         run: npm run perf:index
 

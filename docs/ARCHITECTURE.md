@@ -1615,6 +1615,48 @@ export interface SessionState {
 * **测试 / 验证**：本次改动以 UI 集成为主，可断言的纯逻辑已入 `[S]` 段；浮层交互与观感经 `docs/preview/math-edit-demo.html`（可交互演示）验证。
   * ⚠️ 演示踩坑：把 `MathJax.tex2svg()` 返回的**整个 `mjx-container`** 塞进 flex 容器会夹带辅助节点，出现重复 / 错位残影；只取其中的 `<svg>` 单节点挂载即消除。
 
+## 5.33 组件瘦身与「可测化」：composable 分层约定（2026-09-14）
+
+**起因**：2026-09-14 审计（`docs/AUDIT-2026-09-14.md`）指出两个看似独立、实则同源的问题——
+`App.vue` 达 1797 行（上帝组件），而 **44 个组件共 19493 行（占代码总量 51%）的自动化测试覆盖为 0**。
+根因是同一件事：**逻辑堆在组件里，于是既臃肿又无法断言**。
+故按「一次抽取同时兑现瘦身与可测」推进，并沉淀为本节约定。
+
+### 抽取顺序与成果
+
+| 抽取块 | 产出 | 效果 |
+| --- | --- | --- |
+| 导出（单文档 / 合订 / 预览 / 写盘） | `composables/useExport.ts` + `export/exportMeta.ts` | `App.vue` 1797 → 1592 |
+| 命令面板热键判定 | `utils/paletteHotkey.ts` | 顺带修掉「已开时按任意键都关」与注释不符的行为 |
+| 侧栏搜索 + 替换 | `composables/useSidebarSearch.ts` + `utils/searchNav.ts` | `Sidebar.vue` 1611 → 1436 |
+
+### 约定（新增 composable 时照此办理）
+
+1. **依赖经 `hooks` 以 getter 注入**，不在 composable 里 import 组件、也不反向依赖调用方：
+   `vaultPath: () => props.vaultPath` 而非 `vaultPath: props.vaultPath`（后者会丢失响应性）。
+   风格与既有 `usePkmPanels` / `useVaultLinks` 一致。
+2. **对外抛出用「具名回调」而非 Vue emit 签名**：`{ findHighlight, openResult, replaced }`。
+   这样 composable 不感知事件名字符串，改名只动组件一处。
+3. **DOM 引用归组件，不归 composable**：模板 `ref="xxx"` 由组件持有，聚焦等动作以
+   `focusInput: () => searchInput.value?.focus()` 注入。composable 保持与 DOM 无关。
+4. **纯逻辑单独放零依赖模块**（`utils/searchNav.ts`、`export/exportMeta.ts`），
+   不要塞在 composable 里 —— 否则一测就牵出 vue / i18n / IPC 整条链。
+   判据：**不 import vue、不碰 IPC** 的判定逻辑，就该单独成文件并被 `bundle()` 测到。
+5. **抽完即补断言**：`test-core.mjs` 用 esbuild JS API 打包后 `import()`，无需组件测试框架。
+
+### 结构门禁 `scripts/check-structure.mjs`（`npm run check:structure`，已入 CI）
+
+正确性由 `npm run check` 管，本门禁专管**不会让测试变红的慢劣化**：
+
+* **巨石文件**：默认上限 1700 行；`App.vue` 1650、`Sidebar.vue` 1500。涨破即说明又有该抽的块。
+* **`any` 逃逸**：既控总量（当前 61，只减不增），更控**越界** ——
+  61 处全部位于 `src/editor/features/` 的 5 个文件（ProseMirror / Milkdown 第三方 AST 边界，
+  节点类型无法从包导出完整类型，标 `any` 属合理妥协）。**白名单外出现哪怕 1 处即失败**：
+  一旦 `any` 扩散到 vault / 索引 / 序列化，「Markdown 往返保真」就失去类型护栏。
+* **遗留标记**：`TODO / FIXME / XXX / HACK / WORKAROUND` 必须为零。
+
+想放宽阈值，须**显式改文件并在此说明原因**，而不是让它悄悄涨上去。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash

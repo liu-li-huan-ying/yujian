@@ -1,0 +1,129 @@
+/**
+ * 结构健康门禁 —— 防「劣化回潮」，而不是查正确性（正确性归 `npm run check`）。
+ *
+ * 为什么需要它：2026-09-14 审计（docs/AUDIT-2026-09-14.md）发现两件事都靠人肉才看出来：
+ *   1. `App.vue` 在 09-10 抽过一次 composable 降到 1683，新功能一压又涨回 1789；
+ *   2. `any` 从 61 → 44 → 43，降幅停滞，且没有任何东西阻止它反弹。
+ * 这两类问题都不会让测试变红，只会让代码慢慢变形。故把「上限」写成可执行断言，
+ * 超标即 CI 失败 —— 想放宽必须**显式改这个阈值并说明原因**，而不是悄悄涨上去。
+ *
+ * 只扫生产代码（`src/` + `electron/`）；`scripts/` 下的测试脚本不设行数限制
+ * （`test-core.mjs` 本就是线性堆叠的断言集合，拆分反而更难读）。
+ */
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const root = join(__dirname, '..')
+
+/** 行数上限：默认适用于所有生产文件，特定文件可单独收紧 */
+const MAX_LINES_DEFAULT = 1700
+const MAX_LINES_BY_FILE = {
+  // 抽出 useExport 后为 1592，留 58 行余量；再涨说明又有该抽的块了
+  'src/App.vue': 1650,
+  // 抽出 useSidebarSearch 后为 1436，留 64 行余量；涨破即该再抽一轮
+  'src/components/Sidebar.vue': 1500,
+}
+/**
+ * `any` 逃逸：既控总量，更控**越界**。
+ *
+ * 61 处全部集中在 `src/editor/features/` 的 5 个文件——那里是 ProseMirror / Milkdown
+ * 第三方 AST 边界，节点类型无法从包里导出完整类型，强制标 `any` 属合理妥协。
+ * 真正危险的不是「有多少」，而是**它扩散到核心逻辑**：一旦 `vault` / 索引 /
+ * 序列化里出现 `any`，Markdown 往返保真就失去类型护栏。故设白名单：
+ * 白名单外出现哪怕 1 处 `any` 也直接失败，白名单内则走总量「只减不增」。
+ */
+const MAX_ANY = 61
+const ANY_ALLOWED_PREFIX = 'src/editor/features/'
+/** 遗留标记必须为零 */
+const BANNED_MARKERS = /\b(TODO|FIXME|XXX|HACK|WORKAROUND)\b/g
+
+const SKIP_DIRS = new Set(['node_modules', '.git', 'out', 'release', 'dist', 'assets'])
+const EXTS = /\.(ts|vue)$/
+
+function walk(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    if (SKIP_DIRS.has(name)) continue
+    const p = join(dir, name)
+    const st = statSync(p)
+    if (st.isDirectory()) walk(p, out)
+    else if (EXTS.test(name)) out.push(p)
+  }
+  return out
+}
+
+const files = [...walk(join(root, 'src')), ...walk(join(root, 'electron'))]
+
+const ANY_RE = /(\bas\s+any\b|<any>|:[ \t]*(?:any\[\]|any)\b|\bany\[\]\b)/g
+
+let anyCount = 0
+const anyByFile = new Map()
+const anyOutside = []
+const tooLong = []
+const markers = []
+
+for (const file of files) {
+  const src = readFileSync(file, 'utf-8')
+  const rel = relative(root, file).split(sep).join('/')
+
+  // any 逃逸。用**单一交替**而非分别匹配：分别匹配会让 `: any[]` 被 `:[ \t]*any\b`
+  // 和 `any[]` 各计一次，导致总数虚高、阈值失真。
+  const hits = src.match(ANY_RE)
+  if (hits) {
+    anyCount += hits.length
+    anyByFile.set(rel, hits.length)
+    if (!rel.startsWith(ANY_ALLOWED_PREFIX)) anyOutside.push(`${rel}: ${hits.length} 处`)
+  }
+
+  const lines = src.split('\n').length
+  const limit = MAX_LINES_BY_FILE[rel] ?? MAX_LINES_DEFAULT
+  if (lines > limit) tooLong.push({ rel, lines, limit })
+
+  BANNED_MARKERS.lastIndex = 0
+  let m
+  while ((m = BANNED_MARKERS.exec(src))) markers.push(`${rel}: ${m[1]}`)
+}
+
+const failures = []
+const pass = []
+
+if (anyOutside.length) {
+  failures.push(
+    `any 逃逸越界 ${anyOutside.length} 个文件（只允许出现在 ${ANY_ALLOWED_PREFIX}*）：\n      ` +
+      anyOutside.join('\n      '),
+  )
+} else {
+  pass.push(`any 逃逸未越界（全部位于 ${ANY_ALLOWED_PREFIX}*）`)
+}
+
+if (anyCount > MAX_ANY) {
+  failures.push(`any 逃逸 ${anyCount} 处 > 上限 ${MAX_ANY}（应只减不增）`)
+} else {
+  pass.push(`any ${anyCount} ≤ ${MAX_ANY}`)
+}
+
+if (tooLong.length) {
+  for (const t of tooLong) failures.push(`${t.rel} ${t.lines} 行 > 上限 ${t.limit}`)
+} else {
+  pass.push(`文件行数均在上限内（默认 ${MAX_LINES_DEFAULT}，App.vue ${MAX_LINES_BY_FILE['src/App.vue']}）`)
+}
+
+if (markers.length) {
+  failures.push(`遗留标记 ${markers.length} 处：${markers.slice(0, 5).join(', ')}`)
+} else {
+  pass.push('无 TODO / FIXME / HACK 遗留标记')
+}
+
+for (const line of pass) console.log(`  \x1b[32mPASS\x1b[0m ${line}`)
+if (failures.length) {
+  console.log(`\n\x1b[31m结构门禁失败：\x1b[0m`)
+  for (const f of failures) console.log(`  ✗ ${f}`)
+  console.log(
+    '\n若为有意放宽，请修改 scripts/check-structure.mjs 的阈值并在提交信息里说明原因；' +
+      '\n否则说明又有该抽的块了（见 docs/AUDIT-2026-09-14.md §四）。',
+  )
+  process.exit(1)
+}
+console.log(`\n\x1b[32mstructure check: OK\x1b[0m (${files.length} files scanned)\n`)

@@ -1648,6 +1648,96 @@ check('empty markdown does not throw', (() => {
   return m.title === '空'
 })())
 
+section('[U] palette hotkey -- 命令面板/快速打开热键判定 (src/utils/paletteHotkey.ts)')
+const Ph = await import((await bundle('src/utils/paletteHotkey.ts', 'paletteHotkey.mjs')).url)
+const { resolvePaletteHotkey } = Ph
+
+const key = (k, o = {}) => ({ key: k, ctrlKey: true, metaKey: false, shiftKey: false, ...o })
+
+// 未开时：Ctrl+Shift+P 开命令面板、Ctrl+K 开快速打开
+check('opens commands on Ctrl+Shift+P, files on Ctrl+K', (() => {
+  return resolvePaletteHotkey(key('p', { shiftKey: true }), null) === 'commands'
+    && resolvePaletteHotkey(key('k'), null) === 'files'
+})())
+
+// 已开时再按**同一个键**= 关闭
+check('same key toggles closed', (() => {
+  return resolvePaletteHotkey(key('p', { shiftKey: true }), 'commands') === null
+    && resolvePaletteHotkey(key('k'), 'files') === null
+})())
+
+// 已开时按**另一个键**= 切换过去（不是一律关闭）
+// ⚠️ 这正是原先的实现缺陷：旧代码写成「已开时按任一键都关闭」，
+// 于是命令面板开着时按 Ctrl+K 会整个关掉，而非切到快速打开。
+check('other key switches mode instead of closing', (() => {
+  return resolvePaletteHotkey(key('k'), 'commands') === 'files'
+    && resolvePaletteHotkey(key('p', { shiftKey: true }), 'files') === 'commands'
+})())
+
+// 不归我管的键一律放行（undefined），否则会吞掉正常按键
+check('unrelated keys are not intercepted', (() => {
+  return resolvePaletteHotkey(key('s'), null) === undefined
+    && resolvePaletteHotkey(key('p'), null) === undefined      // Ctrl+P 不带 Shift
+    && resolvePaletteHotkey(key('k', { shiftKey: true }), null) === undefined // Ctrl+Shift+K
+    && resolvePaletteHotkey({ key: 'k', ctrlKey: false, metaKey: false, shiftKey: false }, null) === undefined
+})())
+
+// Cmd(mac) 与 Ctrl 等价；大小写不敏感（CapsLock / Shift 状态下 key 可能是 'P'）
+check('meta==ctrl and case-insensitive', (() => {
+  return resolvePaletteHotkey({ key: 'P', ctrlKey: false, metaKey: true, shiftKey: true }, null) === 'commands'
+    && resolvePaletteHotkey({ key: 'K', ctrlKey: false, metaKey: true, shiftKey: false }, null) === 'files'
+})())
+
+/* ── [U] 搜索结果导航（src/utils/searchNav.ts）─────────────────────
+   从 Sidebar.vue 抽出的纯逻辑：命中序号回绕与「替换后当前行重推导」。
+   前者决定 Ctrl+G / 上一处的循环行为，后者关系到替换后高亮是否残留过期行号。 */
+section('[U] search nav -- 命中导航与当前行重推导 (src/utils/searchNav.ts)')
+
+const SN = await import((await bundle('src/utils/searchNav.ts', 'searchNav.mjs')).url)
+const { wrapIndex, nextIndex, prevIndex, pickCurrentLine } = SN
+
+check('wrapIndex wraps negatives and overflow', (() => {
+  return wrapIndex(0, 3) === 0
+    && wrapIndex(2, 3) === 2
+    && wrapIndex(3, 3) === 0
+    && wrapIndex(-1, 3) === 2
+    && wrapIndex(-4, 3) === 2
+})())
+
+check('wrapIndex on empty list is 0, never negative', (() => {
+  return wrapIndex(0, 0) === 0 && wrapIndex(-1, 0) === 0
+})())
+
+check('nextIndex starts at 0 when nothing selected', (() => {
+  return nextIndex(-1, 5) === 0 && nextIndex(0, 5) === 1 && nextIndex(4, 5) === 0
+})())
+
+// 未选中时按「上一处」应落到末尾，符合向上查找的直觉（而非跳到开头）
+check('prevIndex starts at last when nothing selected', (() => {
+  return prevIndex(-1, 5) === 4 && prevIndex(0, 5) === 4 && prevIndex(3, 5) === 2
+})())
+
+check('next/prevIndex on empty list is -1 (no navigation)', (() => {
+  return nextIndex(-1, 0) === -1 && prevIndex(2, 0) === -1
+})())
+
+// 替换后行号会整体偏移，必须重新取一个仍然有效的命中，而不是沿用旧行号
+check('pickCurrentLine prefers active doc first hit', (() => {
+  const results = [
+    { path: '/v/a.md', hits: [{ line: 3 }, { line: 9 }] },
+    { path: '/v/b.md', hits: [{ line: 7 }] },
+  ]
+  return pickCurrentLine(results, '/v/b.md') === 7 && pickCurrentLine(results, '/v/a.md') === 3
+})())
+
+check('pickCurrentLine falls back to first file, then undefined', (() => {
+  const results = [{ path: '/v/a.md', hits: [{ line: 4 }] }]
+  return pickCurrentLine(results, '/v/other.md') === 4          // 活动文档不在结果里
+    && pickCurrentLine(results, null) === 4                      // 无活动文档
+    && pickCurrentLine([], '/v/a.md') === undefined              // 无结果
+    && pickCurrentLine([{ path: '/v/a.md', hits: [] }], '/v/a.md') === undefined // 空命中
+})())
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 if (failed > 0) {
   console.log('失败项：')

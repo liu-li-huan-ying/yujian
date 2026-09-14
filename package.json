@@ -15,7 +15,7 @@
     "verify:corpus": "node scripts/verify-corpus.mjs",
     "test": "node scripts/test-core.mjs",
     "stress:table": "node scripts/stress-table.mjs",
-    "check": "npm run typecheck && npm run lint && npm run check:encoding && npm test && npm run verify:md && npm run verify:corpus",
+    "check": "npm run typecheck && npm run lint && npm run check:encoding && npm test && npm run verify:md && npm run verify:corpus && npm run check:structure",
     "clean": "node scripts/clean.mjs",
     "lint": "eslint . --ext .ts,.vue",
     "lint:fix": "eslint . --ext .ts,.vue --fix",
@@ -29,7 +29,8 @@
     "release:linux": "electron-vite build && electron-builder --linux --publish=onTag",
     "check:encoding": "node scripts/check-encoding.mjs",
     "perf:index": "node scripts/perf-index.mjs",
-    "readme:assets": "node scripts/gen-readme-assets.mjs"
+    "readme:assets": "node scripts/gen-readme-assets.mjs",
+    "check:structure": "node scripts/check-structure.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
