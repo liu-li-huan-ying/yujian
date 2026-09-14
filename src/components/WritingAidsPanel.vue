@@ -2,7 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
-import { parseFrontmatter, serializeFrontmatter } from '../editor/frontmatter'
+import { parseFrontmatter, serializeFrontmatter } from '../markdown/frontmatter'
 
 const props = defineProps<{
   /** 当前文档全文（用于解析 frontmatter），打开时快照一次 */

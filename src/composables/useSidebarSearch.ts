@@ -16,6 +16,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import type { SearchFileResult, SearchResult } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
 import { nextIndex, pickCurrentLine, prevIndex, wrapIndex } from '../utils/searchNav'
+import { errMsg } from '../../electron/shared/error'
 
 export type FindHighlightPayload = {
   query: string
@@ -122,7 +123,7 @@ export function useSidebarSearch(hooks: SidebarSearchHooks, emit: SidebarSearchE
         scopeFile(),
       )
     } catch (e) {
-      hooks.showToast(e instanceof Error ? e.message : String(e))
+      hooks.showToast(errMsg(e))
       searchResponse.value = { results: [], truncated: false }
     } finally {
       isSearching.value = false

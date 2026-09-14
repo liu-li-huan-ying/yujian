@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 import { onMounted, reactive, ref } from 'vue'
 import type { ImgHostConfig } from '../../electron/shared/ipc-channels'
 import { i18n } from '../i18n'
@@ -80,7 +81,7 @@ async function onSave(): Promise<void> {
     msg.value = { text: U.imgHostConfigSaved, type: 'ok' }
     form.token = ''
   } catch (e) {
-    msg.value = { text: `保存失败：${e instanceof Error ? e.message : String(e)}`, type: 'err' }
+    msg.value = { text: `保存失败：${errMsg(e)}`, type: 'err' }
   } finally {
     saving.value = false
   }
@@ -106,7 +107,7 @@ async function onTest(): Promise<void> {
     await window.api.publishImages('', null)
     msg.value = { text: U.imgHostChannelOk, type: 'ok' }
   } catch (e) {
-    msg.value = { text: `${U.imgHostChannelErr}${e instanceof Error ? e.message : String(e)}`, type: 'err' }
+    msg.value = { text: `${U.imgHostChannelErr}${errMsg(e)}`, type: 'err' }
   } finally {
     testing.value = false
   }

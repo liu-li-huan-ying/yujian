@@ -12,6 +12,7 @@ import type {
   RepairResult
 } from '../shared/ipc-channels'
 import { reportSoftError } from './softError'
+import { errMsg } from '../shared/error'
 
 /**
  * vault 级完整性自检与一键修复 —— Phase 3 批次一（数据安全）。
@@ -26,9 +27,6 @@ import { reportSoftError } from './softError'
 
 const HISTORY_DIR = '.yujian-history'
 
-function errMsg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
-}
 
 /** 与 snapshots.ts 完全一致的路径哈希（sha1），用于判断快照子目录是否对应现存文档 */
 function hashPath(filePath: string): string {

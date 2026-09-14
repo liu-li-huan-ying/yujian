@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -86,7 +87,7 @@ async function run(): Promise<void> {
     filter.value = 'all'
     emit('report', report.value)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   } finally {
     loading.value = false
   }
@@ -106,7 +107,7 @@ async function doRepair(): Promise<void> {
     await window.api.repairIntegrity(props.vaultPath, ['rebuildIndex', 'removeOrphanSnapshots'])
     await run()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
     loading.value = false
   }
 }
@@ -126,7 +127,7 @@ async function clearSoft(): Promise<void> {
     soft.value = null
     softOpen.value = false
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   }
 }
 

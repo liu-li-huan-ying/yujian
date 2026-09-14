@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 /**
  * 标签面板（Phase 3 批次三：#标签 内联语法 + frontmatter tags 双轨聚合）。
  *
@@ -127,7 +128,7 @@ async function loadTags(): Promise<void> {
   try {
     all.value = await window.api.listTags(props.vaultPath)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   } finally {
     loading.value = false
   }
@@ -141,7 +142,7 @@ async function openTag(tag: string): Promise<void> {
   try {
     notes.value = await window.api.getNotesByTag(props.vaultPath, tag)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   } finally {
     notesLoading.value = false
   }
@@ -178,7 +179,7 @@ async function onRebuild(): Promise<void> {
     await loadTags()
     emit('rebuilt')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   } finally {
     rebuilding.value = false
   }

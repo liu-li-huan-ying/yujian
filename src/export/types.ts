@@ -89,3 +89,19 @@ export function kindFilter(
       return { name: U.exportMenuOdt, extensions: ['odt'] }
   }
 }
+
+/**
+ * 二进制格式序列化时所需的文档元信息。
+ *
+ * **契约放在这里、而不是放在调度器 `serialize.ts` 里**：它原本定义在 `serialize.ts`，
+ * 而 `docx/epub/odt` 三个实现又反过来 `import type { SerializeCtx } from './serialize'`，
+ * 于是形成「实现 → 调度器 → 实现」的循环依赖。
+ *
+ * 契约是**被调用方与调用方共同依赖的中立物**，应放在两者都够得着、且不依赖它们的位置
+ * （即 `types.ts`）。这样依赖方向恢复单向：调度器依赖实现，实现只依赖契约。
+ */
+export interface SerializeCtx {
+  title: string
+  author?: string
+  date?: string
+}

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { escapeXml } from '../utils/html'
-import { escapeRegExp } from '../utils/regex'
+import { escapeRegExp } from '../../electron/shared/regex'
 import type { SearchFileResult } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
 

@@ -1,4 +1,4 @@
-import { parseFrontmatter } from '../editor/frontmatter'
+import { parseFrontmatter } from '../markdown/frontmatter'
 
 /** 导出元信息（与 `buildExport.ExportMeta` 结构一致，此处独立声明以免测试时拉进整条导出管线） */
 export interface PickedExportMeta {

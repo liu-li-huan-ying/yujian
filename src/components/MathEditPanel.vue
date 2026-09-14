@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ElementEditPopover from './ElementEditPopover.vue'
-import { renderLatexContent, renderMathToSvg } from '../editor/features/mathjax'
+import { renderLatexContent, renderMathToSvg } from '../render/mathjax'
 import { i18n } from '../i18n'
 
 /**

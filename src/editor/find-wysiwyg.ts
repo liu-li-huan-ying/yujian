@@ -1,7 +1,7 @@
 import { Plugin, PluginKey, type EditorState } from '@milkdown/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/prose/view'
 import type { Node as PMNode } from '@milkdown/prose/model'
-import { buildRegex } from '../utils/regex'
+import { buildRegex } from '../../electron/shared/regex'
 
 /**
  * 所见即所得模式搜索命中高亮（ProseMirror Decoration）。

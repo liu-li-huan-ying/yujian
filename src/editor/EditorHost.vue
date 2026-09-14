@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import MilkdownEditor from './MilkdownEditor.vue'
 import SourceEditor from './SourceEditor.vue'
@@ -235,9 +236,6 @@ function gotoOutline(index: number): void {
 
 /* ── 加载状态 ─────────────────────────────── */
 
-function errMsg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
-}
 
 function startLoading(): void {
   if (loadTimer) clearTimeout(loadTimer)

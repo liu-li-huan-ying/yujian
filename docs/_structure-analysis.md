@@ -1,0 +1,115 @@
+# 结构分析（只读诊断）
+
+扫描 125 个文件 · 内部依赖边 307 条
+
+## 1. 循环依赖（Tarjan 强连通分量）
+
+✅ 无循环依赖
+
+## 2. 分层越界
+
+✅ 无越界
+
+## 3. 上帝模块 / Hub 排行
+
+### 行数 Top 20
+| 行数 | 文件 | 导出 / 扇入 / 扇出 |
+| --- | --- | --- |
+| 1591 | `src/App.vue` | 0 / 1 / 46 |
+| 1435 | `src/components/Sidebar.vue` | 0 / 1 / 12 |
+| 1378 | `src/components/SnapshotPanel.vue` | 0 / 1 / 7 |
+| 1135 | `electron/main/vault.ts` | 12 / 2 / 6 |
+| 1046 | `electron/main/vaultIndex.ts` | 35 / 3 / 4 |
+| 895 | `src/editor/MilkdownEditor.vue` | 0 / 1 / 19 |
+| 852 | `src/components/GraphView.vue` | 0 / 1 / 3 |
+| 729 | `src/i18n/locales/en-US.ts` | 0 / 1 / 0 |
+| 723 | `src/i18n/locales/zh-CN.ts` | 1 / 2 / 0 |
+| 692 | `src/editor/EditorHost.vue` | 1 / 2 / 9 |
+| 656 | `src/components/TagPanel.vue` | 0 / 1 / 5 |
+| 651 | `src/components/IntegrityPanel.vue` | 0 / 1 / 5 |
+| 645 | `electron/shared/ipc-channels.ts` | 59 / 34 / 0 |
+| 619 | `electron/main/index.ts` | 0 / 0 / 12 |
+| 615 | `src/components/ShortcutsSettings.vue` | 0 / 1 / 4 |
+| 592 | `src/components/MocPanel.vue` | 0 / 1 / 5 |
+| 562 | `src/components/TitleBar.vue` | 0 / 1 / 4 |
+| 561 | `src/components/CompilePanel.vue` | 0 / 1 / 5 |
+| 554 | `src/components/TabBar.vue` | 0 / 1 / 6 |
+| 522 | `src/render/mathjax.ts` | 9 / 3 / 2 |
+
+### 扇入 Top 12（被依赖最多 = 真实核心）
+| 扇入 | 文件 | 行数 |
+| --- | --- | --- |
+| 42 | `src/i18n/index.ts` | 75 |
+| 34 | `electron/shared/ipc-channels.ts` | 645 |
+| 22 | `src/components/Icon.vue` | 102 |
+| 16 | `electron/shared/error.ts` | 23 |
+| 8 | `src/export/types.ts` | 108 |
+| 7 | `src/export/domUtils.ts` | 201 |
+| 7 | `src/utils/html.ts` | 11 |
+| 7 | `electron/main/softError.ts` | 145 |
+| 5 | `src/appearance.ts` | 120 |
+| 5 | `src/editor/zen.ts` | 220 |
+| 4 | `src/utils/commands.ts` | 111 |
+| 4 | `src/utils/path.ts` | 5 |
+
+### 扇出 Top 12（依赖最多 = 最易受牵连）
+| 扇出 | 文件 | 行数 |
+| --- | --- | --- |
+| 46 | `src/App.vue` | 1591 |
+| 19 | `src/editor/MilkdownEditor.vue` | 895 |
+| 12 | `src/components/Sidebar.vue` | 1435 |
+| 12 | `electron/main/index.ts` | 619 |
+| 10 | `src/export/buildExport.ts` | 306 |
+| 9 | `src/editor/EditorHost.vue` | 692 |
+| 7 | `src/components/SnapshotPanel.vue` | 1378 |
+| 7 | `src/composables/useExport.ts` | 268 |
+| 6 | `src/components/TabBar.vue` | 554 |
+| 6 | `electron/main/vault.ts` | 1135 |
+| 6 | `electron/main/vaultIntegrity.ts` | 208 |
+| 5 | `src/components/CommandPalette.vue` | 417 |
+
+### 单文件导出符号 Top 12（接口面过宽 = 未分层）
+| 导出数 | 文件 | 行数 |
+| --- | --- | --- |
+| 59 | `electron/shared/ipc-channels.ts` | 645 |
+| 35 | `electron/main/vaultIndex.ts` | 1046 |
+| 22 | `src/shortcuts.ts` | 308 |
+| 12 | `electron/main/vault.ts` | 1135 |
+| 11 | `electron/main/snapshots.ts` | 418 |
+| 10 | `electron/main/softError.ts` | 145 |
+| 9 | `src/appearance.ts` | 120 |
+| 9 | `src/editor/zen.ts` | 220 |
+| 9 | `src/export/buildExport.ts` | 306 |
+| 9 | `src/render/mathjax.ts` | 522 |
+| 9 | `src/typography.ts` | 107 |
+| 9 | `src/utils/keymap.ts` | 169 |
+
+### 文件数 ≥ 8 的目录（是否已分层）
+- `src/components/`：40 文件 / 15706 行 / 最大 1435 行
+- `src/export/`：13 文件 / 2441 行 / 最大 480 行
+- `src/editor/`：12 文件 / 2735 行 / 最大 895 行
+- `src/utils/`：12 文件 / 906 行 / 最大 169 行
+- `electron/main/`：12 文件 / 4181 行 / 最大 1135 行
+- `src/editor/features/`：9 文件 / 1200 行 / 最大 191 行
+
+## 4. 胖文件分布（≥600 行）
+
+共 15 个（占 125 文件的 12%）
+
+| 行数 | 文件 |
+| --- | --- |
+| 1591 | `src/App.vue` |
+| 1435 | `src/components/Sidebar.vue` |
+| 1378 | `src/components/SnapshotPanel.vue` |
+| 1135 | `electron/main/vault.ts` |
+| 1046 | `electron/main/vaultIndex.ts` |
+| 895 | `src/editor/MilkdownEditor.vue` |
+| 852 | `src/components/GraphView.vue` |
+| 729 | `src/i18n/locales/en-US.ts` |
+| 723 | `src/i18n/locales/zh-CN.ts` |
+| 692 | `src/editor/EditorHost.vue` |
+| 656 | `src/components/TagPanel.vue` |
+| 651 | `src/components/IntegrityPanel.vue` |
+| 645 | `electron/shared/ipc-channels.ts` |
+| 619 | `electron/main/index.ts` |
+| 615 | `src/components/ShortcutsSettings.vue` |

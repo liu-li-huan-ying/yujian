@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 /**
  * 内容地图（MOC）面板 —— Phase 3 批次三（二）。
  *
@@ -87,7 +88,7 @@ async function load(): Promise<void> {
     groups.value = outline
     collapsed.value = new Set()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   } finally {
     loading.value = false
   }
@@ -120,7 +121,7 @@ async function onRebuild(): Promise<void> {
     await load()
     emit('rebuilt')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   } finally {
     rebuilding.value = false
   }

@@ -9,6 +9,7 @@ import type {
   ImgHostUploadResult,
   PublishResult
 } from '../shared/ipc-channels'
+import { errMsg } from '../shared/error'
 
 interface StoredConfig {
   provider: string
@@ -93,7 +94,7 @@ export async function uploadToImgHost(items: ImgHostUploadItem[]): Promise<ImgHo
         const url = await uploadOne(stored, token, bytes, it.path)
         return { ref: it.ref, url }
       } catch (e) {
-        return { ref: it.ref, error: e instanceof Error ? e.message : String(e) }
+        return { ref: it.ref, error: errMsg(e) }
       }
     })
   )

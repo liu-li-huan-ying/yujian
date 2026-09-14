@@ -13,6 +13,7 @@ import {
   type ExportPrefs,
 } from '../export/buildExport'
 import type { ExportPayload, ExportResult } from '../../electron/shared/ipc-channels'
+import { errMsg } from '../../electron/shared/error'
 
 /** composer 需要的编辑器能力：除构建期读取正文外，合订导出还要 `markdownToHtml` */
 export interface ExportHostLike extends ExportHostApi {
@@ -99,7 +100,7 @@ export function useExport(hooks: ExportHooks) {
           : await window.api.exportFile(payload)
     } catch (e) {
       console.error('[export] 写盘 IPC 失败：', e)
-      hooks.showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
+      hooks.showToast(`${U.toastExportErr}${errMsg(e)}`, 'err', 5000)
       return
     }
     if (res.ok && res.path) {
@@ -153,7 +154,7 @@ export function useExport(hooks: ExportHooks) {
     } catch (e) {
       // 任何一步（取正文 / 内联图片 / 渲染图表 / 序列化）抛错都不该静默——明确告诉用户
       console.error('[export] 生成导出内容失败：', e)
-      hooks.showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
+      hooks.showToast(`${U.toastExportErr}${errMsg(e)}`, 'err', 5000)
     }
   }
 
@@ -167,7 +168,7 @@ export function useExport(hooks: ExportHooks) {
       await writeExport(built)
     } catch (e) {
       console.error('[export] 写盘失败：', e)
-      hooks.showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
+      hooks.showToast(`${U.toastExportErr}${errMsg(e)}`, 'err', 5000)
     }
   }
 
@@ -246,7 +247,7 @@ export function useExport(hooks: ExportHooks) {
       await writeExport(built)
     } catch (e) {
       console.error('[export] 合订导出失败：', e)
-      hooks.showToast(`${U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
+      hooks.showToast(`${U.toastExportErr}${errMsg(e)}`, 'err', 5000)
     }
   }
 

@@ -3,6 +3,12 @@ import matter from 'gray-matter'
 /**
  * 文档属性（frontmatter）解析与回写。
  *
+ * **为什么在 `src/markdown/` 而不在 `src/editor/`**：它处理的是 Markdown 语法本身
+ * （顶部 `---` 块），与 ProseMirror / Milkdown 无关。使用方跨越三层——
+ * 应用壳（`App.vue` 属性面板）、组件（`WritingAidsPanel.vue`）、导出管线
+ * （`export/exportMeta.ts`）。若留在 `editor/` 下，导出层就会反向 import 编辑器层，
+ * 把自己的 Node 可测性一起赔进去。
+ *
  * 红線：Markdown 往返保真 —— 本模块严禁改动正文。
  * - 解析：用 gray-matter 把 YAML 元数据与正文分离，正文 `content` 一字不改返回。
  * - 回写：只对顶部 `---` 块做增删改，正文原样接回；未知字段（用户手写的其他 key）

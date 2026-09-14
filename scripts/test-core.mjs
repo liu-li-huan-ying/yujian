@@ -17,11 +17,15 @@
  *  G. 软错误上报 —— 可容忍失败必须有出口、分级、有界，且上报自身绝不抛
  *  H. 数据安全线 —— .assets / 快照桶随文档迁移、删除走回收站、危险操作前置守卫
  *  I. 快照 diff 引擎 —— hunk 行号 / 聚合 / 并排配对（src/utils/snapshotDiff.ts）
- *  J. frontmatter 解析 / 回写 —— 正文逐字保留（src/editor/frontmatter.ts）
+ *  J. frontmatter 解析 / 回写 —— 正文逐字保留（src/markdown/frontmatter.ts）
  *  K. 标签页重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）
  *  L. 关系图谱派生 —— 节点 / 边由索引派生，本地子图 BFS / 全局度降序截断（electron/main/vaultIndex.ts）
  *  M. 命令面板内核 —— 模糊匹配 + 命令目录（src/utils/fuzzy.ts, src/utils/commands.ts）
  *  N. 中文排版状态 —— 默认 / 收敛 / 持久化（src/typography.ts）
+ *  O~S. 见各段标题（导出 / 搜索正则 / 快捷键 / 中文搜索 / 大文档）
+ *  T. 导出元信息 —— frontmatter 取值与别名回退（src/export/exportMeta.ts）
+ *  U. 搜索结果导航 —— 命中序号回绕与替换后当前行重推导（src/utils/searchNav.ts）
+ *  V. 错误归一化 —— 非 Error 抛出物的兜底（electron/shared/error.ts）
  *
  * 运行：npm test
  * 退出码：0 = 全部通过；1 = 存在失败。
@@ -847,7 +851,7 @@ const grayStub = [
   "const require = createRequire(" + JSON.stringify(resolve(root, 'package.json')) + ")",
   "export default require('gray-matter')"
 ].join('\n')
-const { url: fmUrl, dir: fmDir } = await bundle('src/editor/frontmatter.ts', 'frontmatter.mjs', {
+const { url: fmUrl, dir: fmDir } = await bundle('src/markdown/frontmatter.ts', 'frontmatter.mjs', {
   'gray-matter': grayStub
 })
 try {
@@ -1534,7 +1538,7 @@ check('stored non-bindable override (bare letter) is dropped on load', (() => {
 })())
 
 section('[S] search regex -- Chinese whole-word matching (src/utils/regex.ts)')
-const Rx = await import((await bundle('src/utils/regex.ts', 'regex.mjs')).url)
+const Rx = await import((await bundle('electron/shared/regex.ts', 'regex.mjs')).url)
 const { buildRegex } = Rx
 
 // 中文全词匹配（wholeWord）不开：子串命中（与旧 \b 行为一致，纯拉丁也如此）
@@ -1738,7 +1742,47 @@ check('pickCurrentLine falls back to first file, then undefined', (() => {
     && pickCurrentLine([{ path: '/v/a.md', hits: [] }], '/v/a.md') === undefined // 空命中
 })())
 
+/* ── [V] 错误归一化（electron/shared/error.ts）─────────────────────
+   这个函数存在的理由就是「catch 到的不一定是 Error」。故重点断言
+   非 Error 抛出物（字符串 / null / undefined / 对象 / 数字）都不会二次抛错。 */
+section('[V] errMsg -- 错误归一化对非 Error 抛出物的兜底 (electron/shared/error.ts)')
+
+const { errMsg } = await import((await bundle('electron/shared/error.ts', 'error.mjs')).url)
+
+check('Error 取 message', (() => {
+  return errMsg(new Error('boom')) === 'boom' && errMsg(new RangeError('r')) === 'r'
+})())
+
+// 本函数存在的唯一理由就是「catch 到的不一定是 Error」，故逐个覆盖非 Error 抛出物。
+// 若有人图省事把它内联回 `e.message`，这条会立刻红——`null.message` 会二次抛错。
+check('非 Error 抛出物一律 String()，绝不二次抛错', (() => {
+  const cases = [
+    ['string', 'oops', 'oops'],
+    ['null', null, 'null'],
+    ['undefined', undefined, 'undefined'],
+    ['number', 42, '42'],
+    ['object', { code: 7 }, '[object Object]'],
+  ]
+  const bad = []
+  for (const [name, input, want] of cases) {
+    let got
+    try {
+      got = errMsg(input)
+    } catch (e) {
+      bad.push(`${name} 抛错了（${e}）`)
+      continue
+    }
+    if (got !== want) bad.push(`${name} 期望 ${want} 实际 ${got}`)
+  }
+  if (bad.length) {
+    check('（明细）', false, bad.join('；'))
+    return false
+  }
+  return true
+})())
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
+
 if (failed > 0) {
   console.log('失败项：')
   for (const f of failures) console.log('  ✗ ' + f)

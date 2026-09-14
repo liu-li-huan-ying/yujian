@@ -33,7 +33,7 @@ import * as Snap from './snapshots'
 import { reportSoftError } from './softError'
 // 搜索正则构造收敛到渲染层单一来源，避免「中文全词匹配」在库级搜索与编辑器内搜索行为不一致。
 // regex.ts 为零依赖纯函数（仅 RegExp），可安全被主进程引用。
-import { buildRegex } from '../../src/utils/regex'
+import { buildRegex } from '../shared/regex'
 
 // 回收站实现可注入：生产用 Electron 系统回收站（trash.ts 惰性加载），测试可换假实现。
 // 必须从本模块也导出——打包会把 ./trash 内联成独立副本，只在外层模块设注入是无效的。

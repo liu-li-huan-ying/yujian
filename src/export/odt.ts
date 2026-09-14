@@ -5,7 +5,7 @@
 import JSZip from 'jszip'
 import { parseHtml, rasterizeSvgToImg, collectImages } from './domUtils'
 import { escapeXml } from '../utils/html'
-import type { SerializeCtx } from './serialize'
+import type { SerializeCtx } from './types'
 
 function pxToCm(v: string | null): number {
   if (!v) return 0

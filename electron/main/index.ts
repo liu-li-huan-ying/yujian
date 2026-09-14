@@ -41,6 +41,7 @@ import {
   clearSoftErrors,
   setSoftErrorVerbose
 } from './softError'
+import { errMsg } from '../shared/error'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -265,7 +266,7 @@ function registerIpc(): void {
         const mime = MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
         return { ok: true, dataUrl: `data:${mime};base64,${buf.toString('base64')}` }
       } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+        return { ok: false, error: errMsg(e) }
       }
     }
   )
@@ -554,7 +555,7 @@ function registerIpc(): void {
       }
       return { ok: true, path: result.filePath }
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      return { ok: false, error: errMsg(e) }
     }
   })
 
@@ -592,7 +593,7 @@ function registerIpc(): void {
       await writeFile(result.filePath, buf)
       return { ok: true, path: result.filePath }
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      return { ok: false, error: errMsg(e) }
     } finally {
       win.destroy()
       await unlink(tmp).catch(() => {})

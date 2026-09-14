@@ -14,7 +14,7 @@ import {
   collectImages
 } from './domUtils'
 import { escapeXml } from '../utils/html'
-import type { SerializeCtx } from './serialize'
+import type { SerializeCtx } from './types'
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'

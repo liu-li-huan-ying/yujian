@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 import { computed, ref, watch } from 'vue'
 import { SIDEBAR_MAX, SIDEBAR_MIN, type FileNode } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
@@ -136,9 +137,6 @@ const vaultName = computed(() => {
   return props.vaultPath.split(/[\\/]/).filter(Boolean).pop() ?? props.vaultPath
 })
 
-function errMsg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
-}
 
 /** 取一个节点的父目录绝对路径 */
 function parentDir(p: string): string {

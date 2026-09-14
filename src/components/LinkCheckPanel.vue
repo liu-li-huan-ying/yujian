@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
@@ -88,7 +89,7 @@ async function run(): Promise<void> {
     report.value = await window.api.checkLinks(props.vaultPath)
     filter.value = 'all'
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errMsg(e)
   } finally {
     loading.value = false
   }

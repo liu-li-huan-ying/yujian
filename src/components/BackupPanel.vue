@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../../electron/shared/error'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import Icon from './Icon.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -58,7 +59,7 @@ async function doBackup(): Promise<void> {
     result.value = { files: res.files, bytes: res.bytes, skipped: [], kind: 'backup' }
     phase.value = 'done'
   } catch (e) {
-    error.value = L.backupFailed.replace('{e}', e instanceof Error ? e.message : String(e))
+    error.value = L.backupFailed.replace('{e}', errMsg(e))
     phase.value = 'error'
   }
 }
@@ -82,7 +83,7 @@ async function doRestore(): Promise<void> {
     // 恢复会改写在库文件，交由 App 重载当前文档并抑制「外部修改」误报
     emit('after-restore')
   } catch (e) {
-    error.value = L.backupFailed.replace('{e}', e instanceof Error ? e.message : String(e))
+    error.value = L.backupFailed.replace('{e}', errMsg(e))
     phase.value = 'error'
   }
 }

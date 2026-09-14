@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errMsg } from '../electron/shared/error'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import Icon from './components/Icon.vue'
@@ -47,7 +48,7 @@ import type {
   BrokenLinkItem,
   IntegrityReport,
 } from '../electron/shared/ipc-channels'
-import { parseFrontmatter, serializeFrontmatter } from './editor/frontmatter'
+import { parseFrontmatter, serializeFrontmatter } from './markdown/frontmatter'
 import { useI18n, setLocale } from './i18n'
 import type { LocaleKey } from './i18n'
 import { useTabsStore } from './store/tabs'
@@ -198,7 +199,7 @@ async function onTabRename(payload: { path: string; name: string }): Promise<voi
     if (res.linksUpdated > 0)
       showToast(U.linksUpdated.replace('{n}', String(res.linksUpdated)), 'ok')
   } catch (e) {
-    showToast(U.renameFail.replace('{m}', e instanceof Error ? e.message : String(e)), 'err')
+    showToast(U.renameFail.replace('{m}', errMsg(e)), 'err')
   }
 }
 
@@ -248,7 +249,7 @@ async function onDeleteNode(node: FileNode): Promise<void> {
   try {
     await window.api.deleteItem(node.path)
   } catch (e) {
-    showToast(U.deleteFail.replace('{m}', e instanceof Error ? e.message : String(e)), 'err')
+    showToast(U.deleteFail.replace('{m}', errMsg(e)), 'err')
     await refreshTree()
     return
   }

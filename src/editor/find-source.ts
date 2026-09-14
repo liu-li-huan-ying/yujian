@@ -1,6 +1,6 @@
 import { StateField, StateEffect, type EditorState, type Range } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView } from '@codemirror/view'
-import { buildRegex } from '../utils/regex'
+import { buildRegex } from '../../electron/shared/regex'
 
 /** 源码模式搜索高亮状态：由统一搜索的 query / 选项驱动，currentLine 标记当前结果所在行 */
 export interface SourceFindState {

@@ -5,7 +5,7 @@
 import JSZip from 'jszip'
 import { parseHtml, collectImages } from './domUtils'
 import { escapeXml } from '../utils/html'
-import type { SerializeCtx } from './serialize'
+import type { SerializeCtx } from './types'
 import { i18n } from '../i18n'
 
 interface NavItem {

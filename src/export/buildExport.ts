@@ -9,13 +9,14 @@
  */
 import { buildExportHtml, renderLatexBlocksInExport } from './docTemplate'
 import { inlineImages } from './imageInline'
-import { embedMermaidSvg } from './mermaidSvg'
+import { embedMermaidSvg } from './embedMermaid'
 import { markdownToLatex } from './markdownToLatex'
 import { isBinary, kindExt, kindFilter, type ExportKind } from './types'
 import { serializeBinary } from './serialize'
 import { htmlToPlainText } from './domUtils'
 import { baseName } from '../utils/path'
 import type { Locale } from '../i18n/locales/zh-CN'
+import { errMsg } from '../../electron/shared/error'
 
 /** 编辑器需向导出构建暴露的最小 API（构建期只读取正文） */
 export interface ExportHostApi {
@@ -285,7 +286,7 @@ export async function buildExportContent(
       })
     } catch (e) {
       console.error('[export] 序列化二进制格式失败：', e)
-      c.showToast(`${c.U.toastExportErr}${e instanceof Error ? e.message : String(e)}`, 'err', 5000)
+      c.showToast(`${c.U.toastExportErr}${errMsg(e)}`, 'err', 5000)
       return null
     }
     // 预览用：渲染同一份规范化 HTML（图片内联、Mermaid 已是 SVG）

@@ -1,3 +1,14 @@
+/**
+ * 搜索正则构造 —— **三进程共享的单一来源**。
+ *
+ * 为什么放在 `electron/shared/` 而不是 `src/utils/`：主进程的库级搜索（`vault.ts`）
+ * 与渲染层的编辑器内搜索（`find-wysiwyg` / `find-source`）必须用同一套正则语义，
+ * 否则「全词匹配」在两边行为会分叉。而 `src/` 属渲染层，主进程 import 它会破坏
+ * 三进程边界（主进程构建会被渲染层的 DOM 依赖拖崩）。
+ * `shared/` 是双方都够得着、且互不依赖的中立位置——与 `ipc-channels` /
+ * `wikilink-syntax` 同属一类：**跨进程契约**。
+ */
+
 /** 把字符串转义为正则字面量，避免用户输入里的 . * + 等被当作元字符 */
 export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

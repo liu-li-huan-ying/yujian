@@ -9,7 +9,7 @@
 
 import { enhanceFootnotes, replaceEmojiInHtml, parseHtml } from './domUtils'
 import { escapeXml } from '../utils/html'
-import { renderLatexContent } from '../editor/features/mathjax'
+import { renderLatexContent } from '../render/mathjax'
 import { i18n } from '../i18n'
 
 export interface ExportOptions {
