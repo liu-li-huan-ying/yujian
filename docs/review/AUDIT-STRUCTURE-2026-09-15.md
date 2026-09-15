@@ -241,7 +241,8 @@ e instanceof Error ? e.message : String(e)
 | Wave D | 建议 7：`vaultIndex.ts` 1045 行 → `vaultIndex/` 包 9 文件（最大 272） | 已落地，提交 `e1b8d1f`。删掉 `writeAtomic` 二行包装；门面导出面与原文件一致 |
 | Wave E | 建议 7 续：`electron/main/index.ts` 618 行 → 29 行引导 + `assetProtocol.ts` + `window.ts` + `ipc/` 9 域模块 + 总注册口 | 已落地。53/53 IPC 接线计数一致、5 个函数符号全保留、产物含全部通道字符串 |
 | Wave F | 建议 10：门禁升级 | 已落地。`check:structure` 从 3 条规则扩到 6 条，新增「无循环依赖 / 无自环 / 无分层越界」三类 + `electron/main/` 450 行目录级上限 |
-| 待做 | 建议 8（`App.vue` / `SnapshotPanel` 继续瘦身）、建议 9（`docs/` 分类索引、`EQREF-KNOWN-ISSUE.md` 入库、根目录清理） | 未做 |
+| Wave G | 建议 9：文件管理 | **已落地**。新增 `docs/README.md`（文档索引 + 冲突优先级，用「索引分类」替代「搬迁目录」——`docs/` 路径被源码注释引用 20 余处，搬迁是纯风险）；`EQREF-KNOWN-ISSUE.md` 从被 gitignore 的 `.workbuddy/memory/` 按字节移入 `docs/` 并从 `ARCHITECTURE.md` 指回；`_check.log` 经查已被 `.gitignore` 的 `*.log` 覆盖，无需再改 |
+| 待做 | 建议 8（`App.vue` / `SnapshotPanel` 继续瘦身） | 未做 |
 
 ### 验收标准逐条核对（§五）
 
@@ -256,7 +257,9 @@ e instanceof Error ? e.message : String(e)
    否则 IPC 注册一搬位置该断言就静默失效。
 4. ✅ 功能零回归：`test-core` **266 断言**、`verify:markdown` 34、`verify:corpus` 18、`perf:index` 9
    （全量构建 1205ms / 增量 0.0069ms，与拆分前同量级，证明拆包零运行时开销）、`build` 通过。
-5. ⬜ `git ls-files` 覆盖全部权威文档、`docs/README.md` 建立索引 —— 属建议 9，未做。
+5. ✅ `git ls-files` 覆盖全部权威文档；`docs/README.md` 建立索引并写明冲突优先级。
+   `EQREF-KNOWN-ISSUE.md` 原先躺在 `.workbuddy/memory/`（该目录被 gitignore）——即
+   **克隆后根本看不到这份「单一事实源」**，且版本库内没有任何文档引用它。已按字节移入 `docs/`。
 
 ### 本次审计暴露的「元问题」
 
