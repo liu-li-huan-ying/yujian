@@ -95,3 +95,21 @@ jobs:
           npm_config_registry: https://registry.npmjs.org/
           ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
           ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download
+
+  # ── 第三步：三平台产物全部上传完毕后，将 draft 翻为「已发布」（并自动成为 Latest）──
+  # 不传 body/name，仅翻转 draft 标记，保留 create-release 生成的发布说明与标题。
+  publish-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release (draft → released)
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ needs.create-release.outputs.tag }}
+          draft: false
+          allowUpdates: true
+          omitBody: true
+          omitName: true
+          token: ${{ secrets.GITHUB_TOKEN }}
