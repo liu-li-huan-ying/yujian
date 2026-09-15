@@ -35,6 +35,9 @@
 - `electron/main/vault.ts`（1134 行 / 12 导出 / 7 类职责）→ 拆为 `electron/main/vault/` 包 **9 个文件**，
   最大 430 行。外部仍从 `./vault` 导入，调用方零改动。
   副产品：中文自然排序（`humanCompare`）从「埋在 1135 行里、无法断言」变成可测纯函数。
+- `electron/main/vaultIndex.ts`（1045 行 / 35 导出）→ 拆为 `electron/main/vaultIndex/` 包 **9 个文件**，
+  最大 270 行：types / metadata / paths / store / links / pkm / rewrites / graph + index 门面。
+  顺带删掉 `writeAtomic` 这个只转调 `atomicWrite` 的二行包装。
 
 ### 新增 · 中文双击选词（分词）
 - **双击中文按词选中**：此前双击中文会把一长串汉字（常含标点）整段选走，想复制一个词、给一个词加粗都很别扭。现在双击中文按**词边界**选中，双击「开源」就选中「开源」。

@@ -95,7 +95,7 @@ function makeVault(files) {
 const read = (p) => readFileSync(p, 'utf-8')
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-const { url, dir: bundleDir } = await bundle('electron/main/vaultIndex.ts', 'vaultIndex.mjs')
+const { url, dir: bundleDir } = await bundle('electron/main/vaultIndex/index.ts', 'vaultIndex.mjs')
 
 try {
   const Idx = await import(url)

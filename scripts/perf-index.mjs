@@ -105,7 +105,7 @@ function makeVault(count) {
 console.log(`\n[index perf] files=${N} budget=${JSON.stringify(BUDGET)}\n`)
 
 const Idx = await import(
-  (await bundleTs({ root, entry: 'electron/main/vaultIndex.ts', outName: 'vaultIndex.mjs' })).url
+  (await bundleTs({ root, entry: 'electron/main/vaultIndex/index.ts', outName: 'vaultIndex.mjs' })).url
 )
 
 const vault = makeVault(N)

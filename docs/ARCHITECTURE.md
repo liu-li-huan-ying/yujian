@@ -1690,6 +1690,34 @@ export interface SessionState {
 2. **可变状态不跨模块散落**：`vaultRoot` / 抑制窗归 `context`，索引状态归 `indexStore`；
    其余模块一律经函数读写（`setVaultRoot` / `isProgrammaticSuppressed`），不直接持有 `let`。
 
+## 5.35 `electron/main/vaultIndex/` 包：索引层细颗粒拆分（2026-09-15）
+
+`vaultIndex.ts`（1045 行 / 35 导出）是主进程第二大胖文件，混装五类职责。现拆为包目录，
+`./vaultIndex` 解析到 `vaultIndex/index.ts` 门面，**调用方零改动**（`main/index.ts`、
+`vaultIntegrity.ts`、`vaultBackup.ts`、`vault/*`、`test-core.mjs`、`perf-index.mjs`）。
+
+### 文件职责与依赖方向
+
+| 文件 | 行数 | 职责 | 依赖 |
+| --- | --- | --- | --- |
+| `types.ts` | ~60 | 全部类型与共享常量（`IndexEntry`/`VaultIndex`/`PathMaps`/`MD_EXT`/`INDEX_VERSION`…） | 无 |
+| `metadata.ts` | ~193 | 元数据解析（frontmatter / 标题层级 / 出链 / 内联标签） | types |
+| `paths.ts` | ~41 | 文件判定（跳过规则 / 是否 Markdown）+ 路径映射构建 | types |
+| `store.ts` | ~220 | 索引构建 / 增量 reconcile / 持久化 / `ensureIndex` | types, metadata, paths |
+| `links.ts` | ~79 | 双链解析与反链上下文 | store, paths, metadata |
+| `pkm.ts` | ~270 | 标签树 / MOC 大纲 / 未链接提及 | store, metadata |
+| `rewrites.ts` | ~132 | 重命名 / 移动时改写全库 `[[wikilink]]` | links, paths |
+| `graph.ts` | ~96 | 关系图谱纯函数 | types |
+| `index.ts` | ~24 | 公开门面（含原文件的**设计铁律**注释） | 全部 |
+
+依赖严格单向（types → metadata/paths → store → links → rewrites；store → pkm），**无环**。
+
+### 拆分的副产品
+
+- `writeAtomic`（只转调 `atomicWrite` 的二行包装）已删除，调用点直呼 `atomicWrite`。
+- `normalizeTag` / `targetKey` / `ensureIndex` 由私有改为对包内导出（跨子模块需要），
+  但**不进公开门面**——门面仍等于原 `vaultIndex.ts` 的导出面，对外 API 未变。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash
