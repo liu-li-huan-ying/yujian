@@ -111,7 +111,46 @@ try {
     resolveTarget,
     resolveTargetWithMaps,
     buildIndex,
+    reconcileIndex,
+    loadIndex,
+    saveIndex,
   } = Idx
+
+  /* ── X. 索引 reconcile 刷新磁盘已变 frontmatter（内容地图识别真因回归） ──
+     为什么单独测：内容地图「moc:true」由索引元数据派生。若打开库时只 load 旧缓存、不
+     reconcile，应用关闭期间外部改动的 frontmatter 永不被重新解析——典型 bug：在外部把 moc
+     改好，重开库仍显示「不是内容地图」。reconcileIndex 仅重解析 mtime 变化的文件，是打开库时
+     一次性对齐的既定用途（vault/indexStore.ensureIndex 现已在 load 缓存后调用它）。 */
+  section('[X] 索引 reconcile 刷新磁盘已变 frontmatter（内容地图识别）')
+
+  {
+    const dir = makeVault({
+      'A.md': '---\nmoc: true\n---\n\n# A\n',
+      'B.md': '---\ntitle: B\n---\n\n# B\n',
+    })
+    const aPath = join(dir, 'A.md')
+    const bPath = join(dir, 'B.md')
+    // 1) 全量构建：A 是 MOC
+    let idx = await buildIndex(dir)
+    check('构建后 A.moc=true', idx.files[aPath].moc === true)
+    // 2) 落盘缓存
+    await saveIndex(dir, idx)
+    // 3) 模拟「应用关闭期间外部把 A 的 moc 去掉」（确保 mtime 已推进，避免同毫秒误判未变）
+    await new Promise((r) => setTimeout(r, 30))
+    writeFileSync(aPath, '---\nmoc: false\n---\n\n# A\n', 'utf-8')
+    // 4) 载入旧缓存（应当仍是 moc=true，stale）
+    const stale = await loadIndex(dir)
+    check('载入旧缓存 A.moc 仍为 true（stale）', stale.files[aPath].moc === true)
+    // 5) reconcile 应当重新解析磁盘 → A.moc=false
+    const fixed = await reconcileIndex(dir, stale)
+    check('reconcile 后 A.moc=false（已刷新）', fixed.files[aPath].moc === false)
+    // 6) 反向：外部把 B 改成 moc，reconcile 应发现新 MOC
+    await new Promise((r) => setTimeout(r, 30))
+    writeFileSync(bPath, '---\nmoc: true\n---\n\n# B\n', 'utf-8')
+    const fixed2 = await reconcileIndex(dir, fixed)
+    check('reconcile 后 B.moc=true（新增 MOC 被发现）', fixed2.files[bPath].moc === true)
+    rmSync(dir, { recursive: true, force: true })
+  }
 
   /* ── A. rewriteWikiLinksInText（纯函数） ────────────────────────────── */
   section('[A] rewriteWikiLinksInText —— 只改 target，锚点 / 别名 / 其余字节原样')

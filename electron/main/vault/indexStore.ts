@@ -114,6 +114,11 @@ export function scheduleReconcile(root: string): void {
 
 /**
  * 取得（或惰性构建）当前库索引。磁盘已有且版本匹配直接载入，否则一次性全量构建后落盘。
+ * 载入旧缓存后**必须 reconcile**：watcher 是 `ignoreInitial:true`，应用关闭期间外部改动
+ * （别的编辑器改了 frontmatter、Git 切分支、资源管理器增删文件）在重开库时不会触发任何
+ * 事件，若不 reconcile，磁盘已变的元数据会永远停在旧缓存值——典型表现：在外部把 frontmatter
+ * 的 `moc:true` 改好后重开库，内容地图仍显示「不是内容地图」。reconcileIndex 仅重解析 mtime
+ * 变化的文件（大库无感），且会在无变化时原样返回，不会做多余 IO。
  * 绝不抛错中断主流程。
  */
 export async function ensureIndex(root: string): Promise<Idx.VaultIndex> {
@@ -121,6 +126,9 @@ export async function ensureIndex(root: string): Promise<Idx.VaultIndex> {
   const loaded = await Idx.loadIndex(root)
   if (loaded) {
     idx = loaded
+    // 打开库时一次性对齐：仅重解析磁盘已变动者，禁周期重算（铁律①）
+    idx = await Idx.reconcileIndex(root, idx)
+    scheduleSave(root)
   } else {
     idx = await Idx.buildIndex(root)
     void Idx.saveIndex(root, idx).catch(() => {})
