@@ -425,6 +425,13 @@ section('[D] wikilink 语法往返 —— 目标 / 别名 / 锚点一个都不�
   })
   try {
     const W = await import(wUrl)
+    // 用**真实** remark-stringify：此前只测纯逻辑 + 假 addNode，跑不到 remark-stringify 的
+    // 转义环节，导致「[[双链]] 存盘后变成 \[\[双链]]」长期未被发现。
+    const { unified } = await import('unified')
+    const remarkStringify = (await import('remark-stringify')).default
+    /** 绑定 this=processor 调用 attacher，从而把 toMarkdownExtensions handler 真正注册进去 */
+    const proc = unified().use(remarkStringify)
+    W.remarkWikilink.call(proc)
 
     /** 把一段文本喂给 remarkWikilink，取出其中的 wikiLink 节点（无则 null） */
     const parseOne = (src) => {
@@ -432,21 +439,27 @@ section('[D] wikilink 语法往返 —— 目标 / 别名 / 锚点一个都不�
         type: 'root',
         children: [{ type: 'paragraph', children: [{ type: 'text', value: src }] }],
       }
-      W.remarkWikilink()(tree)
+      W.remarkWikilink.call(proc)(tree)
       return tree.children[0].children.find((n) => n.type === 'wikiLink') ?? null
     }
-    /** 用 toMarkdown runner 把（类 ProseMirror）节点序列化回 Markdown 文本 */
-    const serialize = (node) => {
+    /** 用 toMarkdown runner 把（类 ProseMirror）节点序列化为 mdast 节点 */
+    const serializeNode = (node) => {
       const out = []
       W.wikiLinkSchema.toMarkdown.runner(
-        { addNode: (_type, _value, text) => out.push(text ?? '') },
+        { addNode: (type, _children, _value, props) => out.push({ type, ...(props ?? {}) }) },
         { attrs: { target: node.target, alias: node.alias, anchor: node.anchor } }
       )
-      return out.join('')
+      return out[0] ?? null
     }
+    /** 完整往返：解析 → mdast 节点 → 真实 remark-stringify → Markdown 文本 */
     const roundTrip = (src) => {
       const n = parseOne(src)
-      return n ? serialize(n) : null
+      if (!n) return null
+      const md = serializeNode(n)
+      if (!md) return null
+      return proc
+        .stringify({ type: 'root', children: [{ type: 'paragraph', children: [md] }] })
+        .trim()
     }
 
     check('[[A]] 往返一致', roundTrip('[[A]]') === '[[A]]', String(roundTrip('[[A]]')))
@@ -473,10 +486,33 @@ section('[D] wikilink 语法往返 —— 目标 / 别名 / 锚点一个都不�
         type: 'root',
         children: [{ type: 'paragraph', children: [{ type: 'text', value: '前 [[A]] 中 [[B#c]] 后' }] }],
       }
-      W.remarkWikilink()(tree)
+      W.remarkWikilink.call(proc)(tree)
       const kids = tree.children[0].children
       check('混合段落节点序列正确', kids.map((n) => n.type).join(',') === 'text,wikiLink,text,wikiLink,text', kids.map((n) => n.type).join(','))
       check('混合段落两侧文本保留', kids[0].value === '前 ' && kids[4].value === ' 后')
+    }
+
+    /* ── 回归：序列化不得被 remark-stringify 转义（「[[双链]] 存盘变 \[\[双链]]」的元凶）──
+       为什么必须真跑 remark-stringify：text 节点里的 `[` 会被当作链接语法字符转义，
+       段落内 `参见 [[中文排版]]` 会写成 `参见 \[\[中文排版]]`，双链全废。
+       故 toMarkdown 必须输出**自定义 mdast 节点** wikiLink，并由注册的 handler 原样输出。 */
+    {
+      const node = serializeNode({ target: '中文排版', alias: null, anchor: null })
+      check('runner 输出 wikiLink 自定义节点（非 text）', node?.type === 'wikiLink', JSON.stringify(node))
+      check('runner 节点带 target 字段', node?.target === '中文排版', JSON.stringify(node))
+
+      // 负向对照：证明本组断言不是空转——text 节点确实会被引擎转义
+      const escaped = proc
+        .stringify({
+          type: 'root',
+          children: [{ type: 'paragraph', children: [{ type: 'text', value: '参见 [[中文排版]]' }] }],
+        })
+        .trim()
+      check('对照：text 节点确实会被转义（证明断言非空转）', escaped.includes('\\['), JSON.stringify(escaped))
+
+      check('[[双链]] 序列化不被转义', roundTrip('[[中文排版]]') === '[[中文排版]]', String(roundTrip('[[中文排版]]')))
+      check('[[双链|别名]] 序列化不被转义', roundTrip('[[A|别名]]') === '[[A|别名]]', String(roundTrip('[[A|别名]]')))
+      check('[[双链#锚点]] 序列化不被转义', roundTrip('[[A#锚]]') === '[[A#锚]]', String(roundTrip('[[A#锚]]')))
     }
   } finally {
     rmSync(wDir, { recursive: true, force: true })
@@ -970,8 +1006,9 @@ try {
   const s = split(mocDoc)
   check('split：识别出 frontmatter 块', s.block !== null, JSON.stringify(s.block))
   check('split：块含 moc:true（MOC 标记不被吞）', (s.block ?? '').includes('moc: true'))
-  check('split：正文逐字剥离（含前导空行）', s.body === '\n# 功能总览\n\n正文。\n', JSON.stringify(s.body))
-  check('split：block+body 复原原串', s.block + s.body === mocDoc)
+  check('split：正文逐字剥离（前导空行归 sep）', s.body === '# 功能总览\n\n正文。\n', JSON.stringify(s.body))
+  check('split：sep 保留头与正文之间的空行', s.sep === '\n\n', JSON.stringify(s.sep))
+  check('split：block+sep+body 复原原串', s.block + s.sep + s.body === mocDoc)
 
   const noFm = '# 无属性\n\n正文。\n'
   const ns = split(noFm)
@@ -980,6 +1017,14 @@ try {
   // 关键回归：未改动正文时，往返必须逐字节等于原文——否则自动保存会写出「无头文件」使 moc=false
   check('往返：正文不变 → 原样保真（MOC 不丢）', roundTrip(mocDoc) === mocDoc, JSON.stringify(roundTrip(mocDoc)))
   check('往返：无 frontmatter 文档不被凭空加头', roundTrip(noFm) === noFm)
+  // Crepe 序列化会吃掉正文的前导空行（实测：保存后 `---` 与首个标题间少一个空行）。
+  // sep 单独留存正是为此：空行不被算进 body，往返后分隔照旧。
+  const eatLeading = (b) => b.replace(/^\n+/, '')
+  check(
+    '往返：Crepe 吃掉正文前导空行后仍保留分隔空行',
+    roundTrip(mocDoc, eatLeading) === mocDoc,
+    JSON.stringify(roundTrip(mocDoc, eatLeading))
+  )
 
   // 模拟 Crepe 序列化做了规范化（如 *强调* → _强调_）：frontmatter 必须仍在、只正文被规范
   const editDoc = '---\nmoc: true\n---\n\n这是 *强调* 文本。\n'

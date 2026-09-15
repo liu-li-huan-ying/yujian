@@ -11,36 +11,38 @@
  */
 
 export interface FrontmatterSplit {
-  /** 匹配到的整段 frontmatter 区域（含闭合 `---` 行及其后换行、已去 BOM）；无合法 frontmatter 时为 null */
+  /** `---\n…\n---` 块本体（不含其后的换行、已去 BOM）；无合法 frontmatter 时为 null */
   block: string | null
-  /** frontmatter 之后的正文，逐字保留（含其前导空行），用于喂给 Crepe */
+  /** 头与正文之间的换行（原样保留，如 `\n\n`）。**单独留存**是因为 Crepe 序列化会吃掉
+   *  正文的前导空行，若把它算进 body，保存后 `---` 与首个标题就会少一个空行。 */
+  sep: string
+  /** 正文（已去掉前导换行），用于喂给 Crepe */
   body: string
 }
 
 /**
- * 拆分 frontmatter 与正文。匹配以 `---` 起、以 `---` 止的 YAML 块；把**整段匹配区域**作为
- * block 留存（含闭合 `---` 行及其后的换行），正文从匹配结束处逐字切出——
- * 如此 `block + body` 在不改动正文时与原串**逐字节一致**（头与正文间的空行数原样保留）。
+ * 拆分 frontmatter 与正文。匹配以 `---` 起、以 `---` 止的 YAML 块：
+ * block 取块本体，其后所有空白（含空行）单独作为 sep，**正文从空白之后逐字切出**——
+ * 如此 `block + sep + body` 在不改动正文时与原串**逐字节一致**。
  */
 export function splitFrontmatter(text: string): FrontmatterSplit {
   const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(clean)
-  if (!m) return { block: null, body: clean }
-  const block = m[0]
+  const m = /^---\r?\n([\s\S]*?)\r?\n---(\s*)/.exec(clean)
+  if (!m) return { block: null, sep: '', body: clean }
+  const block = `---\n${m[1]}\n---`
+  // 至少补一个换行，避免 `---` 与首行内容粘死
+  const sep = m[2] || '\n'
   const body = clean.slice(m[0].length)
-  return { block, body }
+  return { block, sep, body }
 }
 
 /**
- * 把正文拼回留存的 frontmatter。block 通常已以换行结尾（由 splitFrontmatter 得来），
- * 仅当「block 不以换行结尾 且 正文不以换行起」时才补一个换行，避免 `---` 与首行内容粘死；
- * 两侧任一侧已提供换行则不再插入，保证 `block（=原匹配区域）+ body` 在正文不变时逐字节原样。
+ * 把正文拼回留存的 frontmatter（含原本的空行分隔）。
  * 无 frontmatter（block 为 null）时原样返回正文。
  */
-export function reattachFrontmatter(block: string | null, body: string): string {
+export function reattachFrontmatter(block: string | null, body: string, sep = '\n'): string {
   if (!block) return body
-  const sep = block.endsWith('\n') || /^\n/.test(body) ? '' : '\n'
-  return block + sep + body
+  return block + (sep || '\n') + body
 }
 
 /**
@@ -51,6 +53,6 @@ export function roundTripFrontmatter(
   text: string,
   transform: (body: string) => string = (b) => b,
 ): string {
-  const { block, body } = splitFrontmatter(text)
-  return reattachFrontmatter(block, transform(body))
+  const { block, sep, body } = splitFrontmatter(text)
+  return reattachFrontmatter(block, transform(body), sep)
 }

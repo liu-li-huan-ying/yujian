@@ -83,6 +83,8 @@ let imgObserver: MutationObserver | null = null
  * 载入前剥离、序列化后原样拼回（见 ./frontmatterBoundary）。
  */
 let currentFrontmatter: string | null = null
+/** 头与正文之间的原空行（单独留存：Crepe 序列化会吃掉正文前导空行，见 frontmatterBoundary） */
+let currentSep = '\n'
 
 /* ── [[ 自动补全浮层（批次二收尾）────────────────
  * 分工：wikilinkSuggest 插件只负责「判定触发 + 报坐标 + 拦按键」，
@@ -470,6 +472,7 @@ async function init(defaultValue?: string): Promise<void> {
   // 故只把正文交给它，原始 frontmatter 块单独留存（currentFrontmatter）待序列化后拼回。
   const initial = splitFrontmatter(defaultValue ?? props.modelValue ?? '')
   currentFrontmatter = initial.block
+  currentSep = initial.sep
 
   crepe = new Crepe({
     root: host.value,
@@ -546,7 +549,7 @@ async function init(defaultValue?: string): Promise<void> {
   crepe.on((listener) => {
     listener.markdownUpdated((_ctx, markdown) => {
       // 序列化结果只是正文；拼回留存的 frontmatter 再向上 emit，保证保真层与磁盘内容带 YAML 头
-      emit('update:modelValue', reattachFrontmatter(currentFrontmatter, markdown))
+      emit('update:modelValue', reattachFrontmatter(currentFrontmatter, markdown, currentSep))
     })
   })
 
@@ -652,8 +655,9 @@ async function setMarkdown(markdown: string): Promise<void> {
   resetMathNumbering()
   // 载入前剥离 frontmatter：只把正文交给 Crepe，原始 YAML 头单独留存（currentFrontmatter），
   // 待序列化后由 getMarkdown / markdownUpdated 拼回，杜绝「自动保存把无头文件写回磁盘」。
-  const { block, body } = splitFrontmatter(markdown)
+  const { block, sep, body } = splitFrontmatter(markdown)
   currentFrontmatter = block
+  currentSep = sep
   await crepe.editor.action(replaceAll(body))
   if (host.value) rewriteImages(host.value)
 }
@@ -661,7 +665,7 @@ async function setMarkdown(markdown: string): Promise<void> {
 function getMarkdown(): string {
   // 仅序列化正文，再拼回留存的 frontmatter；crepe 未就绪时回退到父组件传入的完整文本。
   if (!crepe) return props.modelValue
-  return reattachFrontmatter(currentFrontmatter, crepe.getMarkdown())
+  return reattachFrontmatter(currentFrontmatter, crepe.getMarkdown(), currentSep)
 }
 
 /**

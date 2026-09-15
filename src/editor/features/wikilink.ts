@@ -54,40 +54,71 @@ function displayText(a: WikiLinkAttrs): string {
 }
 
 /**
- * remark 插件：行内文本里的 `[[...]]` 改写为 `wikiLink` mdast 节点。
+ * 序列化 handler：`wikiLink` mdast 节点 → 原样输出 `[[target]]` / `[[target#anchor|alias]]`。
+ *
+ * **这一步不可省**。若退化成普通 text 节点输出，remark-stringify 会把 `[` 当作链接语法字符
+ * 转义——实测段落内 `参见 [[中文排版]]` 会被写成 `参见 \[\[中文排版]]`，存盘后双链全废。
+ * 这正是「编辑保存后 `[[双链]]` 变成 `\[\[双链]]`」的根因（test-core `[D]` 只测了纯逻辑、
+ * 用的是 stubs，跑不到 remark-stringify，所以一直没暴露）。
+ * 走 `data('toMarkdownExtensions')` 是 remark 官方扩展通道（同 remarkInlineMarks）。
+ */
+function wikiLinkToMarkdownHandlers(): Record<string, (node: unknown) => string> {
+  return {
+    wikiLink: (raw: unknown): string => {
+      const node = (raw ?? {}) as { target?: unknown; alias?: unknown; anchor?: unknown }
+      const target = String(node.target ?? '')
+      const hash = node.anchor ? `#${node.anchor}` : ''
+      return node.alias ? `[[${target}${hash}|${node.alias}]]` : `[[${target}${hash}]]`
+    },
+  }
+}
+
+/**
+ * remark 插件（attacher）：注册序列化 handler + 把正文文本里的 `[[...]]` 改写为 `wikiLink` mdast 节点。
+ *
+ * 刻意用 `function` 而非箭头函数：需要 processor 的 `this.data()` 才能挂 toMarkdownExtensions。
  * 逐节点递归；只对 text 节点做切片替换，其余节点原地保留并继续向下走。
  */
-export const remarkWikilink = $remark('remarkWikilink', () => () => (tree: MdNode) => {
-  const WIKILINK_RE = wikiLinkRegex()
+export const remarkWikilink = $remark('remarkWikilink', () => function (this: unknown) {
+  // this 是 remark processor（由 unified 调用时绑定）。单测直接调用 attacher 时为 undefined，
+  // 故做防御：拿不到 data 就跳过注册，_transformer 本身仍照常工作，绝不抛错。
+  const holder = this as { data?: () => Record<string, unknown> } | undefined
+  const data = holder?.data?.() ?? {}
+  const tm = (data.toMarkdownExtensions as unknown[]) ?? (data.toMarkdownExtensions = [])
+  tm.push({ handlers: wikiLinkToMarkdownHandlers() })
 
-  const walk = (node: MdNode): void => {
-    if (!node || typeof node !== 'object') return
-    if (!Array.isArray(node.children)) return
+  return (tree: MdNode): void => {
+    const WIKILINK_RE = wikiLinkRegex()
 
-    const out: MdNode[] = []
-    for (const child of node.children) {
-      if (child.type === 'text' && typeof child.value === 'string') {
-        const value = child.value
-        let last = 0
-        let m: RegExpExecArray | null
-        WIKILINK_RE.lastIndex = 0
-        while ((m = WIKILINK_RE.exec(value)) !== null) {
-          const pre = value.slice(last, m.index)
-          if (pre) out.push({ type: 'text', value: pre })
-          out.push({ type: 'wikiLink', ...parseInner(m[1]) })
-          last = m.index + m[0].length
+    const walk = (node: MdNode): void => {
+      if (!node || typeof node !== 'object') return
+      if (!Array.isArray(node.children)) return
+
+      const out: MdNode[] = []
+      for (const child of node.children) {
+        if (child.type === 'text' && typeof child.value === 'string') {
+          const value = child.value
+          let last = 0
+          let m: RegExpExecArray | null
+          WIKILINK_RE.lastIndex = 0
+          while ((m = WIKILINK_RE.exec(value)) !== null) {
+            const pre = value.slice(last, m.index)
+            if (pre) out.push({ type: 'text', value: pre })
+            out.push({ type: 'wikiLink', ...parseInner(m[1]) })
+            last = m.index + m[0].length
+          }
+          const tail = value.slice(last)
+          if (tail) out.push({ type: 'text', value: tail })
+        } else {
+          out.push(child)
+          walk(child)
         }
-        const tail = value.slice(last)
-        if (tail) out.push({ type: 'text', value: tail })
-      } else {
-        out.push(child)
-        walk(child)
       }
+      node.children = out
     }
-    node.children = out
-  }
 
-  walk(tree)
+    walk(tree)
+  }
 })
 
 export const wikiLinkSchema = $nodeSchema(wikiLinkId, () => ({
@@ -138,10 +169,16 @@ export const wikiLinkSchema = $nodeSchema(wikiLinkId, () => ({
     runner: (state: any, node: any) => {
       const { target, alias, anchor } = node.attrs
       // 锚点必须写回，否则 `[[目标#小节]]` 一存盘就退化成 `[[目标]]`（往返保真红线）
-      const hash = anchor ? `#${anchor}` : ''
-      const text = alias ? `[[${target}${hash}|${alias}]]` : `[[${target}${hash}]]`
-      // 以纯文本节点写回，保证 `[[`/`]]` 定界符原样保留，Markdown 往返保真
-      state.addNode('text', undefined, text)
+      //
+      // 输出**自定义 mdast 节点** `wikiLink`（而非 text）：text 节点会被 remark-stringify
+      // 当成普通文本做转义，`[[` 变成 `\[\[`；自定义节点则由 remarkWikilink 注册的
+      // toMarkdownExtensions handler 原样输出，定界符零转义。
+      // addNode(type, children, value, props) —— props 会被展开成 mdast 节点字段。
+      state.addNode('wikiLink', undefined, undefined, {
+        target,
+        alias: alias ?? null,
+        anchor: anchor ?? null,
+      })
     }
   }
 }))

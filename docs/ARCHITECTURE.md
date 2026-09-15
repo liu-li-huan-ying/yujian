@@ -430,6 +430,31 @@ MOC 面板消失；且**一旦写坏，坏内容就成了新的"磁盘原文"，
 
 > 注：快照恢复 / 图床发布在灌入后**显式**调 `scheduleSave()`——那是刻意要落盘的，不受抑制影响。
 
+#### 5.2.3 自定义语法的序列化**不得**输出 text 节点（2026-09-15）
+
+> 起因：编辑保存后正文 `[[双链]]` 变成 `\[\[双链]]`，双链全废。
+
+`wikiLinkSchema.toMarkdown` 原本以 `state.addNode('text', undefined, '[[目标]]')` 写回。
+但 text 节点会被 remark-stringify 当作**普通文本**做转义，而 `[` 是链接语法字符——
+段落内 `参见 [[中文排版]]` 被写成 `参见 \[\[中文排版]]`。
+
+**规则**：自定义语法一律输出**自己的 mdast 节点类型**，并走 `data('toMarkdownExtensions')`
+注册 handler 原样输出（remark 官方扩展通道，同 `remarkInlineMarks`）：
+
+| 输出方式 | remark-stringify 结果 |
+| --- | --- |
+| text 节点 | `参见 \[\[中文排版]]`（被转义） |
+| 自定义节点 + handler | `参见 [[中文排版]]`（原样） |
+
+不注册 handler 会直接抛 `Cannot handle unknown node \`wikiLink\``。
+
+> **测试盲区教训**：原 `[D]` 段用假 `addNode` 桩，跑不到 remark-stringify，所以这个 bug 长期
+> 未暴露。现已改为**真跑** `unified().use(remarkStringify)`，并保留一条**负向对照**断言
+> （text 节点确实会被转义），确保这组断言不是空转。
+
+同理，「Crepe 吃掉正文前导空行」也被单独处理：frontmatter 与正文之间的换行由 `sep` **单独
+留存**、不计入 body，否则保存后 `---` 与首个标题之间会少一个空行。
+
 ### 5.3 Mermaid 图表方案（代码块预览钩子）
 
 > **实现时改了方案**：原计划自研 NodeView，实际改用 Crepe 代码块自带的
