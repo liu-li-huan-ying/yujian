@@ -29,9 +29,9 @@ import ZenRetreatBar from './components/ZenRetreatBar.vue'
 import ZenSettings from './components/ZenSettings.vue'
 import ExportPreview from './components/ExportPreview.vue'
 import CompilePanel from './components/CompilePanel.vue'
-import { setZenPrefs } from './editor/zen'
 import { initAppearance } from './appearance'
 import { initTypography } from './typography'
+import { isVaultEventSuppressed, markProgrammatic, assetsPathOf } from './refreshGuard'
 import { eventToCombo, formatCombo } from './utils/keymap'
 import { resolvePaletteHotkey } from './utils/paletteHotkey'
 import {
@@ -44,7 +44,6 @@ import type {
   FileNode,
   VaultChange,
   StartupMode,
-  ZenPrefs,
   BrokenLinkItem,
   IntegrityReport,
 } from '../electron/shared/ipc-channels'
@@ -56,11 +55,18 @@ import { useSnapshotsStore } from './store/snapshots'
 import { usePkmPanels } from './composables/usePkmPanels'
 import { useVaultLinks } from './composables/useVaultLinks'
 import { useExport, type ExportHostLike } from './composables/useExport'
+import { useToast } from './composables/useToast'
+import { useFileConflict, type ConflictEditorLike } from './composables/useFileConflict'
+import { useZenMode, type ZenEditorLike } from './composables/useZenMode'
+import { useWindowLayout } from './composables/useWindowLayout'
 import type { TextStats } from './utils/text-stats'
 import type { CommandId } from './utils/commands'
 
 const { t: L, getLocale } = useI18n()
 const U = L.ui
+
+/** 顶部轻提示：定时器随组件卸载自动清理（原先是 App 自己记一个 toastTimer） */
+const { toast, showToast, clearToast } = useToast()
 
 const tabs = useTabsStore()
 /** 当前编辑文档 = 激活标签路径；多标签下由 tabs store 驱动（单实例换内容，守 Milkdown 红线） */
@@ -74,7 +80,6 @@ const lastSavedAt = ref<number | null>(null)
 
 const vaultPath = ref<string | null>(null)
 const tree = ref<FileNode[]>([])
-const sidebarWidth = ref(224)
 
 /** Crepe 初始化是异步的，就绪前要打开的文档先存在这里 */
 const pendingPath = ref<string | null>(null)
@@ -334,91 +339,48 @@ let treeTimer: ReturnType<typeof setTimeout> | null = null
  * watcher 还会把同一磁盘改动再推回来。以「路径集合 + 时间窗」标定我们刚亲手做过的改动，
  * 让同源事件直接忽略——既去重刷新，也避免当前文档被移动/重命名时误判为「外部删除」。
  */
-import { isVaultEventSuppressed, markProgrammatic, assetsPathOf } from './refreshGuard'
 
 /**
- * 外部修改冲突检测：当笔记库里「当前正在编辑」的文档被玉笺之外（别的编辑器 / Git 切分支 /
- * 资源管理器改名）改写时，若磁盘内容与编辑器内存内容不同，弹出三选一对话框，绝不静默覆盖。
- * - 自己的保存回声：磁盘 == 内存（我们刚写过的内容）→ 直接忽略，不误报。
- * - 任意有意重写磁盘的操作（保存 / 恢复备份）后，用 conflictSuppressUntil 抑制一段窗口，
- *   避免自身的 change 事件再次触发冲突误报。
+ * 外部修改冲突检测（读盘比对 / 三选一对话框 / 有意写盘后的抑制窗）已抽到
+ * `composables/useFileConflict.ts`；纯判定（「另存两份」的兄弟路径、行尾无关的内容比较）
+ * 在 `utils/conflict.ts`，零依赖、可被 `bundle()` 单独断言。
+ * 这里只注入 App 级上下文，**模板绑定名保持不变**。
  */
-let conflictSuppressUntil = 0
-function isConflictSuppressed(): boolean {
-  return Date.now() < conflictSuppressUntil
-}
+const {
+  conflict,
+  conflictOpen,
+  detectConflict,
+  onConflictKeepMine,
+  onConflictUseDisk,
+  onConflictKeepBoth,
+  onBackupRestored,
+} = useFileConflict({
+  filePath: () => filePath.value,
+  host: () => host.value as unknown as ConflictEditorLike | null,
+  showToast,
+})
 
-async function detectConflict(path: string): Promise<void> {
-  if (isConflictSuppressed() || conflictOpen.value) return
-  try {
-    const disk = await window.api.readFile(path)
-    const mine = host.value?.getMarkdown() ?? ''
-    // 归一化换行，避免 CRLF / LF 差异造成误报
-    const norm = (s: string): string => s.replace(/\r\n/g, '\n')
-    if (norm(disk) === norm(mine)) return // 这是自己的保存回声，忽略
-    // 确有外部改动且与内存不同 → 取消待执行的自动保存，避免 800ms 后把外部改动覆盖掉
-    host.value?.cancelPendingSave()
-    const st = await window.api.statFile(path).catch(() => null)
-    conflict.value = {
-      path,
-      mine,
-      disk,
-      diskMtime: st?.exists ? st.mtimeMs : null,
-    }
-    conflictOpen.value = true
-  } catch {
-    // 读不到磁盘内容：不处理
-  }
-}
-
-function siblingMinePath(p: string): string {
-  const dot = p.lastIndexOf('.')
-  const slash = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
-  if (dot > slash && dot >= 0) return p.slice(0, dot) + '.mine' + p.slice(dot)
-  return p + '.mine'
-}
-
-function finishConflict(): void {
-  conflictOpen.value = false
-  conflict.value = null
-}
-
-function onConflictKeepMine(): void {
-  if (!conflict.value) return
-  conflictSuppressUntil = Date.now() + 5000
-  // 覆盖外部改动：把内存中的「我的版本」写回磁盘（朗读保真、不丢字）
-  void host.value?.save()
-  finishConflict()
-}
-
-async function onConflictUseDisk(): Promise<void> {
-  if (!conflict.value) return
-  conflictSuppressUntil = Date.now() + 5000
-  await host.value?.load(conflict.value.path).catch(() => {})
-  finishConflict()
-}
-
-async function onConflictKeepBoth(): Promise<void> {
-  if (!conflict.value) return
-  const c = conflict.value
-  conflictSuppressUntil = Date.now() + 5000
-  const minePath = siblingMinePath(c.path)
-  try {
-    await window.api.writeFile(minePath, c.mine)
-  } catch {
-    /* 另存失败不阻断：仍载入磁盘版本 */
-  }
-  await host.value?.load(c.path).catch(() => {})
-  const base = minePath.split(/[\\/]/).pop() ?? minePath
-  showToast(U.backupConflictBothSaved.replace('{p}', base), 'ok')
-  finishConflict()
-}
-
-/** 恢复备份：重载当前文档以反映磁盘最新内容，并抑制「外部修改」误报 */
-function onBackupRestored(): void {
-  conflictSuppressUntil = Date.now() + 5000
-  if (filePath.value) void host.value?.load(filePath.value).catch(() => {})
-}
+/**
+ * 凝神 2.0（激活态 / 轻退栏 / 设置面板 / 偏好）已抽到 `composables/useZenMode.ts`。
+ * 它有一条**跨模块联动链**——切凝神要同时通知编辑器 `setZen`、按偏好转/还原全屏、落 session、
+ * 退出时收帘（且「只还原自己转的全屏、不碰用户手动 F11」），散在组件里改一处漏一处。
+ * 这里只注入编辑器宿主与标签切换，**模板绑定名保持不变**。
+ */
+const {
+  focusMode,
+  retreatOpen,
+  zenSettingsOpen,
+  zenPrefs,
+  onToggleFocus,
+  onZenPrefsChange,
+  onZenSettings,
+  onZenActivateTab,
+  onEditorClick,
+  restoreZen,
+} = useZenMode({
+  host: () => host.value as unknown as ZenEditorLike | null,
+  activateTab,
+})
 
 function onVaultChange(change: VaultChange): void {
   // 程序化改动的回声（重命名 / 移动 / 删除 / 新建）：我们已在渲染层显式刷新并同步状态，
@@ -507,17 +469,6 @@ function onKeydown(e: KeyboardEvent): void {
   commandActions[id]()
 }
 
-/* ── 导出（HTML / PDF）── */
-
-const toast = ref<{ msg: string; type: 'ok' | 'err' | 'info' } | null>(null)
-let toastTimer: ReturnType<typeof setTimeout> | null = null
-
-function showToast(msg: string, type: 'ok' | 'err' | 'info' = 'info', duration = 2600): void {
-  toast.value = { msg, type }
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (toast.value = null), duration)
-}
-
 /* ── 图床设置 / 上传 ── */
 
 const showImgHost = ref(false)
@@ -564,11 +515,23 @@ function onStartupMode(next: StartupMode): void {
 
 /* ── 面板显隐（左右独立，持久化）── */
 
-const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
-const sidebarVisible = ref(true)
-const outlineVisible = ref(true)
+/**
+ * 窗口布局（窄窗软收起阈值 / 停靠列显隐 / 侧栏宽度持久化）已抽到
+ * `composables/useWindowLayout.ts`：三者共享同一个 `window` resize 监听与同一个防抖定时器，
+ * 注册与注销分居 `onMounted` / `onBeforeUnmount`，归拢后不会只加不删。**模板绑定名保持不变**。
+ */
+const {
+  sidebarVisible,
+  outlineVisible,
+  sidebarWidth,
+  sidebarShown,
+  outlineShown,
+  onToggleSidebar,
+  onToggleOutline,
+  restoreLayout,
+} = useWindowLayout()
 
-/* ── 批次二：快照面板 / 凝神模式 / 写作统计 ── */
+/* ── 批次二：快照面板 / 写作统计 / 浮层开关 ── */
 
 const snapshots = useSnapshotsStore()
 const linkCheckOpen = ref(false)
@@ -590,12 +553,7 @@ const integrityOpen = ref(false)
 const backupOpen = ref(false)
 const writingAidsOpen = ref(false)
 const lastIntegrityReport = ref<IntegrityReport | null>(null)
-const conflict = ref<{ path: string; mine: string; disk: string; diskMtime: number | null } | null>(
-  null,
-)
-const conflictOpen = ref(false)
 const statsOpen = ref(false)
-const focusMode = ref(false)
 /** 写作目标字数（会话级持久化；0 = 未设） */
 const writingGoal = ref(0)
 const stats = computed<TextStats>(
@@ -705,61 +663,6 @@ function onPalettePick(path: string): void {
   void openPath(path)
 }
 
-/** 切换凝神模式：同步编辑器 + 持久化；含「自动全屏」偏好（进入转全屏、退出还原） */
-function onToggleFocus(): void {
-  focusMode.value = !focusMode.value
-  host.value?.setZen(focusMode.value)
-  if (!focusMode.value) retreatOpen.value = false
-  if (focusMode.value && zenPrefs.value.fullscreen) {
-    zenAutoFullscreen = true
-    window.api.setFullscreen(true)
-  } else if (!focusMode.value && zenAutoFullscreen) {
-    zenAutoFullscreen = false
-    window.api.setFullscreen(false)
-  }
-  void window.api.patchSession({ focusMode: focusMode.value })
-}
-
-/* ── 凝神 2.0：轻退栏 + 设置面板 + 偏好（docs/FOCUS-MODE-2.0-DESIGN.md）── */
-
-/** 轻退栏是否掀起（Esc 状态机：Esc 掀帘 / 再按或点编辑区收起） */
-const retreatOpen = ref(false)
-const zenSettingsOpen = ref(false)
-/** 凝神偏好：锚点 / 雾化 / 平滑度 / 自动全屏 / 轻退栏（会话持久化） */
-const zenPrefs = ref<ZenPrefs>({
-  anchor: 1 / 3,
-  fog: 'mid',
-  scroll: 0.16,
-  fullscreen: false,
-  retreatBar: true,
-  blockZoom: true,
-})
-/** 本次凝神是否因偏好自动全屏（退出时只还原自己转的全屏，不碰用户手动 F11） */
-let zenAutoFullscreen = false
-
-/** 设置面板改即生效：合并 → 应用（雾化档位写 CSS 变量 / 其余进 zen 模块）→ 持久化 */
-function onZenPrefsChange(patch: Partial<ZenPrefs>): void {
-  zenPrefs.value = { ...zenPrefs.value, ...patch }
-  setZenPrefs(zenPrefs.value)
-  void window.api.patchSession({ zenPrefs: zenPrefs.value })
-}
-
-function onZenSettings(): void {
-  retreatOpen.value = false
-  zenSettingsOpen.value = true
-}
-
-/** 轻退栏「切换文档」：复用标签激活逻辑（先落盘脏数据，单实例换内容） */
-function onZenActivateTab(path: string): void {
-  retreatOpen.value = false
-  activateTab(path)
-}
-
-/** 点编辑区收帘（capture 捕获编辑区内任意点击） */
-function onEditorClick(): void {
-  if (retreatOpen.value) retreatOpen.value = false
-}
-
 /** 打开/关闭统计弹层 */
 function onToggleStats(): void {
   statsOpen.value = !statsOpen.value
@@ -852,27 +755,9 @@ function onInsertWikiLink(): void {
   host.value?.insertWikiLink()
 }
 
-/** 窄窗软收起：仅影响显示，不改持久偏好，加宽后恢复用户选择 */
-const sidebarShown = computed(() => sidebarVisible.value && windowWidth.value >= 460)
-const outlineShown = computed(() => outlineVisible.value && windowWidth.value >= 720)
-
 /** 编辑器图片落盘失败（粘贴/拖入图片磁盘不可写等）：明确告知用户，而非静默吞掉 */
 function onEditorError(): void {
   showToast(U.toastImageSaveFail, 'err')
-}
-
-function onResize(): void {
-  windowWidth.value = window.innerWidth
-}
-
-function onToggleSidebar(): void {
-  sidebarVisible.value = !sidebarVisible.value
-  void window.api.patchSession({ sidebarVisible: sidebarVisible.value })
-}
-
-function onToggleOutline(): void {
-  outlineVisible.value = !outlineVisible.value
-  void window.api.patchSession({ outlineVisible: outlineVisible.value })
 }
 
 function onOutlineSelect(index: number): void {
@@ -914,9 +799,7 @@ const {
   vaultPath: () => vaultPath.value,
   host: () => host.value as unknown as ExportHostLike | null,
   showToast,
-  clearToast: () => {
-    toast.value = null
-  },
+  clearToast,
 })
 
 /* ── 语言切换（key 驱动 Vue 重挂 Crepe）── */
@@ -937,15 +820,7 @@ function toggleLocale(): void {
 
 /* ── 会话持久化（崩溃恢复）── */
 
-let widthTimer: ReturnType<typeof setTimeout> | null = null
-
 watch(requestedMode, (mode) => void window.api.patchSession({ mode }))
-
-// 拖宽是高频事件，合并后再落盘
-watch(sidebarWidth, (width) => {
-  if (widthTimer) clearTimeout(widthTimer)
-  widthTimer = setTimeout(() => void window.api.patchSession({ sidebarWidth: width }), 250)
-})
 
 onMounted(async () => {
   // 应用持久化的皮肤 / 明暗（index.html 已有青瓷+深默认值兜底）
@@ -961,19 +836,15 @@ onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
   // 命令面板 / 快速打开：捕获阶段拦截，先于编辑器 keymap 拿到 Ctrl+K / Ctrl+Shift+P
   window.addEventListener('keydown', onPaletteHotkey, true)
-  window.addEventListener('resize', onResize)
 
   const session = await window.api.getSession()
-  sidebarWidth.value = session.sidebarWidth
+  restoreLayout(session)
   requestedMode.value = session.mode
   startupMode.value = session.startupMode
-  sidebarVisible.value = session.sidebarVisible
-  outlineVisible.value = session.outlineVisible
   focusMode.value = session.focusMode === true
   writingGoal.value = session.writingGoal ?? 0
   // 凝神 2.0 偏好：合并默认值兜底旧 session（无 zenPrefs 字段），并立即应用（雾化档位写 CSS 变量）
-  zenPrefs.value = { ...zenPrefs.value, ...(session.zenPrefs ?? {}) }
-  setZenPrefs(zenPrefs.value)
+  restoreZen(session.zenPrefs)
 
   // 动态获取真实应用版本（打包后取 package.json 的 version），展示在「关于」面板
   window.api
@@ -1000,10 +871,7 @@ onBeforeUnmount(() => {
   unsubShortcuts?.()
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('keydown', onPaletteHotkey, true)
-  window.removeEventListener('resize', onResize)
   if (treeTimer) clearTimeout(treeTimer)
-  if (widthTimer) clearTimeout(widthTimer)
-  if (toastTimer) clearTimeout(toastTimer)
   void window.api.unwatchVault()
 })
 </script>

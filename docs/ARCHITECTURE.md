@@ -1650,6 +1650,39 @@ export interface SessionState {
    判据：**不 import vue、不碰 IPC** 的判定逻辑，就该单独成文件并被 `bundle()` 测到。
 5. **抽完即补断言**：`test-core.mjs` 用 esbuild JS API 打包后 `import()`，无需组件测试框架。
 
+### 增量（2026-09-15）：`App.vue` / `SnapshotPanel.vue` 续抽
+
+审计建议 8 的收尾。数字为本次拆分前后实测：
+
+| 抽取块 | 产出 | 效果 |
+| --- | --- | --- |
+| 顶部轻提示（原 `App.vue` 自持 `toastTimer`） | `composables/useToast.ts` | 定时器随卸载自动清理，消灭一处泄漏隐患 |
+| 外部修改冲突编排 | `composables/useFileConflict.ts` + **`utils/conflict.ts`** | `App.vue` 1591 → 1477；纯判定可断言（`[W]` 段 8 条，已做注入故障验证） |
+| 凝神 2.0（激活态 / 轻退栏 / 设置 / 偏好） | `composables/useZenMode.ts` | 跨模块联动链（`setZen` ↔ 自动全屏 ↔ session ↔ 收帘）归拢一处 |
+| 窗口布局（窄窗软收起 / 停靠列显隐 / 侧栏宽度持久化） | `composables/useWindowLayout.ts` | 共享同一个 `resize` 监听与防抖定时器，**监听注册与注销同处一文件**，不会只加不删 |
+| 快照对比状态机（A/B 选点 → 读内容 → diffMode → 逐行 diff） | `composables/useSnapshotDiff.ts` | 异步链归拢，消除「选了 B 而 diff 停在旧内容」类漏接线 |
+| 快照 diff **视图**（头部 chrome + 变更段 + 摘取微态 + 样式） | `components/SnapshotDiffView.vue` | `SnapshotPanel.vue` **1377 → 914**（−34%）；顺手修掉 `pickedTimer` 卸载未清理 |
+
+`App.vue` 累计 1797 → **1458**（本节两轮共 −339）。
+
+### 约定补充（拆「视图」与拆「逻辑」之外）
+
+6. **状态归 composable、呈现归子组件；被宿主消费的状态留宿主**。
+   判据：这个状态除了子组件自己，还有别人读吗？
+   `diffView`（统一 / 并排）虽属 diff 视图，但**面板根节点要靠它切 `.snap--split` 宽度**，
+   故留在 `SnapshotPanel`，以 `v-model:view` 传下去；`hunks / 增删统计 / 摘取高亮` 无人外读，随视图走。
+7. **共享 CSS 原语要上提，不要复制两份 scoped 样式**。
+   拆分前 `.vbtn` 是 `SnapshotPanel` 的私用类；拆完变成两处共用 →
+   基础类提到 `src/styles/base.css`（`.vbtn` / `.vbtn.on` / `.vbtn:hover`），修饰类
+   （`.vbtn--mini`）留在视图内。**判据：同一份样式出现第二处引用时上提，而不是提前抽。**
+8. **搬运模板 / CSS 用「行区间脚本 + 边界断言」，绝不手打**。
+   CJK 经 Edit/Write 往返曾静默损坏（U+FFFD，不报错），故脚本对每个区间断言
+   **起点 / 终点 / 内容特征**，行号一漂移立刻抛错而不是静默切错；只做「去固定缩进 + 标识符改名」，
+   并断言改名后无残留旧标识符、根节点 class 不变（**DOM 结构不变 = CSS 不会跑偏**）。
+   子组件原地搬运的模板保持逐字节一致，**不对其跑 Prettier**（会重排 `<pre>` 周边空白）。
+9. **新增门禁 / 断言必须留「注入故障 → 期望报红 → 还原恢复绿」痕迹**，
+   否则无法证明它不是空转（本项在 2026-09-15 审计中已被列为元问题）。
+
 ### 结构门禁 `scripts/check-structure.mjs`（`npm run check:structure`，已入 CI）
 
 正确性由 `npm run check` 管，本门禁专管**不会让测试变红的慢劣化**：
@@ -1658,7 +1691,9 @@ export interface SessionState {
   `electron/main/` **450 行**（主进程是上帝模块重灾区：`vault.ts` 1134 / `vaultIndex.ts` 1045 /
   `index.ts` 618 都在 2026-09-15 才拆成包，不给目录级上限就会顺默认阈值长回来；
   当前最大 `vault/treeOps.ts` 431 行、余量 19 行）、
-  `App.vue` 1650、`Sidebar.vue` 1500、`electron/shared/ipc-channels.ts` 700（纯常量 + 类型表，无逻辑分支，
+  `App.vue` 1500（2026-09-15 抽完本轮 composable 后为 1458 —— 2026-09-14 设的 1650 是照着
+  当时的 1592 留的，不随拆分收紧就会顺着旧余量长回来）、`Sidebar.vue` 1500、
+  `electron/shared/ipc-channels.ts` 700（纯常量 + 类型表，无逻辑分支，
   拆开只增记账成本）。涨破即说明又有该抽的块。
 * **`any` 逃逸**：既控总量（当前 61，只减不增），更控**越界** ——
   61 处全部位于 `src/editor/features/` 的 5 个文件（ProseMirror / Milkdown 第三方 AST 边界，

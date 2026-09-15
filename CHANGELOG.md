@@ -46,6 +46,28 @@
   `assetProtocol.ts` 模块顶层（早于 app ready）；`ipc/index.ts` 刻意不注册窗口控制，
   否则 `ipc/index → ipc/vault → window → ipc/index` 成环。
 
+**组件瘦身（审计建议 8）**
+
+- `src/App.vue` **1797 → 1458 行**，抽出四块内聚状态：
+  `composables/useToast.ts`（顶部轻提示，定时器随卸载自动清理）、
+  `composables/useFileConflict.ts`（外部修改冲突编排，纯判定在 `utils/conflict.ts`）、
+  `composables/useZenMode.ts`（凝神 2.0 —— 编辑器 `setZen` ↔ 自动全屏 ↔ session ↔ 收帘
+  这条跨模块联动链原本散在组件里，改一处漏一处）、
+  `composables/useWindowLayout.ts`（窄窗软收起 / 停靠列显隐 / 侧栏宽度持久化，
+  共享同一个 `resize` 监听与防抖定时器，**监听的注册与注销同处一文件**，不会只加不删）。
+- `src/components/SnapshotPanel.vue` **1377 → 914 行**：diff 视图（头部 / 变更段 / 摘取微态 +
+  其 300 行样式）整体抽成 `components/SnapshotDiffView.vue`；对比状态机
+  （A/B 选点 → 读快照内容 → 决定 diff 两侧）抽成 `composables/useSnapshotDiff.ts`。
+  视图根节点 class 与 DOM 结构逐字未变，故样式零跑偏。
+- `utils/conflict.ts` 的两条判定（「另存我的版本」的兄弟路径、忽略行尾的内容比较）
+  新增 **8 条断言**（`test-core.mjs [W]` 段，总断言 266 → 274）。
+  这两条错了都不会抛错 —— 路径算错＝另存写进不存在的目录（用户以为保住了，其实没有）；
+  比较算错＝自己保存的回声被当成外部改动，于是每次保存都弹「文件被外部修改」。
+  已做「注入故障 → 期望报红 → 还原恢复绿」验证。
+- **`.vbtn` 上提为共享原语**：拆分前它是 `SnapshotPanel` 的私用类，拆完变成面板与 diff 视图
+  两处共用，故基础类移入 `src/styles/base.css`（修饰类 `.vbtn--mini` 留在视图内）。
+  判据是「同一份样式出现第二处引用时上提」，而非提前抽象。
+
 ### 改进 · 结构门禁补齐依赖图规则（无功能变化）
 
 - **`npm run check:structure` 新增「无循环依赖 / 无自环 / 无分层越界」**：规则与诊断脚本

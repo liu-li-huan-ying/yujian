@@ -242,7 +242,7 @@ e instanceof Error ? e.message : String(e)
 | Wave E | 建议 7 续：`electron/main/index.ts` 618 行 → 29 行引导 + `assetProtocol.ts` + `window.ts` + `ipc/` 9 域模块 + 总注册口 | 已落地。53/53 IPC 接线计数一致、5 个函数符号全保留、产物含全部通道字符串 |
 | Wave F | 建议 10：门禁升级 | 已落地。`check:structure` 从 3 条规则扩到 6 条，新增「无循环依赖 / 无自环 / 无分层越界」三类 + `electron/main/` 450 行目录级上限 |
 | Wave G | 建议 9：文件管理 | **已落地**。新增 `docs/README.md`（文档索引 + 冲突优先级，用「索引分类」替代「搬迁目录」——`docs/` 路径被源码注释引用 20 余处，搬迁是纯风险）；`EQREF-KNOWN-ISSUE.md` 从被 gitignore 的 `.workbuddy/memory/` 按字节移入 `docs/` 并从 `ARCHITECTURE.md` 指回；`_check.log` 经查已被 `.gitignore` 的 `*.log` 覆盖，无需再改 |
-| 待做 | 建议 8（`App.vue` / `SnapshotPanel` 继续瘦身） | 未做 |
+| Wave H | 建议 8：`App.vue` / `SnapshotPanel` 继续瘦身 | **已落地**。`App.vue` 1797 → **1458 行**（`useToast` / `useFileConflict` + `utils/conflict` / `useZenMode` / `useWindowLayout`）；`SnapshotPanel.vue` 1377 → **914 行**（diff 视图整体成 `SnapshotDiffView.vue` + 状态机成 `useSnapshotDiff`）。断言 266 → **274**。详见下节 |
 
 ### 验收标准逐条核对（§五）
 
@@ -255,11 +255,42 @@ e instanceof Error ? e.message : String(e)
    （c）`electron/main/` 单文件 ≤ 450 行（实际当前最大 431）；
    （d）`test-core.mjs` `[F]` 段由「只读 `main/index.ts`」改为**整树递归扫描**，
    否则 IPC 注册一搬位置该断言就静默失效。
-4. ✅ 功能零回归：`test-core` **266 断言**、`verify:markdown` 34、`verify:corpus` 18、`perf:index` 9
+4. ✅ 功能零回归：`test-core` **274 断言**（Wave A~G 时为 266，Wave H 新增 `[W]` 段 8 条）、
+   `verify:markdown` 34、`verify:corpus` 18、`perf:index` 9
    （全量构建 1205ms / 增量 0.0069ms，与拆分前同量级，证明拆包零运行时开销）、`build` 通过。
 5. ✅ `git ls-files` 覆盖全部权威文档；`docs/README.md` 建立索引并写明冲突优先级。
    `EQREF-KNOWN-ISSUE.md` 原先躺在 `.workbuddy/memory/`（该目录被 gitignore）——即
    **克隆后根本看不到这份「单一事实源」**，且版本库内没有任何文档引用它。已按字节移入 `docs/`。
+
+### Wave H：组件瘦身落地明细（建议 8）
+
+**`src/App.vue` 1797 → 1458 行**（本轮 −133，两轮累计 −339）
+
+| 抽出的块 | 去处 | 为什么它能走（判据） |
+| --- | --- | --- |
+| 顶部轻提示 | `composables/useToast.ts` | 自带定时器；组件里散落 `toastTimer` 与其清理 |
+| 外部修改冲突编排 | `composables/useFileConflict.ts`（纯判定 → `utils/conflict.ts`） | 读盘 → 弹窗 → 抑制窗是一条链，且含「自己保存的回声」这种易错判定 |
+| 凝神 2.0 | `composables/useZenMode.ts` | 联动链：`setZen` ↔ 自动全屏（**只还原自己转的那次**）↔ session ↔ 退时收帘 |
+| 窗口布局 | `composables/useWindowLayout.ts` | 共享一个 `resize` 监听 + 一个防抖定时器；注册与注销原本分处 `onMounted` / `onBeforeUnmount` |
+
+**`src/components/SnapshotPanel.vue` 1377 → 914 行（−34%）**
+
+- diff 视图（头部 chrome + 变更段 + 摘取微态 + **300 行样式**）→ `components/SnapshotDiffView.vue`。
+  边界判据来自**实测**而非感觉：diff 的样式块与模板块自包含（块外只有 `.snap--tl` / `.snap--split`
+  两条面板宽度规则），且视图根节点 class 不变 ⇒ **DOM 结构不变，样式零跑偏**。
+- 对比状态机（A/B 选点 → 读快照内容 → `diffMode` → 逐行 diff）→ `composables/useSnapshotDiff.ts`。
+- **被宿主消费的状态留宿主**：`diffView`（统一 / 并排）决定面板根 `.snap--split` 宽度，
+  故留在面板、以 `v-model:view` 传下去；`hunks` / 增删统计 / 摘取高亮无人外读，随视图走。
+
+**顺带修掉的两处泄漏**
+
+- `pickedTimer`（diff 摘取高亮）与 `toastTimer`（轻提示）此前都不在卸载时清理，
+  现分别随 `SnapshotDiffView` / `useToast` 的卸载钩子清掉。
+
+**新增断言的负向验证**
+
+`[W]` 段「目录名里的点不当扩展名」一条：把 `dot > slash` 改成 `dot >= 0` 后该条报红
+（`273 passed, 1 failed`），还原后恢复 `274 passed` ⇒ 断言非空转。
 
 ### 本次审计暴露的「元问题」
 
@@ -272,3 +303,9 @@ e instanceof Error ? e.message : String(e)
 - **拆分脚本会引入排版劣化**：脚本按「最小缩进」去前导空格，导致新文件函数体被压平到列 0。
   类型与 lint 都拦不住（缩进不在规则里），只能靠 Prettier 收口 ——
   故拆分后必须对新文件跑一次 `prettier --write`，并把这一步写进流程。
+- **「搬运区间」与「删除区间」分成两张表 ⇒ 必然对不上**：Wave H 抽 `SnapshotDiffView` 时，
+  脚本把模板块 / 状态块 / `.vbtn` 都列进了 SKIP，唯独漏了 CSS 块 —— 于是同一份样式**同时存在于
+  两个文件**，而 typecheck / lint / 断言**全绿**（重复的 scoped 样式谁都不报错）。
+  教训：**提取与删除必须是同一份清单**（提取即删除），且脚本收尾要跑一条
+  「被搬走的特征串在新宿主里恰好出现一次、在旧宿主里为 0」的断言。
+  这与前一条元问题同源 —— **结构劣化之所以能过门禁，是因为门禁从来不检查结构本身**。

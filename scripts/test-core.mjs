@@ -26,6 +26,7 @@
  *  T. 导出元信息 —— frontmatter 取值与别名回退（src/export/exportMeta.ts）
  *  U. 搜索结果导航 —— 命中序号回绕与替换后当前行重推导（src/utils/searchNav.ts）
  *  V. 错误归一化 —— 非 Error 抛出物的兜底（electron/shared/error.ts）
+ *  W. 冲突判定 —— 「另存我的版本」兄弟路径 / 行尾无关比较（src/utils/conflict.ts）
  *
  * 运行：npm test
  * 退出码：0 = 全部通过；1 = 存在失败。
@@ -1792,6 +1793,37 @@ check('非 Error 抛出物一律 String()，绝不二次抛错', (() => {
   }
   return true
 })())
+
+/*
+   [W] 外部改动冲突判定 —— 「另存我的版本」的兄弟路径 + 忽略行尾的内容比较
+   （src/utils/conflict.ts）
+
+   为什么单独测：这两条判定**错了都不会抛错**——
+   兄弟路径算错＝另存写进不存在的目录（用户以为保住了，其实没有）；
+   内容比较算错＝把自己保存的回声当成外部改动，于是每次保存都弹「文件被外部修改」。
+   故用断言把边界钉死，而不是靠 review 时「看起来对」。 */
+section('[W] 外部改动冲突判定 —— 兄弟路径 / 行尾无关比较（src/utils/conflict.ts）')
+
+const { siblingMinePath, isSameText } = await import(
+  (await bundle('src/utils/conflict.ts', 'conflict.mjs')).url
+)
+
+check('兄弟路径：有扩展名 → 插在扩展名前', siblingMinePath('a/b/note.md') === 'a/b/note.mine.md')
+check('兄弟路径：无扩展名 → 直接追加', siblingMinePath('a/b/readme') === 'a/b/readme.mine')
+check(
+  '兄弟路径：Windows 反斜杠同样识别',
+  siblingMinePath('a\\b\\note.md') === 'a\\b\\note.mine.md'
+)
+// 目录名里的点不算扩展名：否则 my.notes/readme → my.mine.notes/readme（目录不存在，另存必失败）
+check(
+  '兄弟路径：目录名里的点不当扩展名',
+  siblingMinePath('a/my.notes/readme') === 'a/my.notes/readme.mine'
+)
+check('兄弟路径：多点文件名只切最后一个点', siblingMinePath('a/x.tar.gz') === 'a/x.tar.mine.gz')
+
+check('内容比较：CRLF 与 LF 视为相同', isSameText('a\r\nb\r\n', 'a\nb\n'))
+check('内容比较：真实差异必须判不同', !isSameText('a\nb\n', 'a\nc\n'))
+check('内容比较：空串相等，空串与单个换行不等', isSameText('', '') && !isSameText('', '\n'))
 
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 

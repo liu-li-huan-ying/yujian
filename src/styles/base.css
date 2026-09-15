@@ -36,6 +36,27 @@ button:hover {
   background: var(--bg-hover);
 }
 
+/* ── 通用 pill 按钮（视图切换用：面板视图切换 + diff 统一/并排）── */
+.vbtn {
+  padding: 3px 10px;
+  font-size: 11px;
+  border: 0;
+  background: transparent;
+  color: var(--hue-text-3);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.vbtn:hover {
+  color: var(--hue-text-1);
+}
+.vbtn.on {
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
+}
+
 :focus-visible {
   outline: 2px solid var(--hue-accent);
   outline-offset: 2px;

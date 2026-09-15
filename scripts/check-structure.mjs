@@ -28,8 +28,9 @@ const root = join(__dirname, '..')
 /** 行数上限：默认适用于所有生产文件，目录级与文件级可分别收紧（文件级优先） */
 const MAX_LINES_DEFAULT = 1700
 const MAX_LINES_BY_FILE = {
-  // 抽出 useExport 后为 1592，留 58 行余量；再涨说明又有该抽的块了
-  'src/App.vue': 1650,
+  // 抽出 useToast / useFileConflict / useZenMode / useWindowLayout 后为 1458，留 ~40 行余量；
+  // 与 Sidebar 同等对待（组件级一律 1500），再涨说明又有该抽的块了
+  'src/App.vue': 1500,
   // 抽出 useSidebarSearch 后为 1436，留 64 行余量；涨破即该再抽一轮
   'src/components/Sidebar.vue': 1500,
   // 纯常量 + 类型表（645 行、无逻辑分支），拆开只增记账成本、无结构性收益
@@ -135,7 +136,7 @@ if (tooLong.length) {
 } else {
   pass.push(
     `文件行数均在上限内（默认 ${MAX_LINES_DEFAULT}，electron/main/ ${MAX_LINES_BY_DIR['electron/main/']}，` +
-      `App.vue ${MAX_LINES_BY_FILE['src/App.vue']}）`,
+      `App.vue / Sidebar.vue ${MAX_LINES_BY_FILE['src/App.vue']}）`,
   )
 }
 
