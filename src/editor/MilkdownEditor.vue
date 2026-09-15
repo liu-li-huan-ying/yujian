@@ -27,6 +27,7 @@ import {
   resetMathNumbering,
 } from './features/mathjax'
 import { codeBlockConfig } from '@milkdown/kit/component/code-block'
+import { splitFrontmatter, reattachFrontmatter } from './frontmatterBoundary'
 import { i18n } from '../i18n'
 import { createZenPlugin } from './zen'
 import { createFocusBlockPlugin } from './focusBlock'
@@ -75,6 +76,13 @@ const emit = defineEmits<{
 const host = ref<HTMLDivElement | null>(null)
 let crepe: Crepe | null = null
 let imgObserver: MutationObserver | null = null
+/**
+ * 留存中的 frontmatter 块（`---\n...\n---`，LF 归一）。Crepe 没有 remark-frontmatter，
+ * 序列化会把 YAML 头整段丢干净——这正是「打开内容地图，过一会 MOC 标记丢失、重开也读不到」
+ * 的根因：自动保存把无头文件写回磁盘，索引重算后 moc=false。故在编辑器边界把它单独留存，
+ * 载入前剥离、序列化后原样拼回（见 ./frontmatterBoundary）。
+ */
+let currentFrontmatter: string | null = null
 
 /* ── [[ 自动补全浮层（批次二收尾）────────────────
  * 分工：wikilinkSuggest 插件只负责「判定触发 + 报坐标 + 拦按键」，
@@ -458,9 +466,14 @@ async function init(defaultValue?: string): Promise<void> {
   // 快照当前语言包值（Crepe 构造时一次性传入）
   const L = i18n
 
+  // 载入前剥离 frontmatter：Crepe 无 remark-frontmatter，整段 YAML 头会在序列化时丢失，
+  // 故只把正文交给它，原始 frontmatter 块单独留存（currentFrontmatter）待序列化后拼回。
+  const initial = splitFrontmatter(defaultValue ?? props.modelValue ?? '')
+  currentFrontmatter = initial.block
+
   crepe = new Crepe({
     root: host.value,
-    defaultValue: defaultValue ?? props.modelValue,
+    defaultValue: initial.body,
     features: {
       [Crepe.Feature.CodeMirror]: true,
       [Crepe.Feature.ListItem]: true,
@@ -532,7 +545,8 @@ async function init(defaultValue?: string): Promise<void> {
 
   crepe.on((listener) => {
     listener.markdownUpdated((_ctx, markdown) => {
-      emit('update:modelValue', markdown)
+      // 序列化结果只是正文；拼回留存的 frontmatter 再向上 emit，保证保真层与磁盘内容带 YAML 头
+      emit('update:modelValue', reattachFrontmatter(currentFrontmatter, markdown))
     })
   })
 
@@ -636,12 +650,18 @@ async function setMarkdown(markdown: string): Promise<void> {
   // 灌入新内容前先清空公式编号与标签表，
   // 否则上一篇文档的编号会接着往下排、同名 label 还会命中旧值。
   resetMathNumbering()
-  await crepe.editor.action(replaceAll(markdown))
+  // 载入前剥离 frontmatter：只把正文交给 Crepe，原始 YAML 头单独留存（currentFrontmatter），
+  // 待序列化后由 getMarkdown / markdownUpdated 拼回，杜绝「自动保存把无头文件写回磁盘」。
+  const { block, body } = splitFrontmatter(markdown)
+  currentFrontmatter = block
+  await crepe.editor.action(replaceAll(body))
   if (host.value) rewriteImages(host.value)
 }
 
 function getMarkdown(): string {
-  return crepe?.getMarkdown() ?? props.modelValue
+  // 仅序列化正文，再拼回留存的 frontmatter；crepe 未就绪时回退到父组件传入的完整文本。
+  if (!crepe) return props.modelValue
+  return reattachFrontmatter(currentFrontmatter, crepe.getMarkdown())
 }
 
 /**

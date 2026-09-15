@@ -382,6 +382,54 @@ markdown-editor/
 * 源码模式编辑后保存，**永远走原文路径**，不经过序列化
 * 提供设置项："保存时总是规范化排版"（默认关）
 
+#### 5.2.1 编辑器边界的 frontmatter 保真（2026-09-15）
+
+> 起因：内容地图「打开时显示、过一会没了、重开也没有」——MOC 标记被静默写坏。
+
+Crepe **没有 `remark-frontmatter` 插件**：把含 YAML 头的全文喂给它，它会把头当普通
+Markdown 解析再序列化，产生**四处破坏**：
+
+| 原文 | Crepe 序列化后 | 机制 |
+| --- | --- | --- |
+| `---`（头起始） | `***` | 被当成 thematic break |
+| `tags: [a, b]` | `tags: \[a, b]` | 方括号被 remark 转义 |
+| `---`（头结束） | `---------------` | 吃成 Setext 二级标题下划线 |
+| `[[双链]]` | `\[\[双链]]` | 同上（方括号转义） |
+
+后果：`moc: true` 从 YAML 字段退化成正文里的一行普通文本 → 索引重算 `moc=false` →
+MOC 面板消失；且**一旦写坏，坏内容就成了新的"磁盘原文"，再也回不去**。
+
+**应对：在编辑器边界「载入前剥离、序列化后原样拼回」**（`src/editor/frontmatterBoundary.ts`，纯函数、可测）：
+
+```
+全文 ──splitFrontmatter──► block(整段 --- 区域，逐字留存) + body(正文)
+                              │                              │
+                              │                              └──► 喂给 Crepe（永远只见正文）
+                              │
+                              └──────────► reattachFrontmatter(block, 序列化后的 body)
+                                                  │
+                                                  ▼
+                                          带头的全文 ──► fidelity
+```
+
+* `block` 取**整段匹配区域**（`m[0]`）而非重建，故不改动正文时 `block + body` **逐字节等于原文**
+  （头与正文之间的空行数也原样保留）。
+* `MilkdownEditor` 在 `init` / `setMarkdown` / `getMarkdown` / `markdownUpdated` 四处接好；
+  `useFidelity` **不改动**（两端口径一致，都是带头的全文）。
+* 回归测试：`npm test` 的 `[J2]` 段 12 条断言。
+
+#### 5.2.2 灌入回显 ≠ 用户编辑（2026-09-15）
+
+仅有 §5.2.1 仍不够：Crepe 序列化本就是破坏性的，只要**「打开即自动保存」**存在，
+任何差异都会被判脏并落盘。而灌入（`load` / 切回所见即所得 / 快照恢复 / 图床发布）
+会触发 `markdownUpdated` 回显——那是「编辑器把刚吃进去的内容又吐出来」，**不是用户编辑**。
+
+故 `EditorHost` 维护 `applyingDepth`：所有向所见即所得端灌入内容的路径统一走
+`applyToEditor()`，灌入期间 `onWysiwygUpdate` 直接 return（不判脏、不 `scheduleSave`）。
+这是「未编辑文档保存一字不改」红线的守门点。
+
+> 注：快照恢复 / 图床发布在灌入后**显式**调 `scheduleSave()`——那是刻意要落盘的，不受抑制影响。
+
 ### 5.3 Mermaid 图表方案（代码块预览钩子）
 
 > **实现时改了方案**：原计划自研 NodeView，实际改用 Crepe 代码块自带的

@@ -955,6 +955,52 @@ try {
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 
+section('[J2] 编辑器边界 frontmatter 保真 —— WYSIWYG 往返不丢 YAML 头（MOC 消失真因回归）')
+// 纯函数、无灰色依赖，直接 bundle；Crepe 无 remark-frontmatter，序列化会丢头——
+// 此模块负责「载入前剥离、序列化后拼回」，保证内容地图等 frontmatter 标记在编辑/重渲染后仍在。
+const { url: fbUrl, dir: fbDir } = await bundle('src/editor/frontmatterBoundary.ts', 'frontmatterBoundary.mjs')
+try {
+  const FB = await import(fbUrl)
+  const split = FB.splitFrontmatter
+  const reattach = FB.reattachFrontmatter
+  const roundTrip = FB.roundTripFrontmatter
+
+  const mocDoc =
+    '---\nmoc: true\ntags: [moc, 示范, pkm, 渲染]\ntitle: 功能总览\n---\n\n# 功能总览\n\n正文。\n'
+  const s = split(mocDoc)
+  check('split：识别出 frontmatter 块', s.block !== null, JSON.stringify(s.block))
+  check('split：块含 moc:true（MOC 标记不被吞）', (s.block ?? '').includes('moc: true'))
+  check('split：正文逐字剥离（含前导空行）', s.body === '\n# 功能总览\n\n正文。\n', JSON.stringify(s.body))
+  check('split：block+body 复原原串', s.block + s.body === mocDoc)
+
+  const noFm = '# 无属性\n\n正文。\n'
+  const ns = split(noFm)
+  check('split：无 frontmatter 时 block=null、正文原样', ns.block === null && ns.body === noFm)
+
+  // 关键回归：未改动正文时，往返必须逐字节等于原文——否则自动保存会写出「无头文件」使 moc=false
+  check('往返：正文不变 → 原样保真（MOC 不丢）', roundTrip(mocDoc) === mocDoc, JSON.stringify(roundTrip(mocDoc)))
+  check('往返：无 frontmatter 文档不被凭空加头', roundTrip(noFm) === noFm)
+
+  // 模拟 Crepe 序列化做了规范化（如 *强调* → _强调_）：frontmatter 必须仍在、只正文被规范
+  const editDoc = '---\nmoc: true\n---\n\n这是 *强调* 文本。\n'
+  const norm = (b) => b.replace(/\*([^*]+)\*/g, '_$1_')
+  const rtNorm = roundTrip(editDoc, norm)
+  check('往返：序列化规范化后 frontmatter 仍在', rtNorm.startsWith('---\nmoc: true') && rtNorm.includes('moc: true'))
+  check('往返：序列化规范化只作用于正文', rtNorm.includes('_强调_') && !rtNorm.includes('*强调*'))
+
+  // 头与正文之间至少补一个换行，避免 `---` 与首行粘死
+  const glued = reattach('---\nx: 1\n---', '# 首行')
+  check('拼回：头后至少补一个换行', glued === '---\nx: 1\n---\n# 首行', JSON.stringify(glued))
+
+  // BOM 不干扰头识别
+  const bomDoc = '﻿---\nmoc: true\n---\n\n# 带 BOM\n'
+  check('BOM：头仍被识别', split(bomDoc).block !== null && split(bomDoc).body.includes('# 带 BOM'))
+} finally {
+  rmSync(fbDir, { recursive: true, force: true })
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+
 section('[K] 标签页路径重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）')
 // pinia / vue 是纯 JS 依赖 → 外置回 Node 原生加载，保证探针与 store 共用同一 pinia 实例
 const piniaStub = [
