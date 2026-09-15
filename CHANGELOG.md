@@ -38,6 +38,26 @@
 - `electron/main/vaultIndex.ts`（1045 行 / 35 导出）→ 拆为 `electron/main/vaultIndex/` 包 **9 个文件**，
   最大 270 行：types / metadata / paths / store / links / pkm / rewrites / graph + index 门面。
   顺带删掉 `writeAtomic` 这个只转调 `atomicWrite` 的二行包装。
+- `electron/main/index.ts`（618 行，混装协议注册 / 窗口创建 / 53 个 IPC 注册）→ 拆为
+  **29 行纯引导** + `assetProtocol.ts` + `window.ts` + `ipc/` 子包（9 个域模块 + 总注册口，
+  最大 116 行）。入口文件的隐式契约是「读一遍就知道应用怎么启动」，拆完后一眼见底；
+  新增能力落到对应 `ipc/<域>.ts`，入口不再增长。
+  易错点已写进 `ARCHITECTURE.md §5.36`：`registerSchemesAsPrivileged` 必须留在
+  `assetProtocol.ts` 模块顶层（早于 app ready）；`ipc/index.ts` 刻意不注册窗口控制，
+  否则 `ipc/index → ipc/vault → window → ipc/index` 成环。
+
+### 改进 · 结构门禁补齐依赖图规则（无功能变化）
+
+- **`npm run check:structure` 新增「无循环依赖 / 无自环 / 无分层越界」**：规则与诊断脚本
+  `analyze-structure.mjs` 共用 `scripts/lib/depgraph.mjs`。此前 `depgraph.mjs` 的注释一直宣称
+  「门禁共用」，但门禁从未引用它 —— 循环依赖与分层越界实际上**没有任何 CI 保护**，属名不副实。
+  已用「注入临时环 → 期望门禁报红 → 还原后恢复绿」验证规则不是空转。
+- **`electron/main/` 新增 450 行目录级上限**（对应审计验收标准 §五·3）：主进程是上帝模块重灾区
+  （1134 / 1045 / 618 三个胖文件都在本次才拆开），不给目录级上限，同样的堆积会顺着 1700 的默认阈值
+  悄悄长回来。当前最大 `vault/treeOps.ts` 431 行，余量 19 行。
+- **`test-core.mjs` `[F]` 段改为整树扫描 `electron/main/`**：原先只读 `electron/main/index.ts`，
+  IPC 注册搬进 `ipc/` 子包后直接「全部通道报未接线」。写死单文件路径会随每次拆分静默失效，
+  故改为递归收集 —— 门禁必须比被它守护的代码活得久。
 
 ### 新增 · 中文双击选词（分词）
 - **双击中文按词选中**：此前双击中文会把一长串汉字（常含标点）整段选走，想复制一个词、给一个词加粗都很别扭。现在双击中文按**词边界**选中，双击「开源」就选中「开源」。

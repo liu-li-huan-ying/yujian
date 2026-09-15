@@ -517,12 +517,24 @@ section('[F] IPC 契约 —— 每个通道都既有主进程接线又有 preloa
 
 {
   const chText = readFileSync(join(root, 'electron/shared/ipc-channels.ts'), 'utf-8')
-  const mainText = readFileSync(join(root, 'electron/main/index.ts'), 'utf-8')
   const preText = readFileSync(join(root, 'electron/preload/index.ts'), 'utf-8')
+
+  // 主进程接线已按域拆到 electron/main/（含 ipc/ 子包），故必须整树扫描。
+  // ⚠️ 写死单文件路径会在下次拆分时「静默漏扫」→ 全部通道报未接线，门禁形同虚设。
+  const collectSources = (dir) =>
+    readdirSync(dir, { withFileTypes: true })
+      .flatMap((e) =>
+        e.isDirectory()
+          ? collectSources(join(dir, e.name))
+          : e.name.endsWith('.ts')
+            ? [readFileSync(join(dir, e.name), 'utf-8')]
+            : []
+      )
+      .join('\n')
 
   const all = [...chText.matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*'/gm)].map((m) => m[1])
   const refs = (text) => new Set([...text.matchAll(/IPC\.([A-Z0-9_]+)/g)].map((m) => m[1]))
-  const mainRefs = refs(mainText)
+  const mainRefs = refs(collectSources(join(root, 'electron/main')))
   const preRefs = refs(preText)
 
   // 先自检解析：正则若失效会「零通道全绿」，故用下限兜底

@@ -231,3 +231,41 @@ e instanceof Error ? e.message : String(e)
 ## 六、落实结果
 
 （本节在改造完成后据实填写，供下次审计直接对照。）
+
+按「波次」推进，每波都要求**零功能变更 + 门禁全绿 + 调用方零改动**。
+
+| 波次 | 内容 | 结果 |
+| --- | --- | --- |
+| Wave A/B | 建议 1~5：契约下沉、`regex`/`error` 归位到 `electron/shared/`、`mathjax`/`mermaid`/`frontmatter` 层归位、mermaid 单例合并 | 已落地，提交 `5879297`。循环依赖 0、分层越界 0；`errMsg()` 收敛 31 处 |
+| Wave C | 建议 6：`vault.ts` 1134 行 → `vault/` 包 9 文件（最大 431） | 已落地，提交 `a68608d`。函数/常量/公开导出 100% 在位；`humanCompare` 变为可测纯函数 |
+| Wave D | 建议 7：`vaultIndex.ts` 1045 行 → `vaultIndex/` 包 9 文件（最大 272） | 已落地，提交 `e1b8d1f`。删掉 `writeAtomic` 二行包装；门面导出面与原文件一致 |
+| Wave E | 建议 7 续：`electron/main/index.ts` 618 行 → 29 行引导 + `assetProtocol.ts` + `window.ts` + `ipc/` 9 域模块 + 总注册口 | 已落地。53/53 IPC 接线计数一致、5 个函数符号全保留、产物含全部通道字符串 |
+| Wave F | 建议 10：门禁升级 | 已落地。`check:structure` 从 3 条规则扩到 6 条，新增「无循环依赖 / 无自环 / 无分层越界」三类 + `electron/main/` 450 行目录级上限 |
+| 待做 | 建议 8（`App.vue` / `SnapshotPanel` 继续瘦身）、建议 9（`docs/` 分类索引、`EQREF-KNOWN-ISSUE.md` 入库、根目录清理） | 未做 |
+
+### 验收标准逐条核对（§五）
+
+1. ✅ `analyze-structure.mjs`：循环依赖 0、分层越界 0。
+2. ✅ `npm run check` 全绿（typecheck / lint / check:encoding / test / verify:md / verify:corpus / check:structure）。
+3. ✅ 门禁新增三条硬规则，且**验证过能拦住人为回归** ——
+   （a）循环依赖 SCC 检测：注入 `ipc/win.ts → ipc/index.ts` 后门禁报红并精确指出
+   `ipc/win.ts ↔ window.ts ↔ ipc/vault.ts ↔ ipc/index.ts` 四点环，还原后恢复绿；
+   （b）分层越界三规则（渲染层 ↛ 主进程实现、主进程 ↛ 渲染层、纯逻辑层 ↛ 编辑器/Vue）已进门禁；
+   （c）`electron/main/` 单文件 ≤ 450 行（实际当前最大 431）；
+   （d）`test-core.mjs` `[F]` 段由「只读 `main/index.ts`」改为**整树递归扫描**，
+   否则 IPC 注册一搬位置该断言就静默失效。
+4. ✅ 功能零回归：`test-core` **266 断言**、`verify:markdown` 34、`verify:corpus` 18、`perf:index` 9
+   （全量构建 1205ms / 增量 0.0069ms，与拆分前同量级，证明拆包零运行时开销）、`build` 通过。
+5. ⬜ `git ls-files` 覆盖全部权威文档、`docs/README.md` 建立索引 —— 属建议 9，未做。
+
+### 本次审计暴露的「元问题」
+
+- **门禁写死单文件路径**：`test-core.mjs` `[F]` 段读 `electron/main/index.ts` 一个文件。
+  拆分一发生，断言立刻「全通道报未接线」（本轮亲眼出现）。**门禁的扫描面必须与被守护代码的
+  组织方式解耦**，否则重构本身就变成门禁的敌人。
+- **文档宣称 ≠ 门禁落地**：`lib/depgraph.mjs` 注释写着「诊断与门禁共用」，
+  但门禁从未 import 它 —— 循环依赖与分层越界实际上没有任何 CI 保护。
+  凡在注释/文档里写下「已被门禁覆盖」，就必须有一次**注入故障 → 期望报红**的验证留痕。
+- **拆分脚本会引入排版劣化**：脚本按「最小缩进」去前导空格，导致新文件函数体被压平到列 0。
+  类型与 lint 都拦不住（缩进不在规则里），只能靠 Prettier 收口 ——
+  故拆分后必须对新文件跑一次 `prettier --write`，并把这一步写进流程。

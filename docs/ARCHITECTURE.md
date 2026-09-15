@@ -1648,12 +1648,22 @@ export interface SessionState {
 
 正确性由 `npm run check` 管，本门禁专管**不会让测试变红的慢劣化**：
 
-* **巨石文件**：默认上限 1700 行；`App.vue` 1650、`Sidebar.vue` 1500。涨破即说明又有该抽的块。
+* **巨石文件**：默认上限 1700 行，另有**目录级**与**文件级**两档收紧（文件级优先）——
+  `electron/main/` **450 行**（主进程是上帝模块重灾区：`vault.ts` 1134 / `vaultIndex.ts` 1045 /
+  `index.ts` 618 都在 2026-09-15 才拆成包，不给目录级上限就会顺默认阈值长回来；
+  当前最大 `vault/treeOps.ts` 431 行、余量 19 行）、
+  `App.vue` 1650、`Sidebar.vue` 1500、`electron/shared/ipc-channels.ts` 700（纯常量 + 类型表，无逻辑分支，
+  拆开只增记账成本）。涨破即说明又有该抽的块。
 * **`any` 逃逸**：既控总量（当前 61，只减不增），更控**越界** ——
   61 处全部位于 `src/editor/features/` 的 5 个文件（ProseMirror / Milkdown 第三方 AST 边界，
   节点类型无法从包导出完整类型，标 `any` 属合理妥协）。**白名单外出现哪怕 1 处即失败**：
   一旦 `any` 扩散到 vault / 索引 / 序列化，「Markdown 往返保真」就失去类型护栏。
 * **遗留标记**：`TODO / FIXME / XXX / HACK / WORKAROUND` 必须为零。
+* **依赖图**：无循环依赖（Tarjan 强连通分量）、无自环、无分层越界。
+  规则与诊断脚本 `analyze-structure.mjs` **共用** `scripts/lib/depgraph.mjs`，两处规则永不分叉。
+  ⚠️ 本项曾长期缺失：`depgraph.mjs` 的注释一直宣称「门禁共用」，但门禁从未引用它，
+  循环依赖与分层越界实际上**没有任何 CI 保护**（2026-09-15 补齐，并用「注入临时环 → 期望报红」
+  验证过规则不是空转）。
 
 想放宽阈值，须**显式改文件并在此说明原因**，而不是让它悄悄涨上去。
 
@@ -1717,6 +1727,43 @@ export interface SessionState {
 - `writeAtomic`（只转调 `atomicWrite` 的二行包装）已删除，调用点直呼 `atomicWrite`。
 - `normalizeTag` / `targetKey` / `ensureIndex` 由私有改为对包内导出（跨子模块需要），
   但**不进公开门面**——门面仍等于原 `vaultIndex.ts` 的导出面，对外 API 未变。
+
+## 5.36 `electron/main/ipc/` 包：主进程入口的细颗粒拆分（2026-09-15）
+
+`electron/main/index.ts` 曾是主进程第三个胖文件（618 行），把**三类互不相关的职责**堆在一起：
+自定义协议注册、主窗口创建与控制、全部 53 个 IPC 通道的注册。现拆为一层引导 + 三个子模块：
+
+| 文件/目录 | 行数 | 职责 |
+| --- | --- | --- |
+| `index.ts` | 29 | **只剩引导**：`setSoftErrorVerbose` → `registerAssetProtocol` → `registerIpc` → `createWindow`，加 `activate` / `window-all-closed` 生命周期 |
+| `assetProtocol.ts` | 76 | `jade-asset://` 自定义协议 + MIME 表 + 请求处理器 |
+| `window.ts` | 85 | 主窗口创建、**`mainWindow` 唯一持有者**、兼容模式开关、窗口控制 IPC 绑定 |
+| `ipc/index.ts` | 24 | IPC 总注册口，按域转调下列模块 |
+| `ipc/{app,files,vault,pkm,session,assets,snapshots,export,win}.ts` | 15~116 | 各域 IPC 注册，9 个文件，最大 116 行 |
+
+### 三条必须守住的约束
+
+1. **`registerSchemesAsPrivileged` 必须早于 app ready**，因此它写在 `assetProtocol.ts` 的
+   **模块顶层**（导入即生效）—— 引导文件第 9 行 import 该模块时就已经完成注册，
+   不能挪进 `registerAssetProtocol()` 函数体内。
+2. **`ipc/index.ts` 刻意不注册 `win.ts`**：窗口控制 IPC 需绑定窗口实例，由 `window.ts`
+   在拿到 `win` 之后调用 `registerWindowIpc(win)`。这同时**避免了一条环**：
+   `ipc/vault.ts` 需要 `getMainWindow()` 推事件，若把 win 注册并进 `ipc/index.ts`，
+   就会形成 `ipc/index → ipc/vault → window → ipc/index` 的循环。
+3. **`mainWindow` 引用只归 `window.ts`**：`ipc/*` 一律经 `getMainWindow()` 读取，
+   不各自持有 `let` —— 否则「笔记库变更推给谁」将取决于模块加载顺序。
+
+### 为什么入口必须是「引导 + 子模块」而不是继续往下堆
+
+入口文件的隐式契约是「读一遍就知道应用怎么启动」。IPC 注册属**按域展开的机械工作**，
+留在入口只会把真正的启动时序淹掉。拆完后 `index.ts` 29 行、一眼见底；
+新增能力落到对应 `ipc/<域>.ts`，入口不再增长（`electron/main/` 450 行目录级门禁守住这条线）。
+
+### 调用方与产物
+
+- 外部零改动：`electron.vite.config.ts` 的入口仍是 `electron/main/index.ts`。
+- 打包产物 `out/main/index.js` 经核验仍包含全部通道字符串（`jade-asset` / `vault:*` /
+  `win:*` / `export:*` / `imghost:*` / `snapshot:*` / `asset:*`）。
 
 ## 附录 A：开工前必做的环境配置
 
