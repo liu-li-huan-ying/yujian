@@ -5,65 +5,14 @@
  */
 import { basename } from 'node:path'
 import { wikiLinkRegex } from '../../shared/wikilink-syntax'
+import { parseFrontmatter, stripBom } from '../../shared/frontmatter'
 import type { IndexEntry } from './types'
 
-/** 极简 frontmatter 解析：只取 `title` / `tags` / `moc` 三字段，覆盖绝大多数笔记场景 */
-function parseFrontmatter(
-  content: string
-): { title: string; tags: string[]; moc: boolean } {
-  const fm = { title: '', tags: [] as string[], moc: false }
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(content)
-  if (!m) return fm
-  const block = m[1]
-  const lines = block.split(/\r?\n/)
-  let inTagsBlock = false
-  for (const raw of lines) {
-    const line = raw.trimEnd()
-    if (inTagsBlock) {
-      // YAML 块列表项：`- foo`
-      const item = /^\s*-\s+(.+)$/.exec(line)
-      if (item) {
-        fm.tags.push(item[1].trim().replace(/^["']|["']$/g, ''))
-        continue
-      }
-      // 块列表结束（遇到下一个 key）
-      if (/^\w[\w-]*\s*:/.test(line)) inTagsBlock = false
-      else continue
-    }
-    const kv = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line)
-    if (!kv) continue
-    const key = kv[1].toLowerCase()
-    const val = kv[2].trim()
-    if (key === 'title') {
-      fm.title = val.replace(/^["']|["']$/g, '')
-    } else if (key === 'moc') {
-      // YAML 真值的常见写法都认（true/yes/on/1），其余（含缺省）为假
-      const v = val.replace(/^["']|["']$/g, '').toLowerCase()
-      fm.moc = v === 'true' || v === 'yes' || v === 'on' || v === '1'
-    } else if (key === 'tags') {
-      if (val.startsWith('[')) {
-        // 行内数组：[a, b, "c"]
-        const inner = val.slice(1, val.lastIndexOf(']'))
-        if (inner !== undefined) {
-          fm.tags = inner
-            .split(',')
-            .map((s) => s.trim().replace(/^["']|["']$/g, ''))
-            .filter(Boolean)
-        }
-      } else if (val.length > 0) {
-        // 逗号/空格分隔：a, b, c 或 a b c
-        fm.tags = val
-          .split(/[,\s]+/)
-          .map((s) => s.trim().replace(/^["']|["']$/g, ''))
-          .filter(Boolean)
-      } else {
-        // 空值意味着接下来是块列表
-        inTagsBlock = true
-      }
-    }
-  }
-  return fm
-}
+/**
+ * frontmatter 解析统一走 @shared/frontmatter（gray-matter）。索引层与渲染层共用同一套解析，
+ * 避免「手写正则 vs gray-matter」双解析器分歧导致 moc/tags 互相矛盾。本文件只负责
+ * 标题层级 / 出链 / 内联标签的采集。
+ */
 
 /** 取首个 H1 作为标题兜底 */
 function firstH1(content: string): string {
@@ -149,9 +98,11 @@ export function parseFile(
   byBase: Map<string, string>,
   byRel: Map<string, string>
 ): IndexEntry {
-  const fm = parseFrontmatter(content)
-  const inlineTags = extractInlineTags(content)
-  const outRaw = extractWikiTargets(content)
+  // 统一在入口剥离 BOM：BOM 会让 frontmatter 判定与内联标签扫描失效
+  const text = stripBom(content)
+  const fm = parseFrontmatter(text)
+  const inlineTags = extractInlineTags(text)
+  const outRaw = extractWikiTargets(text)
   const outLinks: string[] = []
   for (const raw of outRaw) {
     const key = targetKey(raw)
@@ -182,8 +133,8 @@ export function parseFile(
   const tags = [...tagSet]
   return {
     mtime,
-    title: fm.title || firstH1(content),
-    headings: collectHeadings(content),
+    title: fm.title || firstH1(text),
+    headings: collectHeadings(text),
     outLinks: deduped,
     tags,
     moc: fm.moc

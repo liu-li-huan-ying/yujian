@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
 import { parseFrontmatter, serializeFrontmatter } from '../markdown/frontmatter'
+import { coerceMoc } from '@shared/frontmatter'
 
 const props = defineProps<{
   /** 当前文档全文（用于解析 frontmatter），打开时快照一次 */
@@ -53,7 +54,7 @@ function loadFrom(text: string): void {
     ? d.tags.map((x) => (typeof x === 'string' ? x : String(x))).filter(Boolean)
     : []
   form.tags = tags.join(', ')
-  form.moc = d.moc === true || d.moc === 'true' || d.moc === 'yes' || d.moc === 'on' || d.moc === '1'
+  form.moc = coerceMoc(d.moc)
   // 日期：YAML 可能解析成 Date 或字符串，统一取 YYYY-MM-DD
   if (d.date != null) {
     const dt = d.date instanceof Date ? d.date : new Date(String(d.date))
