@@ -179,13 +179,24 @@ function toInfo(m: SnapshotMeta): SnapshotInfo {
 
 /** 读 index.json；不存在/解析失败则把目录内现有 .md 迁移成 index 并返回 */
 async function readIndex(dir: string): Promise<SnapshotMeta[]> {
+  // 目录都不存在 = 该文档从未创建过快照 → 直接返回空，不刷「错误」日志：
+  // ENOENT 是预期的正常状态，把「无快照」当异常上报只会污染 soft-error 通道（每个无快照文档
+  // 被查询时都会刷一条 [soft]）。
+  try {
+    await stat(dir)
+  } catch {
+    return []
+  }
   let metas: SnapshotMeta[] | null = null
   try {
     const raw = await readFile(join(dir, INDEX_FILE), 'utf-8')
     const arr = JSON.parse(raw)
     if (Array.isArray(arr)) metas = arr as SnapshotMeta[]
   } catch (e) {
-    reportSoftError('snapshot.readIndex', e, 'debug')
+    // index.json 缺失（旧版未写索引 / 尚未创建首个快照）属正常 → 仅对真正异常（损坏、权限）上报
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+      reportSoftError('snapshot.readIndex', e, 'warn')
+    }
     // 无 index 或解析损坏 → 走迁移
   }
   // 向后兼容：Phase A 落盘的 index 没有 branch / tags 字段，补齐默认值（不破坏已有数据）

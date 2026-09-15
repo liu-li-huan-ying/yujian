@@ -839,6 +839,24 @@ section('[H] 数据安全线 —— .assets / 快照桶随文档迁移，删除�
     rmSync(dir, { recursive: true, force: true })
   }
 
+  // H7 回归：从未创建过快照的文档（无 .yujian-history 目录）被查询时，listSnapshots 必须返回 []，
+  //     且**不得**把「无快照」当成 soft error 刷日志（此前 ENOENT 被 reportSoftError 当错误上报，
+  //     每个无快照文档被查询都刷一条 [soft]，打开库即污染日志）。
+  {
+    const dir = makeVault({ 'A.md': BODY_A, 'B.md': '# 乙\n' })
+    const origWarn = console.warn
+    const noises = []
+    console.warn = (...args) => {
+      const msg = args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ')
+      if (msg.includes('snapshot.readIndex')) noises.push(msg)
+    }
+    const list = await Snap.listSnapshots(dir, join(dir, 'A.md'))
+    console.warn = origWarn
+    check('无历史文档 listSnapshots 返回 []', Array.isArray(list) && list.length === 0)
+    check('无历史文档查询不刷 snapshot.readIndex 噪声', noises.length === 0, noises.join(' | '))
+    rmSync(dir, { recursive: true, force: true })
+  }
+
   V.setTrashImpl(null)
   Snap.setTrashImpl(null)
   rmSync(trashDir, { recursive: true, force: true })
