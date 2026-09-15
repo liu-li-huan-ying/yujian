@@ -10,7 +10,7 @@
  * 走 esbuild 的官方 JS API 才真正跨平台，且不依赖 CLI 参数拼装。
  */
 import { createRequire } from 'node:module'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, existsSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -29,11 +29,36 @@ const esbuild = require('esbuild')
  *                                依赖（Milkdown 的 $remark / $nodeSchema 等）换成最小替身，
  *                                从而对纯逻辑（remark 改写、toMarkdown 序列化）做断言。
  * @param {number} [opts.timeoutMs] 打包超时，默认 60s（防 esbuild 子进程卡死拖垮 CI）
+ * @param {string[]} [opts.external] 标记不打包的依赖（bare import 留给 Node 运行时解析）。
+ *                                默认含 `gray-matter`：它是主进程 node 依赖，内部用动态
+ *                                `require('fs')`，一旦被 esbuild 打进 ESM 产物就会抛
+ *                                "Dynamic require of fs is not supported"。任何会进主进程
+ *                                打包产物、且自身依赖 node 内置模块的 npm 包都应加进这里。
  * @returns {Promise<{url: string, dir: string}>} url = 产物 file URL；dir = 临时目录（供清理）
  */
-export async function bundleTs({ root, entry, outName, stubs = {}, timeoutMs = 60_000 }) {
+export async function bundleTs({
+  root,
+  entry,
+  outName,
+  stubs = {},
+  external = ['gray-matter'],
+  timeoutMs = 60_000
+}) {
   const tmp = mkdtempSync(join(tmpdir(), 'yj-bundle-'))
   const out = join(tmp, outName)
+
+  // 让临时 bundle 能解析项目里的 npm 依赖（如 external 的 gray-matter）：把项目
+  // node_modules 以「符号链接 / Windows junction」挂到临时目录。否则 external 的 bare
+  // import 在 os tmpdir 下找不到 node_modules，运行时直接 ERR_MODULE_NOT_FOUND。
+  // Windows 用 junction（无需提权），POSIX 用 symlink。
+  const rootNodeModules = join(root, 'node_modules')
+  if (existsSync(rootNodeModules)) {
+    try {
+      symlinkSync(rootNodeModules, join(tmp, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
+    } catch {
+      // 个别环境不支持符号链接时静默忽略；external 解析失败会在跑测试时明确报错，不在此隐藏。
+    }
+  }
 
   /** @type {Record<string, string>} */
   const alias = {}
@@ -52,7 +77,8 @@ export async function bundleTs({ root, entry, outName, stubs = {}, timeoutMs = 6
       platform: 'node',
       outfile: out,
       logLevel: 'error',
-      alias
+      alias,
+      external: external.filter(Boolean)
     }),
     timeoutMs,
     `esbuild 打包 ${entry} 超时（${timeoutMs}ms）`
