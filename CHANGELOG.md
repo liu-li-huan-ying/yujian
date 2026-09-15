@@ -8,6 +8,34 @@
 
 **主题：Phase 3 批次四 · 中文排版（渲染层）+ 大文档分块渲染 + 中文分词 + 快捷键自定义**
 
+### 重构 · 结构与解耦（软件工程审计落地）
+
+依据 `docs/review/AUDIT-STRUCTURE-2026-09-15.md` 做「零功能变更」的结构治理，用户可见行为不变。
+
+**架构缺陷（会咬人的那类）**
+
+- **消除唯一循环依赖**：`SerializeCtx` 契约原定义在导出调度器 `serialize.ts`，而 docx / epub / odt
+  三个实现又反向 import 它，形成「实现 → 调度器 → 实现」环。契约下沉到 `export/types.ts`。
+- **消除主进程越界**（最严重）：`electron/main/vault.ts` 曾 import `src/utils/regex`——主进程直接引渲染层源码。
+  共享正则改落 `electron/shared/regex.ts`。同时删掉 `vault.ts` 内重复的 `buildSearchRegex`，
+  库级搜索与编辑器内搜索终于收敛到同一实现。
+- **消除导出层越界**：`mathjax` 拆为 `src/render/mathjax.ts`（引擎，零 Milkdown 依赖）+
+  `src/editor/features/mathjax.ts`（ProseMirror 接线）；`frontmatter` 迁至 `src/markdown/`。
+- **消除重复实现**：编辑器与导出各有一份 mermaid 懒加载单例，配置（theme / securityLevel）
+  互相覆盖同一全局实例。统一到 `src/render/mermaid.ts`。
+
+**逻辑管理（DRY）**
+
+- 新增 `electron/shared/error.ts` 的 `errMsg()`，收敛 **31 处**重复的
+  `e instanceof Error ? e.message : String(e)`，并删除 3 处本地同名函数定义。
+  非 Error 抛出物（`null` / 字符串 / 对象）此前内联写法会二次抛错，现由测试断言钉死。
+
+**上帝模块**
+
+- `electron/main/vault.ts`（1134 行 / 12 导出 / 7 类职责）→ 拆为 `electron/main/vault/` 包 **9 个文件**，
+  最大 430 行。外部仍从 `./vault` 导入，调用方零改动。
+  副产品：中文自然排序（`humanCompare`）从「埋在 1135 行里、无法断言」变成可测纯函数。
+
 ### 新增 · 中文双击选词（分词）
 - **双击中文按词选中**：此前双击中文会把一长串汉字（常含标点）整段选走，想复制一个词、给一个词加粗都很别扭。现在双击中文按**词边界**选中，双击「开源」就选中「开源」。
 - **不引词典、不改源文件**：分词用浏览器原生的系统级分词能力（与系统输入法同源），对系统未收录的双字词会自动回退成双字，避免只选中一个字；中文标点上双击选中的是该标点本身。

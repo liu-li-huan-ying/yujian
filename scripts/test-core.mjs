@@ -665,7 +665,7 @@ section('[H] 数据安全线 —— .assets / 快照桶随文档迁移，删除�
   // 假回收站：把「删除」变成移到临时目录，从而能断言「确实走了回收站」而不是 rm。
   // 这正是 trash.ts 存在的意义——vault.ts 因此不再顶层依赖 electron，可在 Node 里直测。
   const trashDir = mkdtempSync(join(tmpdir(), 'yj-trash-'))
-  const V = await import((await bundle('electron/main/vault.ts', 'vault.mjs')).url)
+  const V = await import((await bundle('electron/main/vault/index.ts', 'vault.mjs')).url)
   const Snap = await import((await bundle('electron/main/snapshots.ts', 'snapshots.mjs')).url)
   // 注入必须打在「被测模块自己的」trash 副本上（打包会内联 ./trash，外层单独打包的实例是另一份）
   const fakeTrash = async (p) => {

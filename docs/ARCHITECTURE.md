@@ -1657,6 +1657,39 @@ export interface SessionState {
 
 想放宽阈值，须**显式改文件并在此说明原因**，而不是让它悄悄涨上去。
 
+## 5.34 `electron/main/vault/` 包：主进程文件系统能力的细颗粒拆分（2026-09-15）
+
+`vault.ts` 曾是主进程头号上帝模块（1134 行 / 12 导出 / 7 类互不相关职责）。现拆为包目录：
+`vault.ts` 删除，`./vault` 解析到 `vault/index.ts` 门面，**调用方（`main/index.ts`、
+`vaultIntegrity.ts`、`test-core.mjs`）无需改动**。
+
+### 文件职责
+
+| 文件 | 职责 |
+| --- | --- |
+| `context.ts` | 库根（`vaultRoot`）+ 程序化改动抑制窗 + `resolveVaultRoot` —— **可变状态簇之一** |
+| `fsUtils.ts` | 无状态 fs 帮手：存在性 / 权限判定 / 只读递归清除 / 回收站优先删除 / 递归收集文档 |
+| `naturalSort.ts` | 中文自然排序（纯函数、零依赖） —— 拆出后从「无法断言」变为可测 |
+| `treeOps.ts` | 文件树读写与变更：列表 / 新建 / 重命名 / 删除 / 移动（**关联数据随迁铁律的唯一落点**） |
+| `indexStore.ts` | 统一索引生命周期：内存索引 + 映射缓存 + 防抖落盘 + 迁移同步 —— **另一状态簇** |
+| `watcher.ts` | 目录监听 + 增量维护；库根写入的唯一入口 |
+| `search.ts` | 全文搜索 / 全局替换 |
+| `linkCheck.ts` | 链接健康体检（只读，不修改任何文件） |
+| `index.ts` | 公开门面：**外部只从此处导入**，内部可继续拆分而不惊动调用方 |
+
+### 依赖方向（单向、无环）
+
+`context → fsUtils`；`treeOps → {context, fsUtils, naturalSort, indexStore}`；
+`watcher → {context, indexStore}`；`search → indexStore`；`linkCheck → fsUtils`。
+
+### 两条必须守住的细节
+
+1. **trash 注入必须从门面再导出**：打包会把 `../trash` 内联成独立副本，只在外层模块设注入是无效的。
+   测试的 `setTrashImpl` 必须与内部使用**同一份实例**，故门面保留
+   `export { setTrashImpl, trashItem } from '../trash'`。
+2. **可变状态不跨模块散落**：`vaultRoot` / 抑制窗归 `context`，索引状态归 `indexStore`；
+   其余模块一律经函数读写（`setVaultRoot` / `isProgrammaticSuppressed`），不直接持有 `let`。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash
