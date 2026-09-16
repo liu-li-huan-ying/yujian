@@ -2060,6 +2060,36 @@ xvfb-run -a node scripts/e2e-open-no-write.mjs --rounds=2
 
 CI（`ci.yml`）在 `build` 之后跑 2 轮（`xvfb-run` 提供虚拟 X，`MD_EDITOR_COMPAT_MODE=1` 关 GPU 沙箱）。
 
+### 在 Linux / CI 上跑起来的两个坑（各修了一轮才绿）
+
+**① Electron 二进制可能根本没下载 —— 别把「安装快」当成「产物就位」**
+
+`npm ci` 的 CI 日志里「Install dependencies」整步只有 **10s**，而 Electron 二进制约 100MB
+——10s 明显没下。缓存命中时 `npm ci` **不会**重新触发二进制下载，`ELECTRON_MIRROR`
+只决定下载**源**、不决定是否下载。于是 E2E 直接「找不到 electron」。
+
+- 修：`ci.yml` 在 E2E 前显式 `node node_modules/electron/install.js`。
+  该脚本首行是 `if (isInstalled()) process.exit(0)` → **幂等**，已就位秒退、缺失才下载，
+  非 CI 环境零成本。
+- 修：脚本内取可执行文件路径改用 `require('electron')`（ESM 里经 `createRequire`），
+  **不再手拼 `dist/electron(.exe)`**。该包自己的 `index.js` 会读它生成的 `path.txt` 再拼 `dist/`，
+  且缺失时自动补下载；平台名映射（`linux`→`electron` / `win32`→`electron.exe` /
+  `darwin`→`Electron.app/Contents/MacOS/Electron`）由它负责。
+  注：从普通 Node 上下文 `require('electron')` 返回的是**路径字符串**，正好当解析器用。
+
+**② SUID 沙箱会让 Electron 启动即 FATAL —— 沙箱开关必须走命令行**
+
+```
+FATAL: The SUID sandbox helper binary was found, but is not configured correctly.
+… node_modules/electron/dist/chrome-sandbox is owned by root and has mode 4755.
+```
+
+Chromium 的 SUID 沙箱要求 `chrome-sandbox` 属 root 且 mode 4755，CI runner 不满足。
+⚠️ **只靠应用内 `app.commandLine.appendSwitch('no-sandbox')` 不够** —— 那已晚于沙箱初始化。
+必须在 **spawn 时**把 `--no-sandbox` 作为命令行参数传给 electron：
+`runElectron` 在 `linux` 上以 `['--no-sandbox', IN_ELECTRON]` 启动（非 Linux 不传，
+保持常规平台的沙箱强度）。应用内的 `MD_EDITOR_COMPAT_MODE` 只负责 GPU 相关开关。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash
