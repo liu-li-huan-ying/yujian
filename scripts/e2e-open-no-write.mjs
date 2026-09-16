@@ -220,7 +220,11 @@ function runElectron(electronBin, vault, waitMs) {
   return new Promise((resolvePromise) => {
     const env = { ...process.env, YJ_E2E_VAULT: vault, YJ_E2E_WAIT: String(waitMs), MD_EDITOR_COMPAT_MODE: '1' }
     delete env.ELECTRON_RUN_AS_NODE // 宿主 IDE 会注入：不清除则 Electron 退化成纯 Node，永不建窗
-    const child = spawn(electronBin, [IN_ELECTRON], { env, stdio: ['ignore', 'pipe', 'pipe'] })
+    // Linux 上 Chromium 的 SUID 沙箱要求 chrome-sandbox 属 root 且 mode 4755；
+    // CI 里不满足 → 启动即 FATAL 中止。`--no-sandbox` 必须在**进程启动前**作为命令行参数传入，
+    // 不能只靠应用里 `app.commandLine.appendSwitch('no-sandbox')`（那已晚于沙箱初始化）。
+    const args = process.platform === 'linux' ? ['--no-sandbox', IN_ELECTRON] : [IN_ELECTRON]
+    const child = spawn(electronBin, args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
     let out = ''
     child.stdout.on('data', (d) => (out += d))
     child.stderr.on('data', (d) => (out += d))
