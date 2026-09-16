@@ -306,6 +306,9 @@ const zhCN = {
     snapshotClearCompare: '清除对比',
     snapshotFilterTag: '按标签筛选',
     snapshotClearFilter: '清除筛选',
+    snapshotShowAuto: '显示自动备份（{n}）',
+    snapshotHideAuto: '隐藏自动备份',
+    snapshotNoManual: '暂无手工快照（自动备份已隐藏）',
     /* ── 版本快照 Phase B：时间轴 / 血缘视图 + 轻量草稿分支 ── */
     snapshotViewList: '列表',
     snapshotViewTimeline: '时间轴',
@@ -464,6 +467,7 @@ const zhCN = {
     integrityCatOrphan: '孤儿快照',
     integrityCatAttachment: '缺失附件',
     integrityCatLink: '断链',
+    integrityCatCorrupt: '文档损坏',
     integrityScanning: '正在扫描笔记库…',
     integrityNoVault: '请先打开笔记库',
     integrityEmpty: '未发现异常 ✓',
@@ -472,6 +476,12 @@ const zhCN = {
     integrityRepairConfirm:
       '将重建索引并删除孤儿快照（走回收站）；缺失附件与断链需手动处理。是否继续？',
     integrityNothingToRepair: '无可修复项',
+    /* ── 文档损坏自愈 ── */
+    integrityHealTitle: '检测到文档被写坏',
+    integrityHealHint:
+      '这些文档带有序列化损坏特征（YAML 头变 ***、双链被转义等）。还原会把该文档回滚到损坏前的历史版本——还原前的那一版也会自动留档，可再次回滚。',
+    integrityHeal: '还原',
+    integrityHealing: '还原中…',
     /* ── 软错误（已知可容忍失败）── */
     integritySoftErrors: '已忽略的小故障',
     integritySoftHint:
@@ -575,6 +585,7 @@ const zhCN = {
     snapshotRestored: '已恢复到该快照',
     snapshotReadFail: '快照读取失败',
     snapshotDeleted: '已删除快照',
+    integrityHealed: '已还原为损坏前的版本',
     exportGroupText: '文本',
     exportGroupLayout: '排版 / 网页',
     exportGroupOffice: '办公 / 电子书',

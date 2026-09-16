@@ -59,3 +59,12 @@ jobs:
 
       - name: Build (main / preload / renderer)
         run: npm run build
+
+      # 「打开不写盘」红线：Crepe 序列化是破坏性的，只要「打开」被误判成「编辑」，
+      # 自动保存就会把规范化后的文本写回磁盘，且坏内容即刻成为新的磁盘原文、无法自愈。
+      # 单元测试用的是桩，跑不到真实 Crepe/ProseMirror，故由真启动应用、真比字节的 E2E 来守。
+      # Linux 无显示器 → 用 xvfb 提供虚拟 X。
+      - name: E2E — open must not write (byte-exact)
+        run: xvfb-run -a --server-args="-screen 0 1400x1000x24" node scripts/e2e-open-no-write.mjs --rounds=2
+        env:
+          MD_EDITOR_COMPAT_MODE: '1'

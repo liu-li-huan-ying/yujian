@@ -6,6 +6,7 @@ import { extname } from 'node:path'
 import { IPC, type FileStat, type ReadBase64Result } from '../../shared/ipc-channels'
 import { errMsg } from '../../shared/error'
 import { atomicWrite } from '../atomicWrite'
+import { backupBeforeSave, readPrevContent } from '../autoBackup'
 import { createDoc, createFolder, deleteItem, moveItem, renameItem } from '../vault'
 import { reportSoftError } from '../softError'
 
@@ -53,6 +54,10 @@ export function registerFilesIpc(): void {
   )
 
   ipcMain.handle(IPC.FILE_WRITE, async (_event, filePath: string, content: string) => {
+    // 保命防线：覆盖前把上一版留给版本历史（库内 / 非空 / 内容有变 才留档；
+    // 失败只记软错误，绝不阻断本次保存）。详见 autoBackup.ts 的设计取舍。
+    const prev = await readPrevContent(filePath)
+    if (prev !== content) await backupBeforeSave(filePath, prev)
     // 原子写（临时文件 + rename），并对 Windows 只读 / 同步锁导致的 rename EPERM 做兜底
     await atomicWrite(filePath, content)
   })

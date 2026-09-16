@@ -99,10 +99,33 @@ const allTags = computed<string[]>(() => {
   for (const s of snapshots.branchList) for (const tg of s.tags || []) set.add(tg)
   return [...set]
 })
+
+/**
+ * 自动备份的隐藏开关。
+ *
+ * 为什么需要：编辑器的自动保存在每次覆盖前都会留一份（上限 50），
+ * 若全量铺开，手工快照会被淹没在几十条「自动备份」里，面板基本不可用。
+ * 故**默认隐藏**自动备份，只保留手工快照；需要回滚时可一键显示。
+ * 与后端约定：自动备份的备注恒为「自动备份」（见 electron/main/autoBackup.ts 的 AUTO_BACKUP_NOTE）。
+ */
+const AUTO_NOTE = '自动备份'
+const showAuto = ref(false)
+
+const visibleList = computed<SnapshotInfo[]>(() =>
+  showAuto.value
+    ? snapshots.branchList
+    : snapshots.branchList.filter((s) => s.note !== AUTO_NOTE)
+)
+
+/** 当前分支里被隐藏的自动备份条数（用于按钮文案，0 时不显示按钮） */
+const hiddenAutoCount = computed(
+  () => snapshots.branchList.filter((s) => s.note === AUTO_NOTE).length
+)
+
 const filteredList = computed(() =>
   filterTag.value
-    ? snapshots.branchList.filter((s) => (s.tags || []).includes(filterTag.value))
-    : snapshots.branchList
+    ? visibleList.value.filter((s) => (s.tags || []).includes(filterTag.value))
+    : visibleList.value
 )
 
 /* ── 字数差（快照相对当前文档）── */
@@ -251,8 +274,8 @@ function fmtTime(ts: number): string {
       </button>
     </div>
 
-    <!-- 标签筛选 -->
-    <div v-if="allTags.length" class="snap__filters">
+    <!-- 标签筛选 / 自动备份开关 -->
+    <div v-if="allTags.length || hiddenAutoCount > 0" class="snap__filters">
       <button
         v-for="tg in allTags"
         :key="tg"
@@ -262,6 +285,14 @@ function fmtTime(ts: number): string {
         @click="filterTag = filterTag === tg ? '' : tg"
       >{{ tg }}</button>
       <button v-if="filterTag" type="button" class="ftag ftag--clear" @click="filterTag = ''">{{ L.snapshotClearFilter }}</button>
+      <!-- 自动备份默认隐藏（每次保存前都会留一份，全铺开会淹没手工快照） -->
+      <button
+        v-if="hiddenAutoCount > 0 || showAuto"
+        type="button"
+        class="ftag ftag--auto"
+        :class="{ on: showAuto }"
+        @click="showAuto = !showAuto"
+      >{{ showAuto ? L.snapshotHideAuto : L.snapshotShowAuto.replace('{n}', String(hiddenAutoCount)) }}</button>
     </div>
 
     <!-- 列表 / 时间轴（同一份数据两种呈现：时间轴多一列血缘导轨） -->
@@ -269,6 +300,9 @@ function fmtTime(ts: number): string {
       <p v-if="!filePath" class="snap__empty">{{ L.snapshotEmpty }}</p>
       <p v-else-if="snapshots.branchList.length === 0" class="snap__empty">
         {{ isDraft ? L.snapshotBranchEmpty : L.snapshotEmpty }}
+      </p>
+      <p v-else-if="filteredList.length === 0" class="snap__empty">
+        {{ L.snapshotNoManual }}
       </p>
 
       <template v-else>
@@ -600,6 +634,12 @@ function fmtTime(ts: number): string {
   color: var(--hue-accent);
 }
 .ftag--clear {
+  color: var(--hue-text-3);
+  border-style: dashed;
+}
+/* 自动备份开关：虚线边框区分于普通标签筛选，靠右收在筛选行末尾 */
+.ftag--auto {
+  margin-left: auto;
   color: var(--hue-text-3);
   border-style: dashed;
 }

@@ -21,6 +21,7 @@ import WikiSuggest from '../components/WikiSuggest.vue'
 import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
 import { highlightSchema, inlineMarkInputRules, subSchema, supSchema } from './features/inlineMarks'
 import { remarkInlineMarks } from './features/inlineMarksSyntax'
+import { beginIngest, createIngestPlugin } from './features/ingestGate'
 import {
   mathInlineNodeViewPlugin,
   renderMathBlockPreview,
@@ -616,6 +617,12 @@ async function init(defaultValue?: string): Promise<void> {
     }))
   })
 
+  // 灌入门闩：必须在 crepe.create() **之前**注册——create 期间 Milkdown 会注册 listener 插件
+  // （markdownUpdated 的 200ms 防抖回显），而插件执行顺序 = 注册顺序。本插件排在前面，
+  // 才能在 listener 读取 `tr.getMeta('addToHistory')` 之前把灌入事务标记好。
+  // 详见 features/ingestGate.ts（含「为何不用 setTimeout(0) 抑制」的完整论证）。
+  crepe.editor.use($prose(() => createIngestPlugin()))
+
   await crepe.create()
   crepe.setReadonly(props.readonly)
   setupImageResolver()
@@ -658,7 +665,15 @@ async function setMarkdown(markdown: string): Promise<void> {
   const { block, sep, body } = splitFrontmatter(markdown)
   currentFrontmatter = block
   currentSep = sep
-  await crepe.editor.action(replaceAll(body))
+  // 开灌入门闩：本次 docChanged 事务会被打好 addToHistory:false，listener 直接跳过、
+  // **不产生 markdownUpdated 回显**（而非「产生了再抑制」）。
+  // 这样启用/停用与 200ms 防抖窗口无关，慢机器上也不会漏抑制（漏一次 = 静默写坏文件）。
+  const endIngest = beginIngest()
+  try {
+    await crepe.editor.action(replaceAll(body))
+  } finally {
+    endIngest()
+  }
   if (host.value) rewriteImages(host.value)
 }
 

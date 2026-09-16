@@ -418,15 +418,26 @@ MOC 面板消失；且**一旦写坏，坏内容就成了新的"磁盘原文"，
   `useFidelity` **不改动**（两端口径一致，都是带头的全文）。
 * 回归测试：`npm test` 的 `[J2]` 段 12 条断言。
 
-#### 5.2.2 灌入回显 ≠ 用户编辑（2026-09-15）
+#### 5.2.2 灌入回显 ≠ 用户编辑（2026-09-15；2026-09-15 晚加固）
 
 仅有 §5.2.1 仍不够：Crepe 序列化本就是破坏性的，只要**「打开即自动保存」**存在，
 任何差异都会被判脏并落盘。而灌入（`load` / 切回所见即所得 / 快照恢复 / 图床发布）
 会触发 `markdownUpdated` 回显——那是「编辑器把刚吃进去的内容又吐出来」，**不是用户编辑**。
 
-故 `EditorHost` 维护 `applyingDepth`：所有向所见即所得端灌入内容的路径统一走
-`applyToEditor()`，灌入期间 `onWysiwygUpdate` 直接 return（不判脏、不 `scheduleSave`）。
-这是「未编辑文档保存一字不改」红线的守门点。
+抑制点历经两版：
+
+| 版本 | 做法 | 判定 |
+| --- | --- | --- |
+| 初版 | `EditorHost` 维护 `applyingDepth`，灌入期间 `onWysiwygUpdate` 直接 return | ⚠️ **不可靠，已废弃** |
+| 现行 | `MilkdownEditor.setMarkdown` 开「灌入门闩」，让灌入事务带 `addToHistory:false` | ✅ |
+
+**初版为何废弃**：读了 `@milkdown/plugin-listener` 源码后确认 `markdownUpdated` 是
+**200ms 防抖**的，任何「延后一拍解除抑制」的时序假设都会偶发失效，
+而失效一次就是**静默写坏用户文件**。
+
+**现行做法的要点**：listener 明确跳过 `tr.getMeta('addToHistory') === false` 的事务，
+故灌入事务打上该 meta 后**根本不产生回显**（从源头不产生，而非「产生了再抑制」）。
+完整论证、插件顺序约束与负向对照见 **§5.37.3**。
 
 > 注：快照恢复 / 图床发布在灌入后**显式**调 `scheduleSave()`——那是刻意要落盘的，不受抑制影响。
 
@@ -1878,6 +1889,176 @@ export interface SessionState {
 - 外部零改动：`electron.vite.config.ts` 的入口仍是 `electron/main/index.ts`。
 - 打包产物 `out/main/index.js` 经核验仍包含全部通道字符串（`jade-asset` / `vault:*` /
   `win:*` / `export:*` / `imghost:*` / `snapshot:*` / `asset:*`）。
+
+## 5.37 数据自愈三件套：保存前备份 · 损坏巡检 · 灌入门闩（2026-09-15）
+
+这一节记录三项**围绕「静默写坏」**的加固。它们不是新功能，而是把历史上踩过的两类事故
+（frontmatter 被吞、`[[双链]]` 被转义）从「靠记得修」升级为「坏不掉 / 坏了好救」。
+
+### 5.37.1 保存前自动备份（`electron/main/autoBackup.ts`）
+
+**动机**：编辑器序列化是破坏性的，而**坏内容一旦落盘就成为新的磁盘原文，无法自愈**——
+历史上前两次事故都只能靠外部脚本抢救。必须在「覆盖」这一刻就留下上一版。
+
+**插入点**：`electron/main/ipc/files.ts` 的 `IPC.FILE_WRITE`（**唯一**的文档保存入口，
+`EditorHost.save()` 经 preload 的 `writeFile` 走到这里，是数据安全的咽喉）。
+
+**四条取舍**（都有测试守着）：
+
+| 规则 | 理由 |
+| --- | --- |
+| **只在库内备份** | 库外单文件无 `.yujian-history`/`.mdeditor` 标记。否则会在用户任意目录凭空造出历史目录，而那个目录未必归本编辑器管。 |
+| **空内容不备份** | 新建文档首次落盘是 `''`，每一次新建都留一份空快照会污染历史。 |
+| **内容哈希去重** | 与最近一份自动备份相同则不重复留档——连续自动保存同一内容只留一份。 |
+| **有界保留 50 份** | 超出按时间删最旧（走回收站）。**只碰自动备份，绝不碰手工快照**。 |
+
+**永不阻断保存**：任何失败只记 `reportSoftError('autoBackup', …, 'warn')`，不向调用方抛——
+备份是安全网，不是保存的前置条件。
+
+**与手工快照的区分**：靠固定备注 `自动备份`（`AUTO_BACKUP_NOTE`）。它同时是修剪的筛选键。
+
+### 5.37.2 序列化损坏巡检与自愈（`electron/main/corruptionDetect.ts` + `vaultIntegrity.ts`）
+
+**动机**：备份只解决「以后写坏能回滚」，但**已经写坏的存量文档**需要能**被认出来**。
+检测做成**纯函数**（零依赖、可在 Node 直测），因为损坏特征会演进，用可断言的函数守住
+比在主进程里散落 `if` 可靠得多。
+
+**三条规则**（宁漏勿误，每条都要求结构上像损坏而非孤例）：
+
+1. `frontmatter-as-stars`：首行 `***` + 其后有 YAML 键名 + **有收尾围栏**。
+   收尾围栏有两种形态，实测都出现过：又一个 `***`；或一行长 `-`（结束 `---` 被 Setext 吃掉）。
+2. `frontmatter-setext-eaten`：收尾是长 `-` 而非 `***` 时追加此条（前一行的标题被升级成 h2）。
+3. `escaped-wikilink`：出现 `\[\[` 即判定——这是几乎不可能自然出现的组合。
+
+**关键误报防线**：`***` 是合法水平线。**两条 `***` 夹普通正文**与「`***` 包 YAML」结构同形，
+唯一区别是夹的内容不像 YAML。故「中间必须有 YAML 键名」这条约束不可省——
+测试里专门留了这个误报样本（`test-core` 的「健康 #6」）。⚠️ 实测：删掉该约束后
+**其余所有样本都不报红**，只有这一个能抓住，属真·测试盲区。
+
+**自愈闭环**：巡检为每个损坏文档挑出「**时间倒序里第一份本身没损坏的**快照」id
+（不取最新一份——若连续多次自动保存都写坏，最新几份可能全是坏的）。
+`IntegrityPanel` 据此显示「还原」按钮 → `snapshotRestore` 读 → `writeFile` 覆盖。
+还原本身也是一次保存，故会命中 §5.37.1 的自动备份 → **可再次回滚**。
+
+### 5.37.3 灌入门闩：把「程序化灌入」标记绑到事务上（`src/editor/features/ingestGate.ts`）
+
+**这是 §5.2.2 的加固版，替换掉原来的「计数器 + `setTimeout(0)`」。**
+
+**为什么原实现是错的**：读了 `@milkdown/plugin-listener` 源码后确认，
+`markdownUpdated` 是 **200ms 防抖**的：
+
+```js
+const debouncedHandler = debounce(() => { … listeners.markdownUpdated.forEach(…) }, 200)
+```
+
+于是「灌入后延后一拍解除抑制」的时序假设**必然不可靠**——慢机器 / 长文档上会偶发漏抑制，
+而漏一次就是**静默写坏用户文件**。这类 bug 最不能容忍。
+
+**正确做法**：同一份源码给了答案——listener 明确跳过
+`tr.getMeta('addToHistory') === false` 的事务。所以灌入事务打上该 meta 后
+**根本不产生 `markdownUpdated`**——不是「触发了再抑制」，而是从源头不产生回显。
+语义也更对：程序化整体替换本就不该进撤销历史。
+
+**实现**：`replaceAll` 是 Milkdown 高层命令，无法附加 meta。故用「门闩 + 插件 `state.apply`」：
+`beginIngest()` 置位 → 插件在 `apply` 钩子里给 docChanged 事务补打 meta → `finally` 解除。
+
+⚠️ **插件的执行顺序 = 注册顺序**，本插件必须在 `crepe.create()` **之前** `editor.use()`，
+否则会排在 listener 之后、读不到 meta。（`MilkdownEditor.init()` 里已注明。）
+
+⚠️ **ProseMirror 语义已实测确认**：插件 `state.apply` 里对已构造的 `tr.setMeta(...)`，
+能被**后续**插件的 `state.apply` 读到。验证脚本（`test-core` 的 `[J5]` 段固化了这个断言）。
+
+**负向对照不可省**：若只断言「灌入不回显」，把门闩写成**永远置位**也能全绿——
+而那会让**用户每一次编辑都不落盘**，比原 bug 更危险。故 `[J5]` 同时断言
+「解除后用户编辑必须回显」「从未开门闩时用户编辑必须回显」。
+
+## 5.38 全语法真实序列化往返矩阵的补全（2026-09-15）
+
+`verify:corpus` 的语料从 18 个补到 20 个，并补上两处**真实盲区**：
+
+| 新增 | 守住什么 |
+| --- | --- |
+| `19-inline-marks.md` | `~sub~` / `^sup^` / `==mark==` 走**真实** remark 流水线往返。这几条历史上有「单 `~` 被 GFM `singleTilde` 规范化成 `~~`」的坑。 |
+| `20-frontmatter.md` | YAML 头在**纯 remark 流水线**下会被破坏（`***` + Setext）——这是历史上的损坏形态，故意留作**活样本**。 |
+
+**语料矩阵新增了 `remarkInlineMarks` 插件**（此前只挂了 wikilink/tag/htmlInline 三个），
+故 `19-inline-marks.md` 走的是与编辑器一致的解析 + 序列化路径，而非「当普通文本」的假绿。
+
+**`EXPECTED_DIFF` 从 `Set` 改为 `Map`**（值 = 登记理由），并把「跳过」改成**断言差异依然存在**：
+若哪天上游修好、该用例转绿，门禁会报红提醒「可以撤掉这条豁免了」。
+否则豁免会永远留着，成为新的盲区。
+
+**语料必须是 remark-stringify 的规范形式**（这是既有约定，此处再踩一次）：
+- 无序列表用 `*` 而非 `-`（`-` 会被规范化成 `*`）
+- 表格列必须对齐填充（remark-gfm 会重排）
+- 文件必须以**单个** `\n` 结尾（多个会被折叠成一个）
+
+## 5.39 E2E 红线：打开文档不写盘（`scripts/e2e-open-no-write.mjs`，2026-09-15）
+
+### 为什么单元测试守不住这条线
+
+`test-core` 里所有编辑器相关断言都用**桩**（假 `addNode`、假 adapter），
+跑不到真实的 Crepe / ProseMirror 组合。而「打开即写盘」这个事故恰恰**只存在于真实组合里**：
+灌入 → `markdownUpdated` 回显 → 判脏 → 800ms 自动保存 → 磁盘原文被规范化文本覆盖。
+桩里没有这条链路，所以桩永远绿，用户文件照样坏。**红线必须由真启动应用、真读磁盘字节的 E2E 来守。**
+
+### 为什么不用 Playwright
+
+本机无 Playwright。实测**无头 Electron 能建窗口 + `executeJavaScript`**（无需显示器），
+于是直接让 Electron 自己当驱动：零额外依赖，且跑的**就是真实应用主进程**（不是另写一个壳）。
+
+### 两段式结构（关键，别合并）
+
+| 角色 | 文件 | 职责 |
+| --- | --- | --- |
+| 编排者（`node` 跑） | `scripts/e2e-open-no-write.mjs` | 造临时库 → 快照字节 → `spawn electron` → 关闭后比对字节 |
+| 车内脚本（`electron` 跑） | `scripts/e2e-open-no-write.main.cjs` | 预置 `session.json` → 顶层 `require` 真实产物 → 等载入 → 睡过保存窗口 → 上报 |
+
+⚠️ **车内脚本必须是 CJS**：真实主进程产物 `out/main/index.js` 是 CJS，
+从 ESM 里 `await import()` 它会让模块内的 `require('electron')` 返回**路径字符串**而非 API
+（就是 `dev.mjs` 注释里那个坑的同源变体）。
+
+⚠️ **必须在顶层 `require` 真实入口，不能放进 `whenReady().then()`**：
+`out/main/index.js` 里 `protocol.registerSchemesAsPrivileged` 必须在 app ready **之前**调用，
+放进 `whenReady` 里会抛「should be called before app is ready」→ 应用根本起不来（实测踩过）。
+
+⚠️ **必须清 `ELECTRON_RUN_AS_NODE`**：宿主 IDE 会注入该变量，不清则 Electron 退化成纯 Node，
+永不建窗（与 `dev.mjs` 同理）。
+
+### 语料要覆盖「每种曾被写坏的语法」
+
+`FIXTURES` 四篇：frontmatter + 双链 + 行内标记（综合）、纯正文（验「不被凭空加头」）、
+头与正文间**两个空行**（Crepe 会吃前导空行，最易暴露）、转义字符 + `<kbd>` + 数学。
+断言除「逐字节相等」外，另加「库内不得凭空新增文件」（防误建 `.assets`）。
+
+### 等待窗口为什么取 4800ms
+
+自动保存防抖 `AUTOSAVE_DELAY = 800ms`，灌入回显另有 200ms debounce，再叠加渲染往返。
+取 **6 倍**（默认 `--wait=4800`），让任何「误判为编辑」的保存都有充足时间发生。
+`--rounds=N` 可多轮跑（每轮全新库），用来抓时序性偶发。
+
+### 负向验证（已做，必须做）
+
+守卫**必须能抓到故障**，否则就是空转。注入验证：
+把 `ingestGate` 的 `tr.setMeta('addToHistory', false)` 去掉（等价于回退到无抑制）→
+重建 → E2E **报红**，精确指出 `frontmatter.md` 的 `- 列表项一` → `* 列表项一`
+（长度 210 → 215）。还原后恢复绿。
+
+⚠️ 值得记一笔：**第一次注入位置选错了**。我先把 `EditorHost.onWysiwygUpdate` 里的
+`markEdited` 换成 `applyExternal`（强制判脏），结果 E2E **仍然全绿** ——
+因为门闩在**事务层**就把回显掐掉了，`markdownUpdated` 根本不触发，下游怎么改都无影响。
+这说明「注入点要选在被守护机制的**上游**」，否则会把「机制有效」误读成「守卫空转」。
+
+### 运行
+
+```bash
+npm run e2e:open                 # = build && node scripts/e2e-open-no-write.mjs
+node scripts/e2e-open-no-write.mjs --rounds=3 --keep
+# Linux / CI（无显示器）：
+xvfb-run -a node scripts/e2e-open-no-write.mjs --rounds=2
+```
+
+CI（`ci.yml`）在 `build` 之后跑 2 轮（`xvfb-run` 提供虚拟 X，`MD_EDITOR_COMPAT_MODE=1` 关 GPU 沙箱）。
 
 ## 附录 A：开工前必做的环境配置
 

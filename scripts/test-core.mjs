@@ -18,6 +18,10 @@
  *  H. 数据安全线 —— .assets / 快照桶随文档迁移、删除走回收站、危险操作前置守卫
  *  I. 快照 diff 引擎 —— hunk 行号 / 聚合 / 并排配对（src/utils/snapshotDiff.ts）
  *  J. frontmatter 解析 / 回写 —— 正文逐字保留（src/markdown/frontmatter.ts）
+ *  J2. 编辑器边界 frontmatter 保真 —— WYSIWYG 往返不丢 YAML 头（MOC 消失真因回归）
+ *  J3. 保存前自动备份 —— 覆盖前留档 / 内容去重 / 有界保留 / 库外不建目录（electron/main/autoBackup.ts）
+ *  J4. 序列化损坏检测 —— frontmatter 变 *** / 双链被转义 / 正常文档不误报（electron/main/corruptionDetect.ts）
+ *  J5. 灌入门闩 —— 程序化灌入不回显、用户编辑照常回显（src/editor/features/ingestGate.ts）
  *  K. 标签页重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）
  *  L. 关系图谱派生 —— 节点 / 边由索引派生，本地子图 BFS / 全局度降序截断（electron/main/vaultIndex.ts）
  *  M. 命令面板内核 —— 模糊匹配 + 命令目录（src/utils/fuzzy.ts, src/utils/commands.ts）
@@ -1045,6 +1049,206 @@ try {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════ */
+
+section('[J3] 保存前自动备份（保命防线）—— 覆盖前留档 / 内容去重 / 有界保留 / 库外不建目录')
+
+{
+  // 假回收站：deleteSnapshot 的物理删除必须走回收站，不 rm（数据安全红线）。
+  // ⚠️ 注入必须打在「运行时真正使用的那份 trash 副本」上。bundle 会把 ./trash 内联进各产物，
+  // 故本段只对 Snap（snapshots.ts 产物）注入，并只用它验证删除语义；
+  // autoBackup 只断言「保留了正确的份数」，物理删除路径已由 H 段与 snaps 自身守护。
+  const abTrash = mkdtempSync(join(tmpdir(), 'yj-abtrash-'))
+  const Auto = await import((await bundle('electron/main/autoBackup.ts', 'autoBackup.mjs')).url)
+  const Snap = await import((await bundle('electron/main/snapshots.ts', 'snapshots.mjs')).url)
+  const fakeTrash2 = async (p) => {
+    await renameSync(p, join(abTrash, `${Date.now()}-${basename(p)}`))
+  }
+  Snap.setTrashImpl(fakeTrash2)
+
+  const V1 = '# 第一版\n\n原正文。\n'
+  const V2 = '# 第二版\n\n改过的正文。\n'
+
+  // J3-1 空内容 / 纯空白不值得备份（新建文档首次落盘会命中）
+  check('shouldBackup：空串不留档', Auto.shouldBackup('') === false)
+  check('shouldBackup：纯空白不留档', Auto.shouldBackup('   \n\t\n') === false)
+  check('shouldBackup：有正文字符才留档', Auto.shouldBackup('正文') === true)
+
+  // J3-2 库内备份：覆盖前把上一版留进历史
+  {
+    const dir = makeVault({ 'A.md': V1 })
+    // 先建一次库标记（.yujian-history 由首个快照创建），使 resolveVaultRoot 能自解析
+    await Snap.createSnapshot(dir, join(dir, 'A.md'), V1, '初稿')
+    const ok = await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
+    check('库内：首次备份返回 true', ok === true)
+    const list = await Snap.listSnapshots(dir, join(dir, 'A.md'))
+    check('库内：历史里出现自动备份条目', list.some((s) => s.note === '自动备份'), list.map((s) => s.note).join(','))
+    check('库内：自动备份内容 = 覆盖前的原文', await Snap.restoreSnapshot(dir, join(dir, 'A.md'), list.find((s) => s.note === '自动备份').id) === V1)
+    // 手工快照不被误标为自动备份
+    check('库内：手工快照备注保持不变', list.some((s) => s.note === '初稿'))
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // J3-3 内容去重：同一内容连续保存不重复留档（否则自动保存会把历史刷爆）
+  {
+    const dir = makeVault({ 'A.md': V1 })
+    await Snap.createSnapshot(dir, join(dir, 'A.md'), V1, '初稿')
+    await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
+    const second = await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
+    check('去重：同内容第二次不新增备份', second === false)
+    const autos = (await Snap.listSnapshots(dir, join(dir, 'A.md'))).filter((s) => s.note === '自动备份')
+    check('去重：自动备份仍只有 1 份', autos.length === 1, String(autos.length))
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // J3-4 内容变化时确实新增一份
+  {
+    const dir = makeVault({ 'A.md': V1 })
+    await Snap.createSnapshot(dir, join(dir, 'A.md'), V1, '初稿')
+    await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
+    const added = await Auto.backupBeforeSave(join(dir, 'A.md'), V2)
+    check('变化：内容不同则新增备份', added === true)
+    const autos = (await Snap.listSnapshots(dir, join(dir, 'A.md'))).filter((s) => s.note === '自动备份')
+    check('变化：自动备份累计 2 份', autos.length === 2, String(autos.length))
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // J3-5 有界保留：超出上限时删最旧的自动备份，但**不动手工快照**
+  {
+    const dir = makeVault({ 'A.md': V1 })
+    await Snap.createSnapshot(dir, join(dir, 'A.md'), V1, '初稿')
+    for (let i = 0; i < Auto.AUTO_BACKUP_LIMIT + 4; i++) {
+      await Auto.backupBeforeSave(join(dir, 'A.md'), `# 版本 ${i}\n\n内容 ${i}。\n`)
+    }
+    const all = await Snap.listSnapshots(dir, join(dir, 'A.md'))
+    const autos = all.filter((s) => s.note === '自动备份')
+    check(`上限：自动备份收敛到 ${Auto.AUTO_BACKUP_LIMIT} 份`, autos.length === Auto.AUTO_BACKUP_LIMIT, String(autos.length))
+    check('上限：手工快照（初稿）未被误删', all.some((s) => s.note === '初稿'))
+    rmSync(dir, { recursive: true, force: true })
+  }
+
+  // J3-6 库外文件不建历史目录（否则会在用户任意目录凭空造 .yujian-history）
+  {
+    const outside = mkdtempSync(join(tmpdir(), 'yj-outside-'))
+    writeFileSync(join(outside, 'loose.md'), V1, 'utf-8')
+    const did = await Auto.backupBeforeSave(join(outside, 'loose.md'), V1)
+    check('库外：不做备份', did === false)
+    check('库外：不凭空创建 .yujian-history', !existsSync(join(outside, '.yujian-history')))
+    rmSync(outside, { recursive: true, force: true })
+  }
+}
+
+section('[J4] 序列化损坏检测 —— frontmatter 变 *** / 双链被转义 / 正常文档不误报')
+
+{
+  const CD = await import((await bundle('electron/main/corruptionDetect.ts', 'corruptionDetect.mjs')).url)
+  const detect = CD.detectCorruption
+
+  // 真·损坏样本（历史上实际产生过的形态）
+  const brokenFm = '***\n\ntitle: 功能总览\nmoc: true\n---------\n\n# 功能总览\n\n正文。\n'
+  const hitsFm = detect(brokenFm)
+  check('损坏：frontmatter 变 *** 被检出', hitsFm.some((h) => h.rule === 'frontmatter-as-stars'), JSON.stringify(hitsFm))
+  check('损坏：结束符被吃成 Setext 也一并检出', hitsFm.some((h) => h.rule === 'frontmatter-setext-eaten'), JSON.stringify(hitsFm))
+
+  const brokenWiki = '正文参见 \\[\\[中文排版]] 结束。\n'
+  const hitsWiki = detect(brokenWiki)
+  check('损坏：被转义的双链被检出', hitsWiki.some((h) => h.rule === 'escaped-wikilink'), JSON.stringify(hitsWiki))
+
+  // 正常文档绝不误报（误报会让用户对正常的转义产生怀疑）
+  const healthy = [
+    '---\nmoc: true\n---\n\n# 标题\n\n正文含 [[双链]] 与 #标签。\n',
+    '# 标题\n\n---\n\n分割线之上是正文。\n',
+    '正文里的 `\\[` 是字面转义写法，出现在行内代码里。\n',
+    '***\n\n这只是 Markdown 里的一条水平线，前后没有 YAML 键名。\n',
+    '',
+    // ⚠️ 关键误报样本：**两条 `***` 水平线夹着普通正文**，结构上与「*** 包 YAML」几乎同形，
+    //    唯一区别是夹的内容不像 YAML。少了这条，把「中间要有 YAML 键名」的约束删掉也能全绿
+    //    （实测：删掉该约束后本段其余样本全不报红，属真·测试盲区）。
+    '***\n\n这只是正文第一段，不是 YAML。\n\n***\n\n后面还有内容。\n',
+  ]
+  for (const [i, doc] of healthy.entries()) {
+    check(`健康：正常文档 #${i + 1} 不误报`, detect(doc).length === 0, JSON.stringify(detect(doc)))
+  }
+
+  check('isCorrupted：损坏文档为 true', CD.isCorrupted(brokenWiki) === true)
+  check('isCorrupted：正常文档为 false', CD.isCorrupted('# 正常\n\n正文。\n') === false)
+}
+
+section('[J5] 灌入门闩 —— 程序化灌入事务不带回显、用户编辑照常回显（含负向对照）')
+
+{
+  // 直接对 ProseMirror 复现「门闩 + listener」的相对顺序，断言：
+  //   灌入事务 → listener 读到 addToHistory:false（不回显）
+  //   用户事务 → listener 读到正常 meta（回显，即被判脏）
+  // 负向对照不可省：若不打断言，把门闩写成「永远置位」也能全绿，
+  // 而那会让**用户的每一次编辑都不落盘**——比原 bug 更危险。
+  const { EditorState, Plugin, PluginKey } = await import('prosemirror-state')
+  const { Schema } = await import('prosemirror-model')
+  const { createIngestPlugin, beginIngest, isIngestPending } = await import(
+    (await bundle('src/editor/features/ingestGate.ts', 'ingestGate.mjs')).url
+  )
+
+  const schema = new Schema({
+    nodes: {
+      doc: { content: 'block+' },
+      paragraph: { content: 'inline*', group: 'block' },
+      text: { group: 'inline' },
+    },
+    marks: {},
+  })
+
+  /** 复刻 Milkdown listener 的判定：这就是真实链路里「会不会回显」的那一行 */
+  const observed = []
+  const fakeListener = new Plugin({
+    key: new PluginKey('test-listener'),
+    state: {
+      init: () => null,
+      apply: (tr) => {
+        const fires = tr.docChanged && tr.getMeta('addToHistory') !== false
+        observed.push(fires ? 'ECHO' : 'SILENT')
+        return null
+      },
+    },
+  })
+
+  const mk = () =>
+    EditorState.create({
+      schema,
+      // 顺序必须与真实一致：门闩插件在前、listener 在后
+      plugins: [createIngestPlugin(), fakeListener],
+      doc: schema.node('doc', null, [schema.node('paragraph')]),
+    })
+
+  // 1) 灌入：门闩置位期间的事务不应回显
+  {
+    observed.length = 0
+    let st = mk()
+    const end = beginIngest()
+    check('门闩：置位期间 isIngestPending 为 true', isIngestPending() === true)
+    st = st.apply(st.tr.insertText('灌入的正文'))
+    end()
+    check('门闩：灌入事务不回显（listener 不触发）', observed.join(',') === 'SILENT', observed.join(','))
+    check('门闩：解除后 isIngestPending 为 false', isIngestPending() === false)
+  }
+
+  // 2) 负向对照：解除门闩后的用户编辑必须照常回显（否则用户改的东西永远不保存）
+  {
+    observed.length = 0
+    let st = mk()
+    const end = beginIngest()
+    st = st.apply(st.tr.insertText('灌入'))
+    end()
+    st = st.apply(st.tr.insertText('用户真的敲了字'))
+    check('对照：解除门闩后用户编辑正常回显', observed.join(',') === 'SILENT,ECHO', observed.join(','))
+  }
+
+  // 3) 从头到尾没开过门闩时，纯用户编辑必须回显（确认插件默认不放行抑制）
+  {
+    observed.length = 0
+    let st = mk()
+    st = st.apply(st.tr.insertText('用户输入'))
+    check('默认：未开门闩时用户编辑回显', observed.join(',') === 'ECHO', observed.join(','))
+  }
+}
 
 section('[K] 标签页路径重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）')
 // pinia / vue 是纯 JS 依赖 → 外置回 Node 原生加载，保证探针与 store 共用同一 pinia 实例

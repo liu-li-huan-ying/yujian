@@ -18,6 +18,8 @@ const props = defineProps<{ vaultPath: string | null }>()
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'report', report: IntegrityReport | null): void
+  /** 某篇损坏文档已还原为历史版本（宿主据此刷新编辑器 / 索引 / 内容地图） */
+  (e: 'healed', payload: { file: string; content: string }): void
 }>()
 
 const report = ref<IntegrityReport | null>(null)
@@ -45,7 +47,12 @@ const filters = computed(() => {
       label: L.integrityCatAttachment,
       count: c?.['missing-attachment'] ?? 0
     },
-    { key: 'broken-link' as const, label: L.integrityCatLink, count: c?.['broken-link'] ?? 0 }
+    { key: 'broken-link' as const, label: L.integrityCatLink, count: c?.['broken-link'] ?? 0 },
+    {
+      key: 'corrupted-markdown' as const,
+      label: L.integrityCatCorrupt,
+      count: c?.['corrupted-markdown'] ?? 0
+    }
   ]
 })
 
@@ -59,7 +66,8 @@ const catLabel: Record<IntegrityCategory, string> = {
   index: L.integrityCatIndex,
   'orphan-snapshot': L.integrityCatOrphan,
   'missing-attachment': L.integrityCatAttachment,
-  'broken-link': L.integrityCatLink
+  'broken-link': L.integrityCatLink,
+  'corrupted-markdown': L.integrityCatCorrupt
 }
 
 function fileBase(p?: string): string {
@@ -109,6 +117,31 @@ async function doRepair(): Promise<void> {
   } catch (e) {
     error.value = errMsg(e)
     loading.value = false
+  }
+}
+
+/* ── 损坏文档自愈：把某篇文档的磁盘内容还原为指定快照（损坏前那一份）── */
+
+/** 是否有可一键还原的损坏文档（决定「自愈」区块是否显示） */
+const corrupted = computed<IntegrityIssue[]>(() =>
+  (report.value?.issues ?? []).filter((i) => i.category === 'corrupted-markdown' && i.snapshotId)
+)
+
+const healingFile = ref<string | null>(null)
+async function heal(issue: IntegrityIssue): Promise<void> {
+  if (!props.vaultPath || !issue.file || !issue.snapshotId || healingFile.value) return
+  healingFile.value = issue.file
+  error.value = null
+  try {
+    const text = await window.api.snapshotRestore(props.vaultPath, issue.file, issue.snapshotId)
+    // 还原 = 覆盖磁盘（保真层会把上一版自动备份下来，故这一步本身也是可回滚的）
+    await window.api.writeFile(issue.file, text)
+    emit('healed', { file: issue.file, content: text })
+    await run()
+  } catch (e) {
+    error.value = errMsg(e)
+  } finally {
+    healingFile.value = null
   }
 }
 
@@ -206,6 +239,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
       <p v-if="!repairable" class="ic__hint">{{ L.integrityReportOnly }}</p>
     </template>
+
+    <!-- 损坏文档自愈：检测到序列化写坏的文档时，提供「还原为损坏前那一版」 -->
+    <div v-if="!loading && corrupted.length > 0" class="hl">
+      <div class="hl__head">
+        <Icon name="alert" :size="13" class="hl__icon" />
+        <span class="hl__title">{{ L.integrityHealTitle }}</span>
+        <span class="hl__badge">{{ corrupted.length }}</span>
+      </div>
+      <p class="hl__hint">{{ L.integrityHealHint }}</p>
+      <div v-for="(it, i) in corrupted" :key="i" class="hl__row">
+        <span class="hl__file">{{ fileBase(it.file) }}</span>
+        <span class="hl__detail">{{ it.detail }}</span>
+        <button
+          class="hl__btn"
+          type="button"
+          :disabled="healingFile !== null"
+          @click="heal(it)"
+        >
+          {{ healingFile === it.file ? L.integrityHealing : L.integrityHeal }}
+        </button>
+      </div>
+    </div>
 
     <!-- 软错误：主进程里被 catch 吞掉但不该消失的 IO 失败（索引落盘 / 快照搬运 / 附件迁移…） -->
     <div v-if="soft && soft.summary.length > 0" class="sw">
@@ -532,6 +587,87 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .btn--primary:hover:not(:disabled) {
   filter: brightness(1.06);
   background: var(--hue-accent);
+}
+/* ── 损坏文档自愈 ── */
+.hl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--hue-danger);
+  border-radius: var(--radius-sm);
+}
+.hl__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hl__icon {
+  flex: 0 0 auto;
+  color: rgb(var(--hue-mark));
+}
+.hl__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hue-text-1);
+}
+.hl__badge {
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: rgb(var(--hue-mark));
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+}
+.hl__hint {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--hue-text-3);
+}
+.hl__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.hl__file {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--hue-text-1);
+}
+.hl__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--hue-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hl__btn {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border: 1px solid var(--hue-border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--hue-text-1);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease);
+}
+.hl__btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--hue-accent);
+  border-color: var(--hue-accent);
+}
+.hl__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 /* 软错误（已知可容忍失败） */
 .sw {

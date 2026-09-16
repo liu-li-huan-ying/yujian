@@ -1,9 +1,11 @@
-import { access, readdir, rm } from 'node:fs/promises'
+import { access, readdir, readFile, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { trashItem } from './trash'
 import * as Idx from './vaultIndex'
 import { checkLinks } from './vault'
+import { listSnapshots, restoreSnapshot } from './snapshots'
+import { detectCorruption } from './corruptionDetect'
 import type {
   IntegrityAction,
   IntegrityCategory,
@@ -49,6 +51,53 @@ async function findOrphanSnapshots(root: string): Promise<string[]> {
   if (subdirs.length === 0) return []
   const liveHashes = new Set((await Idx.collectMarkdown(root)).map((p) => hashPath(p)))
   return subdirs.filter((d) => !liveHashes.has(d)).map((d) => join(histRoot, d))
+}
+
+/**
+ * 检测「已被序列化写坏」的文档，并为每篇指出可还原的来源快照。
+ *
+ * 为什么单独一轮：损坏判定要读全文（正则匹配），且需要对照版本历史挑出「损坏前那一份」。
+ * 只在用户显式触发自检时跑，不做后台周期扫描。
+ *
+ * 「损坏前那一份」的挑选：按时间倒序取第一份**本身没损坏**的快照。
+ * 之所以不直接取「最新一份」，是因为若连续多次自动保存都写坏，最新几份可能全是坏的。
+ */
+async function findCorruptedDocs(root: string): Promise<IntegrityIssue[]> {
+  const issues: IntegrityIssue[] = []
+  const paths = await Idx.collectMarkdown(root)
+  for (const p of paths) {
+    let text: string
+    try {
+      text = await readFile(p, 'utf-8')
+    } catch (e) {
+      reportSoftError('integrity.readDoc', e, 'debug')
+      continue
+    }
+    const hits = detectCorruption(text)
+    if (hits.length === 0) continue
+    // 找回滚来源：时间倒序里第一份未损坏的快照
+    let snapshotId: string | undefined
+    try {
+      const snaps = await listSnapshots(root, p)
+      for (const s of snaps) {
+        const body = await restoreSnapshot(root, p, s.id)
+        if (body && detectCorruption(body).length === 0) {
+          snapshotId = s.id
+          break
+        }
+      }
+    } catch (e) {
+      reportSoftError('integrity.snapshotLookup', e, 'debug')
+    }
+    issues.push({
+      severity: 'error',
+      category: 'corrupted-markdown',
+      file: p,
+      detail: hits.map((h) => h.detail).join('；'),
+      snapshotId
+    })
+  }
+  return issues
 }
 
 /**
@@ -137,11 +186,20 @@ export async function runIntegrityCheck(root: string): Promise<IntegrityReport> 
     // 断链扫描失败不应让自检整体失败
   }
 
+  // ── 4. 序列化损坏（历史事故：frontmatter / 双链被写坏，且写坏后无法自愈）──
+  // 这一轮要读全文，故放在最后；结果里带可回滚的快照 id，面板可直接一键还原。
+  try {
+    issues.push(...(await findCorruptedDocs(root)))
+  } catch (e) {
+    reportSoftError('integrity.corruptionScan', e, 'warn')
+  }
+
   const counts: Record<IntegrityCategory, number> = {
     index: 0,
     'orphan-snapshot': 0,
     'missing-attachment': 0,
-    'broken-link': 0
+    'broken-link': 0,
+    'corrupted-markdown': 0
   }
   for (const i of issues) counts[i.category]++
   const repairable = issues.some(

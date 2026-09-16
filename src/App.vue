@@ -701,6 +701,16 @@ function onIntegrityReport(report: IntegrityReport | null): void {
   lastIntegrityReport.value = report
 }
 
+/**
+ * 自检面板「自愈」成功：该文档磁盘内容已被还原（面板已写盘）。
+ * 若还原的正是当前打开文档，需把新内容灌进编辑器并刷新索引，否则视图里仍是坏内容。
+ */
+function onIntegrityHealed(payload: { file: string; content: string }): void {
+  if (payload.file === filePath.value) host.value?.loadMarkdownExternal(payload.content)
+  void refreshTree()
+  showToast(U.integrityHealed, 'ok')
+}
+
 /** 恢复快照：读取内容灌入编辑器并标脏（主进程只读返回，不写盘，守保真红线） */
 async function onSnapshotRestore(id: string): Promise<void> {
   try {
@@ -1024,6 +1034,7 @@ onBeforeUnmount(() => {
           :vault-path="vaultPath"
           @close="integrityOpen = false"
           @report="onIntegrityReport"
+          @healed="onIntegrityHealed"
         />
 
         <BackupPanel

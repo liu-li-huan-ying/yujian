@@ -307,6 +307,9 @@ const enUS = {
     snapshotClearCompare: 'Clear compare',
     snapshotFilterTag: 'Filter by tag',
     snapshotClearFilter: 'Clear filter',
+    snapshotShowAuto: 'Show auto-backups ({n})',
+    snapshotHideAuto: 'Hide auto-backups',
+    snapshotNoManual: 'No manual snapshots (auto-backups hidden)',
     /* ── Snapshots Phase B: timeline / lineage view + lightweight draft branches ── */
     snapshotViewList: 'List',
     snapshotViewTimeline: 'Timeline',
@@ -466,6 +469,7 @@ const enUS = {
     integrityCatOrphan: 'Orphan snapshot',
     integrityCatAttachment: 'Missing attachment',
     integrityCatLink: 'Broken link',
+    integrityCatCorrupt: 'Corrupted doc',
     integrityScanning: 'Scanning vault…',
     integrityNoVault: 'Open a vault first',
     integrityEmpty: 'No issues found ✓',
@@ -475,6 +479,12 @@ const enUS = {
     integrityRepairConfirm:
       'This rebuilds the index and deletes orphan snapshots (via trash). Missing attachments and broken links need manual fixes. Continue?',
     integrityNothingToRepair: 'Nothing to repair',
+    /* ── Corrupted doc self-heal ── */
+    integrityHealTitle: 'Documents found corrupted',
+    integrityHealHint:
+      'These files show serialization damage (YAML header turned into ***, escaped wikilinks, etc). Restoring rolls the file back to a snapshot taken before the damage — the version you restore over is auto-archived too, so you can roll again.',
+    integrityHeal: 'Restore',
+    integrityHealing: 'Restoring…',
     /* ── Soft errors (tolerated failures) ── */
     integritySoftErrors: 'Tolerated failures',
     integritySoftHint:
@@ -582,6 +592,7 @@ const enUS = {
     snapshotRestored: 'Restored to this snapshot',
     snapshotReadFail: 'Failed to read snapshot',
     snapshotDeleted: 'Snapshot deleted',
+    integrityHealed: 'Restored to the pre-damage version',
     exportGroupText: 'Text',
     exportGroupLayout: 'Layout / Web',
     exportGroupOffice: 'Office / E-book',

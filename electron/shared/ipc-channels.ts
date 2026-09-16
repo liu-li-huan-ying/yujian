@@ -570,6 +570,7 @@ export type IntegrityCategory =
   | 'orphan-snapshot' // 源文档已删但快照残留（可删修复）
   | 'missing-attachment' // 图片等附件引用缺失（报告，不自动改）
   | 'broken-link' // [[wikilink]] / 相对链接断链（报告，不自动改）
+  | 'corrupted-markdown' // 检测到已知的序列化损坏特征（可一键还原上一版）
 
 export interface IntegrityIssue {
   severity: IntegritySeverity
@@ -578,6 +579,11 @@ export interface IntegrityIssue {
   file?: string
   /** 次级说明：断链目标 / 所在行文本等，供面板直接展示 */
   detail?: string
+  /**
+   * 该条问题可一键还原的「来源快照 id」（仅 corrupted-markdown 会带）。
+   * 由主进程从该文档的版本历史里挑出「损坏前的一份」，前端据此直接调 snapshot:restore。
+   */
+  snapshotId?: string
 }
 
 export interface IntegrityReport {
@@ -586,6 +592,18 @@ export interface IntegrityReport {
   total: number
   /** 至少含一项可修复条目（索引 / 孤儿快照）时为 true，决定「一键修复」按钮可用性 */
   repairable: boolean
+}
+
+/** 可一键还原上一版的损坏文档（`corrupted-markdown` 子集，前端「自愈」按钮消费） */
+export interface CorruptedDoc {
+  /** 文档绝对路径 */
+  file: string
+  /** 检出的损坏特征描述（供用户确认看到的确实是这类损坏） */
+  detail: string
+  /** 可还原的来源快照 id */
+  snapshotId: string
+  /** 来源快照内容与当前磁盘内容的字符数差（负数 = 当前比备份更少，多半被吃掉内容） */
+  charDelta: number
 }
 
 /** 可执行的修复动作标识（前端「一键修复」二次确认后传入） */

@@ -14,6 +14,7 @@
     "verify:md": "node scripts/verify-markdown.mjs",
     "verify:corpus": "node scripts/verify-corpus.mjs",
     "test": "node scripts/test-core.mjs",
+    "e2e:open": "electron-vite build && node scripts/e2e-open-no-write.mjs",
     "stress:table": "node scripts/stress-table.mjs",
     "check": "npm run typecheck && npm run lint && npm run check:encoding && npm test && npm run verify:md && npm run verify:corpus && npm run check:structure",
     "clean": "node scripts/clean.mjs",

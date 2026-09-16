@@ -276,33 +276,23 @@ function onRetry(): void {
 /* ── 内容变更 ─────────────────────────────── */
 
 /**
- * 正在向所见即所得端**程序化灌入**内容的深度（加载 / 切回所见即所得 / 快照恢复 / 图床发布）。
+ * 向所见即所得端**程序化灌入**内容（加载 / 切回所见即所得 / 快照恢复 / 图床发布）。
  *
- * 为什么必须抑制：灌入会触发 Crepe 的 `markdownUpdated` 回显——那是「编辑器把刚吃进去的内容
- * 又吐出来」，**不是用户编辑**。而 Crepe 的序列化是**破坏性**的（无 remark-frontmatter 会吞掉
- * YAML 头、方括号被转义成 `\[`），若不抑制，这次回显会被判脏 → 自动保存 → 把**根本没编辑过**
- * 的文档写坏（内容地图 `moc:true` 被吞、`[[双链]]` 变 `\[\[双链]]` 的元凶）。
- * 这也正是「未编辑文档保存一字不改」红线的守门点。
+ * 灌入的抑制**不在这一层**：`MilkdownEditor.setMarkdown` 内部会开「灌入门闩」
+ * （features/ingestGate.ts），让本次 docChanged 事务带上 `addToHistory:false`，
+ * 于是 Milkdown 的 listener 直接跳过、**根本不产生 markdownUpdated 回显**。
+ *
+ * 为什么不用这里的计数器 + setTimeout 抑制（曾经的实现）：
+ * listener 的 markdownUpdated 是 **200ms 防抖**的，任何「延后一拍解除抑制」的时序假设
+ * 都会在慢机器 / 长文档上偶发失效——而失效的代价是**静默写坏用户文件**。
+ * 门闩把标记绑在事务上，与任何延时时序无关，故这一层不再需要 suppressing 状态。
  */
-let applyingDepth = 0
-
-/** 向所见即所得端灌入内容，并抑制随之而来的回显被误判为用户编辑 */
 async function applyToEditor(text: string): Promise<void> {
-  applyingDepth++
-  try {
-    await milkdown.value?.setMarkdown(text)
-  } finally {
-    // 延后一拍清除：markdownUpdated 可能在 action 之后的微任务里才到达
-    setTimeout(() => {
-      applyingDepth = Math.max(0, applyingDepth - 1)
-    }, 0)
-  }
+  await milkdown.value?.setMarkdown(text)
 }
 
 /** 所见即所得模式下产生编辑事务 → 记录序列化结果并标记脏 */
 function onWysiwygUpdate(markdown: string): void {
-  // 灌入回显：不判脏、不保存，否则「打开即保存」会用序列化结果覆盖磁盘原文
-  if (applyingDepth > 0) return
   fidelity.markEdited(markdown)
   scheduleSave()
 }
