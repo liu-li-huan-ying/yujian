@@ -30,6 +30,9 @@ const zhCN = {
       table: { label: '表格' },
       math: { label: '公式' },
     },
+    /** 块操作手柄语言提示（Crepe 原生缺 title / aria-label，由 trayLabels 补齐） */
+    handleAdd: '在下方插入块',
+    handleDrag: '拖拽移动此块',
   },
 
   /* ── Crepe Placeholder ── */
@@ -69,6 +72,10 @@ const zhCN = {
     ai: '问 AI',
     /** 悬浮浮块 / 标题栏「更多」共用的「插入双链」按钮标签 */
     insertWikilink: '插入双链',
+    /** 悬浮工具条按钮的额外语义提示（拼进 title，Crepe 会渲染为「标签（提示）」） */
+    linkHint: '选中文字后粘贴或输入网址',
+    latexHint: '不选中内容时插入空公式',
+    wikilinkHint: '输入 [[ 亦可唤起候选',
   },
 
   /* ── 复杂元素临时编辑界面 · 公式编辑器 ── */

@@ -358,6 +358,12 @@
    把手落到文字上），而是保留 floating-ui 算出的块左缘，仅用 transform
    向左挪 12px 形成与正文的呼吸缝。缩进块（列表）的手柄随之右移，
    始终在块左缘左侧 —— 视觉一致、永不遮字。 */
+/* ── 两处药丸托盘视觉统一 ─────────────────────
+   编辑区有两处「药丸托盘」：
+   ① 块操作手柄（本段）—— 常驻在块左缘左侧的竖排胶囊：＋ 新增 / ⠿ 拖拽；
+   ② 行内工具条（下两段）—— 选中文字后浮出的横向胶囊：B/I/链接/公式…
+   二者材质与令牌必须同源（同一 `--hue-*` 家族、同一圆角/阴影/过渡），
+   否则在同一屏里并排出现会像两个不同软件。 */
 .milkdown .milkdown-block-handle {
   transform: translateX(-12px) !important;
   gap: 2px;
@@ -366,31 +372,45 @@
   background: var(--hue-surface);
   border: 1px solid var(--hue-border-subtle);
   box-shadow: var(--hue-shadow-1);
+  transition: opacity var(--dur-fast) var(--ease);
 }
 .milkdown .milkdown-block-handle .operation-item {
   width: 28px;
   height: 28px;
   padding: 3px;
   border-radius: 6px;
-  transition: background var(--dur-fast) var(--ease);
+  /* 与行内工具条按钮同一过渡曲线，hover 反馈节奏一致 */
+  transition:
+    background var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
+/* 图标默认亮度对齐行内工具条（t2 / 0.9），不再用更暗的 t3 —— 那是「暗淡」的根源之一 */
 .milkdown .milkdown-block-handle .operation-item svg {
   width: 22px;
   height: 22px;
-  fill: var(--hue-text-3);
-  transition: fill var(--dur-fast) var(--ease);
+  fill: var(--hue-text-2);
+  opacity: 0.9;
+  transition:
+    fill var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 .milkdown .milkdown-block-handle .operation-item:hover {
   background: var(--hue-active);
 }
 .milkdown .milkdown-block-handle .operation-item:hover svg {
   fill: var(--hue-accent);
+  opacity: 1;
+}
+/* 补齐「语言提示」后的可发现性暗示：有 title 的手柄用 help 光标 */
+.milkdown .milkdown-block-handle .operation-item[title] {
+  cursor: pointer;
 }
 .milkdown .milkdown-block-handle .operation-item.active {
   background: var(--hue-active);
 }
 .milkdown .milkdown-block-handle .operation-item.active svg {
   fill: var(--hue-accent);
+  opacity: 1;
 }
 
 /* ── 编辑区所有 Crepe 浮层统一为全局 .glass 同款玻璃 ──
@@ -437,7 +457,8 @@
 /* ── BlockEdit 浮动工具栏图标可见性 ──
    Crepe 内置的块编辑工具条（B/I/引用/代码/数学等）SVG 图标默认用
    --crepe-color-on-surface-variant（= --hue-text-3）着色，在玻璃暗底上对比度不足。
-   强制提升至 --hue-text-2，hover 时用强调色高亮。 */
+   强制提升至 --hue-text-2，hover 时用强调色高亮。
+   （与上方块操作手柄同一套亮度/强调色口径 —— 两处药丸托盘视觉统一。） */
 .milkdown .milkdown-toolbar svg,
 .milkdown .milkdown-toolbar [class*='menu'] svg,
 .milkdown .milkdown-toolbar [class*='item'] svg,
@@ -454,6 +475,11 @@
   color: var(--hue-accent);
   fill: var(--hue-accent);
   opacity: 1;
+}
+/* 行内工具条按钮补「语言提示」后的可发现性：cursor 与 hover 节奏对齐块手柄 */
+.milkdown .milkdown-toolbar button[title],
+.milkdown .milkdown-toolbar [class*='item'][title] {
+  cursor: pointer;
 }
 
 /* ── 源码模式：CodeMirror 套用同一套令牌 ───────

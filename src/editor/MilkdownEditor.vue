@@ -22,6 +22,7 @@ import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
 import { highlightSchema, inlineMarkInputRules, subSchema, supSchema } from './features/inlineMarks'
 import { remarkInlineMarks } from './features/inlineMarksSyntax'
 import { beginIngest, createIngestPlugin } from './features/ingestGate'
+import { decorateBlockHandles } from './features/trayLabels'
 import {
   mathInlineNodeViewPlugin,
   renderMathBlockPreview,
@@ -527,6 +528,8 @@ async function init(defaultValue?: string): Promise<void> {
       },
       [Crepe.Feature.Toolbar]: {
         // 选中文字浮块中文化：覆盖 Crepe 默认英文标签（i18n 缺陷修复）
+        // Crepe 会把 title 渲染为「label (shortcut)」；无 keymap 的项（链接/公式）用 shortcut
+        // 位置挂一句操作提示，让每枚按钮都有「点了会怎样」的语言说明。
         boldLabel: L.toolbar.bold,
         italicLabel: L.toolbar.italic,
         strikethroughLabel: L.toolbar.strikethrough,
@@ -536,9 +539,17 @@ async function init(defaultValue?: string): Promise<void> {
         aiLabel: L.toolbar.ai,
         // 在「功能」分组注入「插入双链」：点击即在光标处插入字面 [[ 并唤起候选浮层
         buildToolbar: (builder) => {
-          builder.getGroup('function').addItem('yj-insert-wikilink', {
+          const fn = builder.getGroup('function')
+          // 链接 / 公式无 keymap（Crepe 不会自动解析快捷键），借 shortcut 位挂操作提示；
+          // GroupBuilder 只暴露 group 本体（含 items），故从 group.items 上找。
+          const linkItem = fn.group.items.find((i) => i.key === 'link')
+          if (linkItem) linkItem.shortcut = L.toolbar.linkHint
+          const latexItem = fn.group.items.find((i) => i.key === 'latex')
+          if (latexItem) latexItem.shortcut = L.toolbar.latexHint
+          fn.addItem('yj-insert-wikilink', {
             icon: WIKI_LINK_ICON,
             label: L.toolbar.insertWikilink,
+            shortcut: L.toolbar.wikilinkHint,
             active: () => false,
             onRun: () => insertWikiLinkTrigger(),
           })
@@ -625,6 +636,9 @@ async function init(defaultValue?: string): Promise<void> {
 
   await crepe.create()
   crepe.setReadonly(props.readonly)
+  // 块操作手柄补语言提示：Crepe 的手柄是裸 div（无 title / aria-label），
+  // 与行内工具条的语言提示待遇不一致。手柄整个生命周期只建一次，故此处补一次即可。
+  decorateBlockHandles(host.value, { add: L.blockEdit.handleAdd, drag: L.blockEdit.handleDrag })
   setupImageResolver()
   // Ctrl/⌘+点击链接跳转：普通点击保持可编辑，仅修饰键按下时打开外部浏览器
   host.value?.addEventListener('click', onEditorClick)

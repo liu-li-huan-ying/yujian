@@ -124,12 +124,22 @@ function withAlpha(color: string, a: number): string {
 function radiusOf(n: GraphNode): number {
   if (n.center) return 8
   if (effectiveMode.value === 'local') return n.depth <= 1 ? 5 : 3.5
-  return 3.5
+  // 全局视图：连边多的笔记（枢纽）稍大，一眼看出结构重心
+  return degreeOf(n.path) >= 4 ? 4.5 : 3.5
 }
-function fillOf(n: GraphNode, accent: string, t2: string, t3: string): string {
+/** 邻居条数（布局重建时算好，绘制期零开销） */
+function degreeOf(path: string): number {
+  return adj.get(path)?.size ?? 0
+}
+/** 节点填充：中心 = accent；一跳 / 枢纽 = accent 淡染（与灰调区分开）；更远 = 中性 t2 */
+function fillOf(n: GraphNode, accent: string, t2: string): string {
   if (n.center) return accent
-  if (effectiveMode.value === 'local' && n.depth === 1) return t2
-  return t3
+  if (effectiveMode.value === 'local') {
+    if (n.depth === 1) return t2
+    return withAlpha(accent, 0.22)
+  }
+  // 全局：枢纽节点带一点强调色，其余保持中性但提亮到 t2
+  return degreeOf(n.path) >= 3 ? withAlpha(accent, 0.45) : t2
 }
 function neighborSet(path: string): Set<string> {
   const s = new Set<string>([path])
@@ -182,38 +192,45 @@ function draw(): void {
   const hl = selectedPath.value ?? hoverPath.value
   const neighbors = hl ? neighborSet(hl) : null
 
-  // 连线
+  // 连线：常态提亮到可辨识（原 35% 在近黑底上几乎不可见），高亮态加饱和加粗
   for (const l of simLinks) {
     const s = l.source as SimNode
     const tg = l.target as SimNode
     if (s.x == null || tg.x == null) continue
     const hot = hl !== null && (s.path === hl || tg.path === hl)
-    ctx.strokeStyle = hot ? withAlpha(accent, 0.6) : withAlpha(t3, 0.35)
-    ctx.lineWidth = (hot ? 1.4 : 1) / view.k
+    ctx.strokeStyle = hot ? withAlpha(accent, 0.85) : withAlpha(t3, 0.55)
+    ctx.lineWidth = (hot ? 1.8 : 1.1) / view.k
     ctx.beginPath()
     ctx.moveTo(s.x, s.y!)
     ctx.lineTo(tg.x, tg.y!)
     ctx.stroke()
   }
 
-  // 节点
+  // 节点：中心带柔和光晕；所有节点用底色描边勾勒，避免相互糊成一团
   for (const n of simNodes) {
     if (n.x == null) continue
     const dim = neighbors !== null && !neighbors.has(n.path)
     ctx.globalAlpha = dim ? 0.4 : 1
+    if (n.center && !dim) {
+      ctx.beginPath()
+      ctx.arc(n.x, n.y!, n.r * 2.6, 0, Math.PI * 2)
+      const glow = ctx.createRadialGradient(n.x, n.y!, n.r, n.x, n.y!, n.r * 2.6)
+      glow.addColorStop(0, withAlpha(accent, 0.35))
+      glow.addColorStop(1, withAlpha(accent, 0))
+      ctx.fillStyle = glow
+      ctx.fill()
+    }
     ctx.beginPath()
     ctx.arc(n.x, n.y!, n.r, 0, Math.PI * 2)
-    ctx.fillStyle = n.path === selectedPath.value ? accent : fillOf(n, accent, t2, t3)
+    ctx.fillStyle = n.path === selectedPath.value ? accent : fillOf(n, accent, t2)
     ctx.fill()
-    if (n.center) {
-      ctx.lineWidth = 1.5 / view.k
-      ctx.strokeStyle = t1
-      ctx.stroke()
-    }
+    ctx.lineWidth = (n.center ? 1.5 : 1) / view.k
+    ctx.strokeStyle = n.center ? t1 : withAlpha(bg, 0.9)
+    ctx.stroke()
     ctx.globalAlpha = 1
   }
 
-  // 标签
+  // 标签：中心常驻 + 一跳 / 枢纽可见，压暗态不画，避免文字糊成一片
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   for (const n of simNodes) {
@@ -223,7 +240,8 @@ function draw(): void {
       n.center ||
       n.path === selectedPath.value ||
       n.path === hoverPath.value ||
-      (effectiveMode.value === 'local' && n.depth === 1)
+      (effectiveMode.value === 'local' && n.depth === 1) ||
+      degreeOf(n.path) >= 5
     if (!show || dim) continue
     const fs = n.center ? 12 : 11
     ctx.font = `${fs}px system-ui, -apple-system, "Segoe UI", sans-serif`

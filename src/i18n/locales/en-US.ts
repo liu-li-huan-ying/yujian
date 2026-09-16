@@ -30,6 +30,9 @@ const enUS = {
       table: { label: 'Table' },
       math: { label: 'Math' },
     },
+    /** Block-handle hints (Crepe ships no title / aria-label; filled by trayLabels) */
+    handleAdd: 'Insert block below',
+    handleDrag: 'Drag to move this block',
   },
 
   /* ── Crepe Placeholder ── */
@@ -69,6 +72,10 @@ const enUS = {
     ai: 'Ask AI',
     /** Shared label for the "Insert link" button in the bubble menu / TitleBar "More" */
     insertWikilink: 'Insert link',
+    /** Extra semantic hints for bubble-menu buttons (appended to title as "label (hint)") */
+    linkHint: 'With text selected, type or paste a URL',
+    latexHint: 'Inserts an empty formula when nothing is selected',
+    wikilinkHint: 'Type [[ to open suggestions too',
   },
 
   /* ── Temporary edit overlay · formula editor ── */

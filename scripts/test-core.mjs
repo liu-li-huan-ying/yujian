@@ -22,6 +22,7 @@
  *  J3. 保存前自动备份 —— 覆盖前留档 / 内容去重 / 有界保留 / 库外不建目录（electron/main/autoBackup.ts）
  *  J4. 序列化损坏检测 —— frontmatter 变 *** / 双链被转义 / 正常文档不误报（electron/main/corruptionDetect.ts）
  *  J5. 灌入门闩 —— 程序化灌入不回显、用户编辑照常回显（src/editor/features/ingestGate.ts）
+ *  J6. 药丸托盘语言提示 —— 块操作手柄补齐 title/aria-label（src/editor/features/trayLabels.ts）
  *  K. 标签页重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）
  *  L. 关系图谱派生 —— 节点 / 边由索引派生，本地子图 BFS / 全局度降序截断（electron/main/vaultIndex.ts）
  *  M. 命令面板内核 —— 模糊匹配 + 命令目录（src/utils/fuzzy.ts, src/utils/commands.ts）
@@ -1250,8 +1251,68 @@ section('[J5] 灌入门闩 —— 程序化灌入事务不带回显、用户编�
   }
 }
 
-section('[K] 标签页路径重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）')
-// pinia / vue 是纯 JS 依赖 → 外置回 Node 原生加载，保证探针与 store 共用同一 pinia 实例
+section('[J6] 药丸托盘语言提示 —— 块操作手柄补齐 title/aria-label（src/editor/features/trayLabels.ts）')
+// 目的：守住「两处药丸托盘的语言提示待遇一致」这条产品约定。
+// Crepe 的手柄是裸 div（无 title / aria-label），靠 decorateBlockHandles 在 DOM 上补，
+// 故用一个最小 DOM 桩来跑真实的选择器与属性语义 —— 不能只断言「函数被调过」。
+{
+  /** 极简 DOM 桩：仅实现本模块用到的 querySelectorAll / getAttribute / setAttribute */
+  function makeEl(attrs = {}) {
+    const store = { ...attrs }
+    return {
+      getAttribute: (k) => (k in store ? store[k] : null),
+      setAttribute: (k, v) => {
+        store[k] = String(v)
+      },
+      _attrs: store,
+    }
+  }
+  function makeRoot(els) {
+    return {
+      querySelectorAll(sel) {
+        // 只认这一个选择器，其它一律返回空（等价于「结构变了就静默跳过」）
+        return sel === '.milkdown-block-handle .operation-item' ? els : []
+      },
+    }
+  }
+
+  const { decorateBlockHandles } = await import(
+    (await bundle('src/editor/features/trayLabels.ts', 'trayLabels.mjs')).url
+  )
+  const labels = { add: '在下方插入块', drag: '拖拽移动此块' }
+
+  // 1) 正常结构：两枚手柄各拿到对应文案
+  {
+    const add = makeEl()
+    const drag = makeEl()
+    const n = decorateBlockHandles(makeRoot([add, drag]), labels)
+    check('手柄：补到 2 枚', n === 2, `n=${n}`)
+    check('手柄：＋ 拿到「新增」文案', add._attrs['aria-label'] === labels.add, add._attrs['aria-label'])
+    check('手柄：⠿ 拿到「拖拽」文案', drag._attrs['aria-label'] === labels.drag, drag._attrs['aria-label'])
+    check('手柄：title 与 aria-label 同源', add._attrs.title === labels.add && drag._attrs.title === labels.drag)
+    check('手柄：补上 button 语义便于读屏聚焦', add._attrs.role === 'button')
+  }
+
+  // 2) 幂等：重复调用覆盖同值，不叠加、不抛错
+  {
+    const add = makeEl()
+    const drag = makeEl()
+    const root = makeRoot([add, drag])
+    decorateBlockHandles(root, labels)
+    decorateBlockHandles(root, labels)
+    check('手柄：重复打标签幂等', add._attrs['aria-label'] === labels.add)
+  }
+
+  // 3) 负向对照：结构变化（找不到 .operation-item）时必须静默跳过，绝不能抛错炸掉编辑器初始化
+  {
+    const n = decorateBlockHandles(makeRoot([]), labels)
+    check('手柄：找不到元素时返回 0 且不抛错', n === 0, `n=${n}`)
+    const n2 = decorateBlockHandles(null, labels)
+    check('手柄：root 为 null 时返回 0 且不抛错', n2 === 0, `n=${n2}`)
+  }
+}
+
+section('[K] 标签页路径重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）')// pinia / vue 是纯 JS 依赖 → 外置回 Node 原生加载，保证探针与 store 共用同一 pinia 实例
 const piniaStub = [
   "import { createRequire } from 'node:module'",
   "const require = createRequire(" + JSON.stringify(resolve(root, 'package.json')) + ")",
