@@ -584,7 +584,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .btn--primary {
   background: var(--hue-accent);
   border-color: var(--hue-accent);
-  color: #fff;
+  color: var(--hue-on-accent);
 }
 .btn--primary:hover:not(:disabled) {
   filter: brightness(1.06);
@@ -618,8 +618,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   height: 16px;
   padding: 0 5px;
   border-radius: 8px;
-  background: rgb(var(--hue-mark));
-  color: #fff;
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
   font-size: 10.5px;
   line-height: 16px;
   text-align: center;
@@ -706,8 +706,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   height: 16px;
   padding: 0 5px;
   border-radius: 8px;
-  background: var(--hue-mark);
-  color: #fff;
+  background: var(--hue-accent);
+  color: var(--hue-on-accent);
   font-size: 10.5px;
   line-height: 16px;
   text-align: center;
@@ -742,7 +742,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   border-radius: 50%;
 }
 .sw__sev--warn {
-  background: var(--hue-mark);
+  background: rgb(var(--hue-mark));
 }
 .sw__sev--dbg {
   background: var(--hue-text-3);

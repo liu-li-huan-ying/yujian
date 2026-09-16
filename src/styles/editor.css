@@ -901,7 +901,7 @@
 .footnote-backref {
   margin-left: 0.4em;
   text-decoration: none;
-  color: var(--yj-accent, #248077);
+  color: var(--hue-accent);
 }
 
 /* ── MathJax 数学渲染 ── */

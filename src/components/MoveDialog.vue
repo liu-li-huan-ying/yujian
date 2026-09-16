@@ -190,7 +190,7 @@ function confirm(): void {
   padding: 2px 4px;
   border: 1px solid var(--hue-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--bg-subtle, rgba(127, 127, 127, 0.05));
+  background: var(--bg-hover);
 }
 
 .move__item {

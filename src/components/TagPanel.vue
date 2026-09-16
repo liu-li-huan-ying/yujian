@@ -409,7 +409,7 @@ onBeforeUnmount(() => {
   padding: 0 8px 0 28px;
   font-size: 13px;
   color: var(--hue-text-1);
-  background: var(--hue-input-bg, rgba(127, 127, 127, 0.1));
+  background: var(--hue-surface);
   border: 1px solid var(--hue-border-subtle);
   border-radius: var(--radius-sm);
   outline: none;

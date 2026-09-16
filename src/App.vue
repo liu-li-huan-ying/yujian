@@ -1446,12 +1446,12 @@ onBeforeUnmount(() => {
 }
 
 .toast--ok {
-  border-color: rgba(var(--hue-success-rgb, 60, 180, 140), 0.6);
+  border-color: color-mix(in srgb, var(--hue-success) 60%, transparent);
 }
 
 .toast--err {
-  border-color: rgba(224, 79, 69, 0.6);
-  color: #f3b4af;
+  border-color: color-mix(in srgb, var(--hue-danger) 60%, transparent);
+  color: var(--hue-danger);
 }
 
 .toast-enter-active,

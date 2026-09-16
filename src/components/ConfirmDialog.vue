@@ -123,7 +123,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .btn--primary {
   background: var(--hue-accent);
   border-color: var(--hue-accent);
-  color: #fff;
+  color: var(--hue-on-accent);
 }
 
 .btn--primary:hover {
@@ -134,7 +134,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .btn--danger {
   background: var(--hue-danger);
   border-color: var(--hue-danger);
-  color: #fff;
+  color: var(--hue-on-accent);
 }
 
 .btn--danger:hover {

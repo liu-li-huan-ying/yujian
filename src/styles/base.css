@@ -64,5 +64,5 @@ button:hover {
 }
 
 ::selection {
-  background: var(--hue-active);
+  background: var(--hue-selection);
 }

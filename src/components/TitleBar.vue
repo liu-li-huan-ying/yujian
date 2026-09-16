@@ -559,8 +559,8 @@ onMounted(() => {
 }
 
 .win__btn--close:hover {
-  background: #e04f45;
-  color: #ffffff;
+  background: var(--hue-danger);
+  color: var(--hue-on-accent);
 }
 
 .win__btn:focus-visible {

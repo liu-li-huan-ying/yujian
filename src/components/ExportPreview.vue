@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .panel__x:hover {
-  background: var(--hue-hover, rgba(0, 0, 0, 0.06));
+  background: var(--bg-hover);
   color: var(--hue-text-1);
 }
 
@@ -270,7 +270,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .btn:hover {
-  background: var(--hue-hover, rgba(0, 0, 0, 0.05));
+  background: var(--bg-hover);
 }
 .btn--primary {
   border-color: transparent;

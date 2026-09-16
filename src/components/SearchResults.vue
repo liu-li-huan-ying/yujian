@@ -204,7 +204,7 @@ const metaText = computed(() =>
 
 :deep(mark) {
   background: var(--hue-accent);
-  color: #fff;
+  color: var(--hue-on-accent);
   border-radius: 2px;
   padding: 0 1px;
 }

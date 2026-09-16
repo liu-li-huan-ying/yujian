@@ -322,7 +322,7 @@ select.field__input {
 .btn--primary {
   background: var(--hue-accent, #248077);
   border-color: transparent;
-  color: #fff;
+  color: var(--hue-on-accent);
   font-weight: 500;
 }
 

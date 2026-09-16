@@ -1199,7 +1199,7 @@ function startDrag(e: PointerEvent): void {
   gap: 8px;
   padding: 7px 9px;
   border-radius: var(--radius-sm);
-  background: var(--hue-surmount, rgba(var(--hue-tint-2, 120, 180, 170), 0.12));
+  background: var(--hue-active);
   border: 1px solid var(--hue-border-subtle);
 }
 
@@ -1225,7 +1225,7 @@ function startDrag(e: PointerEvent): void {
 }
 
 .repl__ok {
-  color: #fff;
+  color: var(--hue-on-accent);
   background: var(--hue-accent);
   border-color: var(--hue-accent);
 }
@@ -1364,7 +1364,7 @@ function startDrag(e: PointerEvent): void {
   padding: 4px 6px;
   border: 1px solid var(--hue-border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle, rgba(127, 127, 127, 0.06));
+  background: var(--bg-hover);
 }
 
 .nav__btn {
