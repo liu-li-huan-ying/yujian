@@ -36,12 +36,31 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
 const IN_ELECTRON = join(HERE, 'e2e-open-no-write.main.cjs')
+const require = createRequire(import.meta.url)
+
+/**
+ * 取 Electron 可执行文件路径。
+ *
+ * 不手拼 `node_modules/electron/dist/electron(.exe)`：`electron` 包的 `index.js`
+ * 会读它**自己生成**的 `path.txt`（各平台二进制名不同）再拼 `dist/`，
+ * 且在二进制缺失时**自动补下载**。从普通 Node 上下文 `require('electron')` 返回的
+ * 就是这个路径字符串（而不是 Electron API 对象——那是 Electron 运行时里才有的行为）。
+ */
+function resolveElectronBin() {
+  try {
+    const p = require('electron')
+    return typeof p === 'string' ? p : null
+  } catch {
+    return null
+  }
+}
 
 /* ────────────────────────────────────────────────────────────
  * 易损语料：每一种都曾在真实使用中被 Crepe 写坏过
@@ -230,22 +249,26 @@ async function main() {
   const waitArg = args.find((a) => a.startsWith('--wait='))
   const waitMs = waitArg ? Number(waitArg.split('=')[1]) || DEFAULT_WAIT_MS : DEFAULT_WAIT_MS
 
-  const electronBin = join(
-    ROOT,
-    'node_modules',
-    'electron',
-    'dist',
-    process.platform === 'win32' ? 'electron.exe' : 'electron'
-  )
+  // 用 electron 包自己的解析器取可执行文件路径，而不是手拼 `dist/electron(.exe)`。
+  // 理由：`node_modules/electron/index.js` 会读它自己生成的 path.txt 再拼 dist/，
+  // 且**发现缺失时会自动补下载**——手拼路径在 Linux CI 上会因平台名/未下载而失配。
+  // 从普通 Node 上下文 `require('electron')` 返回的就是路径字符串（不是 API 对象）。
+  const electronBin = resolveElectronBin()
   const appEntry = join(ROOT, 'out', 'main', 'index.js')
 
   console.log('E2E 打开不写盘（真 Electron）')
   console.log(`  语料：${Object.keys(FIXTURES).length} 篇易损文档 · 等待窗口 ${waitMs}ms · ${rounds} 轮`)
 
-  if (!existsSync(electronBin)) {
-    console.error(`✗ 未找到 electron：${electronBin}`)
+  if (!electronBin || !existsSync(electronBin)) {
+    console.error(
+      `✗ 未找到 electron 可执行文件${electronBin ? `：${electronBin}` : ''}\n` +
+        `  请先确保 Electron 二进制已下载：\n` +
+        `    ELECTRON_MIRROR="https://github.com/electron/electron/releases/download/" node node_modules/electron/install.js\n` +
+        `  （CI 上 npm ci 应自动完成；本地若失败可按上面手动补）`
+    )
     process.exit(1)
   }
+  console.log(`  electron：${electronBin}`)
   if (!existsSync(appEntry)) {
     console.error(`✗ 未找到构建产物 ${appEntry}，请先 \`npm run build\``)
     process.exit(1)

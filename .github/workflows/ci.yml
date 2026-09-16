@@ -63,6 +63,15 @@ jobs:
       # 「打开不写盘」红线：Crepe 序列化是破坏性的，只要「打开」被误判成「编辑」，
       # 自动保存就会把规范化后的文本写回磁盘，且坏内容即刻成为新的磁盘原文、无法自愈。
       # 单元测试用的是桩，跑不到真实 Crepe/ProseMirror，故由真启动应用、真比字节的 E2E 来守。
+      #
+      # 必须先确保 Electron 二进制就位：`npm ci` 在缓存命中时**不会**重新下载二进制
+      # （实测整步仅 10s，而二进制约 100MB，明显没下），跑 E2E 会直接「找不到 electron」。
+      # install.js 自身幂等：已就位时秒退，缺失时才下载。
+      - name: Ensure Electron binary
+        run: node node_modules/electron/install.js
+        env:
+          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+
       # Linux 无显示器 → 用 xvfb 提供虚拟 X。
       - name: E2E — open must not write (byte-exact)
         run: xvfb-run -a --server-args="-screen 0 1400x1000x24" node scripts/e2e-open-no-write.mjs --rounds=2
