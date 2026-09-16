@@ -2252,6 +2252,63 @@ hover/active 一律 `--hue-active` 底 + `--hue-accent` 图标。四处令牌同
   故在宿主侧加了 `setupTrayObserver`（subtree+childList，`queueMicrotask` 合并、只在新增元素节点时触发、
   幂等覆盖、卸载时 disconnect），与 `markdownUpdated` 的装饰调用同源。
 
+### 5.40.5 写死颜色与伪令牌清零（2026-09-16）
+
+继托盘统一之后做的一次全库复查（见 §5.40.3 方法论）。**最高发的两类坑：**
+
+1. **写死 `#fff` 落在强调/危险色上**：暗色强调色（青瓷 `#5fa8a0`）配白字对比度仅 ~2:1。
+   项目本就有 `--hue-on-accent`（暗色近黑 / 亮色白）专治此症，`CompilePanel` 早就在正确用，
+   其余 6 处漏了。修复清单见提交 `99b0264`。
+2. **「伪令牌」—— 看似用了变量、实则写死**：`--hue-hover` / `--bg-subtle` / `--hue-input-bg` /
+   `--hue-surmount` / `--hue-success-rgb` / `--yj-accent` **全项目从未定义**，
+   `var(--x, 兜底)` 恒取兜底字面量，不随 6 皮肤×明暗。已全部换成真实令牌或 `color-mix`。
+
+⚠️ **另有一类更隐蔽的**：`--hue-mark` 是 **RGB 三元组**（`226,190,120`，供 `rgb(var(--hue-mark))` 用），
+直接写 `background: var(--hue-mark)` 是**非法 CSS** —— 声明被丢弃、元素变透明，而白字还挂在上面。
+此类「变量存在但用法错」typecheck / lint / 测试**一律拦不住**，只能靠肉眼或对比度复查发现。
+
+## 5.41 交互可达性：破坏性操作确认 + 模态焦点管理（2026-09-16，已落地）
+
+### 5.41.1 破坏性操作必须过 ConfirmDialog
+
+`ConfirmDialog.vue` 是站内唯一的二次确认入口。**已接入**：删除文件/文件夹（Sidebar）、
+整库备份恢复（BackupPanel）、完整性自检修复（IntegrityPanel）、**删除快照**（本轮补）。
+
+⚠️ **盘点是必要的**：本轮发现「删除快照」是唯一漏网的 —— 它直接 `snapshots.remove()` 送回收站、
+只留一句事后 toast，而删除钮又紧挨「恢复/采纳」。**写了组件不等于各处都接上了**，
+新增任何破坏性操作时应先搜 `ConfirmDialog` 看同类操作怎么接的。
+
+### 5.41.2 模态焦点管理（`src/utils/focusTrap.ts` + `src/composables/useFocusTrap.ts`）
+
+此前站内所有对话框只是渲染了 `role="dialog" aria-modal="true"` 的盒子，**没有任何焦点管理**：
+打开时焦点仍在背景编辑器、Tab 会一路走出对话框、关闭后不归还触发者。
+
+分两层（沿用 §5.33「纯逻辑单独成文件才能被 `bundle()` 测」）：
+- `src/utils/focusTrap.ts`（纯逻辑，被 `[J10]` 15 条守护）：可聚焦元素筛选 ——
+  排掉 `disabled` / `[hidden]` / `aria-hidden="true"`，以及 **`tabindex="-1"`**
+  （命令面板列表项靠它不进 Tab 序列，否则 Tab 进列表后方向键失效）；`nextFocusable()` 负责到头回绕。
+- `src/composables/useFocusTrap.ts`：打开送焦点进框、Tab 循环困在框内、关闭归还触发者
+  （归还前判 `isConnected`，因触发者可能已随 `v-if` 销毁）。`onEscape` 是 **opt-in** ——
+  Esc 在站内是「上下文相关的退出」，统一拦截会与各面板既有处理打架。
+
+已接入：ConfirmDialog / MoveDialog / CompilePanel / ConflictDialog / 命令面板。
+顺带给缺 Esc 的 MoveDialog、CompilePanel 补上，与站内其余面板口径一致。
+
+### 5.41.3 三个会反复踩的交互/布局坑
+
+- **🔴 `backdrop-filter` 会让元素成为「固定定位子元素的包含块」**：
+  在 `.snap.glass`（快照面板）里放 `position:fixed; inset:0` 的遮罩，会被**困在 340px 宽的面板里**
+  而不是铺满窗口 —— 因为 `.glass` 带 `backdrop-filter`。修法是 `<Teleport to="body">` 脱离该包含块。
+  ⚠️ 同类的还有 `filter` / `transform` / `will-change` / `contain`。
+  **判断依据**：Sidebar 是 `.jade`（无 backdrop-filter）+ `position:relative`，故它的确认框不受影响 ——
+  同样写法在两处结果不同，**别因为「另一处这么写没事」就认为安全**。
+- **window 级 Enter 监听会与按钮自身 click 双触发**：`ConfirmDialog` 原先用
+  `window.addEventListener('keydown')` 无条件 `emit('confirm')`，于是「Tab 到取消 → 按 Enter」
+  会同时触发取消与确认。修法：监听里判断 `e.target.tagName === 'BUTTON'` 就**让位给按钮**。
+  删除类操作不可撤销，必须以按钮的实际焦点为准。
+- **Aria 语义标了不等于可用**：`TagPanel` 的树项标了 `role="treeitem"` 却不可聚焦；
+  `Outline` 是 `<li @click>` 键盘完全够不着。**凡 `@click` 的非 button 元素，都要问一句「键盘怎么触发」**。
+
 ## 附录 A：开工前必做的环境配置
 
 ```bash
