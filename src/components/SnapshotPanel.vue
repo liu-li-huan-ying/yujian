@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import Icon from './Icon.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 import { MAIN_BRANCH, useSnapshotsStore } from '../store/snapshots'
 import SnapshotDiffView from './SnapshotDiffView.vue'
 import { useSnapshotDiff } from '../composables/useSnapshotDiff'
@@ -200,7 +201,22 @@ function onMenuSelect(action: string): void {
   menu.value = null
   if (!id) return
   if (action === 'restore') onRestore(id)
-  else if (action === 'delete') emit('delete', id)
+  else if (action === 'delete') requestDelete(id)
+}
+
+/* ── 删除二次确认 ──
+   版本快照是「后悔药」，删除按钮又紧挨着恢复/采纳按钮，误触代价高（立刻送回收站、只留一句 toast）。
+   故与文件删除（Sidebar）保持一致：先弹确认框，用户确认后才 emit 真正的删除。 */
+const pendingDelete = ref<string | null>(null)
+
+function requestDelete(id: string): void {
+  pendingDelete.value = id
+}
+
+function confirmDelete(): void {
+  const id = pendingDelete.value
+  pendingDelete.value = null
+  if (id) emit('delete', id)
 }
 
 const tz = localTimeZone()
@@ -364,7 +380,17 @@ function fmtTime(ts: number): string {
 
             <div v-if="(item.tags && item.tags.length) || editingTagsId === item.id" class="row__tags">
               <template v-if="item.tags && item.tags.length">
-                <span v-for="tg in item.tags" :key="tg" class="chip" @click.stop="removeTag(item, tg)">{{ tg }}<i class="chip__x">×</i></span>
+                <!-- 用 <button>：此前是 <span @click>，键盘够不着且没有提示说明「点了是删标签」 -->
+                <button
+                  v-for="tg in item.tags"
+                  :key="tg"
+                  type="button"
+                  class="chip"
+                  :title="L.snapshotRemoveTag.replace('{tag}', tg)"
+                  @click.stop="removeTag(item, tg)"
+                >
+                  {{ tg }}<i class="chip__x">×</i>
+                </button>
               </template>
               <button v-if="editingTagsId !== item.id" type="button" class="chip chip--add" :title="L.snapshotAddTag" @click.stop="startEditTags(item)">+</button>
               <input
@@ -404,7 +430,7 @@ function fmtTime(ts: number): string {
         <Icon name="history" :size="13" />
         {{ isDraft ? L.snapshotAdopt : L.snapshotRestore }}
       </button>
-      <button class="act act--del" type="button" @click="emit('delete', snapshots.selectedId!)">
+      <button class="act act--del" type="button" @click="requestDelete(snapshots.selectedId!)">
         <Icon name="trash" :size="13" />
         {{ L.snapshotDelete }}
       </button>
@@ -418,6 +444,24 @@ function fmtTime(ts: number): string {
       @select="onMenuSelect"
       @close="menu = null"
     />
+
+    <!-- 删除二次确认（与文件删除同一套范式）
+         ⚠️ 必须 Teleport 到 body：本面板根节点是 `.snap glass`，而 glass 带
+         `backdrop-filter` —— 它会使元素成为「固定定位子元素的包含块」，
+         确认框的 `position:fixed; inset:0` 遮罩会被困在这 340px 宽的面板里，
+         而不是铺满整个窗口。挂到 body 下即可脱离该包含块。 -->
+    <Teleport to="body">
+      <ConfirmDialog
+        v-if="pendingDelete"
+        :open="true"
+        :title="L.snapshotDeleteConfirm"
+        :message="L.snapshotDeleteConfirmMsg"
+        :confirm-label="L.snapshotDelete"
+        danger
+        @confirm="confirmDelete()"
+        @cancel="pendingDelete = null"
+      />
+    </Teleport>
   </div>
 </template>
 
@@ -811,6 +855,10 @@ function fmtTime(ts: number): string {
   color: var(--hue-text-1);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease);
+  /* 标签芯片是 <button>（键盘可达），需抹掉浏览器默认外观 */
+  border: 0;
+  font-family: inherit;
+  line-height: inherit;
 }
 .chip:hover {
   background: color-mix(in srgb, var(--hue-accent) 28%, transparent);

@@ -228,6 +228,29 @@ function onTabClick(path: string): void {
   emit('activate', path)
 }
 
+/* ── 键盘可达：标签此前是纯 <div @click>，键盘用户完全无法切换文档 ──
+   采用 tablist 的标准「漫游 tabindex」模式：只有当前标签进 Tab 序列（tabindex=0），
+   其余为 -1；进入后用 ←/→ 在标签间移动并跟随切换，Enter/空格激活当前项。
+   这样既不会让 Tab 键逐个穿过十几个标签，也保住了完整的键盘操作路径。 */
+function onTabKey(e: KeyboardEvent, path: string): void {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    onTabClick(path)
+    return
+  }
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+  // 复用既有的 scroller ref（同一个滚动容器），不另起一个 ref
+  const items = Array.from(scroller.value?.querySelectorAll<HTMLElement>('.tab') ?? [])
+  const idx = items.findIndex((el) => el === e.currentTarget)
+  if (items.length === 0 || idx === -1) return
+  e.preventDefault()
+  const step = e.key === 'ArrowRight' ? 1 : -1
+  const next = items[(idx + step + items.length) % items.length]
+  next?.focus()
+  const nextPath = next?.dataset.path
+  if (nextPath) onTabClick(nextPath)
+}
+
 /* ── 单标签右键菜单 ── */
 const menu = ref<{ x: number; y: number; path: string } | null>(null)
 function onContextMenu(e: MouseEvent, path: string): void {
@@ -268,6 +291,7 @@ function onMoreSelect(action: string): void {
     <div
       ref="scroller"
       class="tabbar__scroll"
+      role="tablist"
       :class="{ 'is-bounce-l': bounceDir === -1, 'is-bounce-r': bounceDir === 1 }"
       @wheel="onWheel"
     >
@@ -275,9 +299,14 @@ function onMoreSelect(action: string): void {
         v-for="tab in visibleTabs"
         :key="tab.path"
         class="tab"
+        role="tab"
         :class="{ 'tab--active': isActive(tab.path) }"
+        :aria-selected="isActive(tab.path)"
+        :data-path="tab.path"
+        :tabindex="isActive(tab.path) ? 0 : -1"
         :title="tab.path"
         @click="onTabClick(tab.path)"
+        @keydown="onTabKey($event, tab.path)"
         @contextmenu="onContextMenu($event, tab.path)"
       >
         <RenameInput

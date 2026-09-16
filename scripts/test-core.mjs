@@ -1637,6 +1637,78 @@ section('[J9] 药丸托盘语言提示 —— 图片块 / 链接浮层 / 代码�
   }
 }
 
+section('[J10] 模态焦点陷阱纯逻辑 —— 可聚焦元素筛选 / 方向回绕（src/utils/focusTrap.ts）')
+// 目的：站内所有对话框（确认框 / 移动 / 合订 / 冲突 / 命令面板）此前都没有焦点管理——
+// 打开时焦点留在背景、Tab 会走出对话框、关闭后不归还。取元素的规则是纯函数，锁在这里；
+// 与 DOM/生命周期绑定的部分在 composables/useFocusTrap.ts。
+{
+  const { getFocusable, nextFocusable, FOCUSABLE_SELECTOR } = await import(
+    (await bundle('src/utils/focusTrap.ts', 'focusTrap.mjs')).url
+  )
+
+  /** 最小元素桩：只需 getAttribute（与托盘测试同一套口径） */
+  function el(attrs = {}) {
+    return { getAttribute: (k) => (k in attrs ? attrs[k] : null) }
+  }
+  /** 最小容器桩：按 selector 里是否含某元素名来模拟 querySelectorAll 的命中 */
+  function root(items) {
+    return { querySelectorAll: () => items }
+  }
+
+  // 1) 选择器必须排掉 disabled / hidden input / tabindex="-1"
+  {
+    check(
+      '焦点陷阱：选择器排除 disabled 元素',
+      FOCUSABLE_SELECTOR.includes('button:not([disabled])'),
+    )
+    check(
+      '焦点陷阱：选择器排除 type=hidden 的 input',
+      FOCUSABLE_SELECTOR.includes('input:not([disabled]):not([type="hidden"])'),
+    )
+    check(
+      '焦点陷阱：选择器排除 tabindex=-1（命令面板列表项靠它不进 Tab 序列）',
+      FOCUSABLE_SELECTOR.includes('[tabindex]:not([tabindex="-1"])'),
+    )
+  }
+
+  // 2) 过滤 hidden / aria-hidden
+  {
+    const a = el()
+    const b = el({ hidden: '' })
+    const c = el({ 'aria-hidden': 'true' })
+    check('焦点陷阱：过滤掉 hidden 元素', getFocusable(root([a, b, c])).length === 1, `${getFocusable(root([a, b, c])).length}`)
+    check('焦点陷阱：过滤掉 aria-hidden=true', !getFocusable(root([a, b, c])).includes(c))
+  }
+
+  // 3) 空 / null 容器必须安全返回空数组（调用方据此降级为不劫持 Tab）
+  {
+    check('焦点陷阱：空容器返回空数组', getFocusable(root([])).length === 0)
+    check('焦点陷阱：root 为 null 返回空数组且不抛错', getFocusable(null).length === 0)
+  }
+
+  // 4) 方向回绕
+  {
+    const a = el()
+    const b = el()
+    const c = el()
+    const list = [a, b, c]
+    check('焦点陷阱：正向取下一个', nextFocusable(list, a) === b)
+    check('焦点陷阱：正向到末位回绕到首位', nextFocusable(list, c) === a)
+    check('焦点陷阱：反向取上一个', nextFocusable(list, c, true) === b)
+    check('焦点陷阱：反向到首位回绕到末位', nextFocusable(list, a, true) === c)
+    check(
+      '焦点陷阱：焦点不在列表内时正向取首个',
+      nextFocusable(list, el()) === a,
+    )
+    check(
+      '焦点陷阱：焦点不在列表内时反向取末个',
+      nextFocusable(list, el(), true) === c,
+    )
+    check('焦点陷阱：空列表返回 null（不劫持 Tab）', nextFocusable([], a) === null)
+    check('焦点陷阱：current 为 null 时取首个', nextFocusable(list, null) === a)
+  }
+}
+
 section('[K] 标签页路径重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）')// pinia / vue 是纯 JS 依赖 → 外置回 Node 原生加载，保证探针与 store 共用同一 pinia 实例
 const piniaStub = [
   "import { createRequire } from 'node:module'",

@@ -170,6 +170,19 @@ function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape') emit('close')
 }
 
+/**
+ * 标签树项键盘可达：树项此前只是 `<li role="treeitem">` + 内部 div 的 @click，
+ * 标了 treeitem 却没有可聚焦性 —— 键盘用户无法选中/进入任何标签。
+ * 这里补 Enter/空格 = 打开该标签（与点击同一条路径 openTag）。
+ * 不做 ↑/↓ 漫游：本面板树是**扁平列表 + 缩进**渲染（flatTree），方向键没有真实层级语义可依，
+ * 交给原生 Tab 顺序即可，比半套的树导航更可预期。
+ */
+function onTreeKey(e: KeyboardEvent, name: string): void {
+  if (e.key !== 'Enter' && e.key !== ' ') return
+  e.preventDefault()
+  openTag(name)
+}
+
 /** 重建统一索引（兜底陈旧缓存），完成后自刷新并通知 App 弹 toast */
 async function onRebuild(): Promise<void> {
   if (!props.vaultPath || rebuilding.value) return
@@ -245,6 +258,8 @@ onBeforeUnmount(() => {
           :aria-expanded="item.node.leaf ? undefined : isExpanded(item.node.name)"
           class="tags__li"
           :style="{ paddingLeft: 8 + item.depth * 14 + 'px' }"
+          tabindex="0"
+          @keydown="onTreeKey($event, item.node.name)"
         >
           <div class="tags__row" @click="openTag(item.node.name)">
             <button

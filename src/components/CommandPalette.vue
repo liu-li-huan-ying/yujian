@@ -12,6 +12,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
+import { useFocusTrap } from '../composables/useFocusTrap'
 import {
   COMMANDS,
   GROUP_ORDER,
@@ -189,11 +190,19 @@ onMounted(() => {
 })
 
 const emptyText = computed(() => (props.mode === 'commands' ? L.emptyCmd : L.emptyFile))
+
+const box = ref<HTMLElement | null>(null)
+// 命令面板是模态：焦点应锁在面板内（首个焦点是搜索框），关闭后归还给触发者。
+// 列表项已改成 tabindex="-1"（由 aria-activedescendant 驱动），故 Tab 不会跑进列表。
+// 不传 onEscape：本组件的 input 已在 onKeydown 里处理 Esc（先清空查询、再关闭），
+// 组合式再拦一次会重复 emit('close')。
+useFocusTrap({ container: box, active: () => true, initial: () => inputEl.value })
 </script>
 
 <template>
   <div class="cp-backdrop" @mousedown="emit('close')">
     <div
+      ref="box"
       class="cp glass"
       role="dialog"
       aria-modal="true"
@@ -227,6 +236,7 @@ const emptyText = computed(() => (props.mode === 'commands' ? L.emptyCmd : L.emp
             class="cp__row"
             :class="{ 'cp__row--on': row.flat === activeIndex }"
             role="option"
+            tabindex="-1"
             :aria-selected="row.flat === activeIndex"
             @mouseenter="activeIndex = row.flat"
             @mousedown.prevent="emit('run', row.id)"
@@ -253,6 +263,7 @@ const emptyText = computed(() => (props.mode === 'commands' ? L.emptyCmd : L.emp
           class="cp__row"
           :class="{ 'cp__row--on': i === activeIndex }"
           role="option"
+          tabindex="-1"
           :aria-selected="i === activeIndex"
           :title="row.path"
           @mouseenter="activeIndex = i"

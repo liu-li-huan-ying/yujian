@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from '../i18n'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 const { t } = useI18n()
 const L = t.ui
+
+const box = ref<HTMLElement | null>(null)
+// 焦点陷阱：打开时把焦点送进对话框、Tab 只在本框内循环、关闭时归还给触发者。
+// 首个可聚焦元素是「取消」（模板里排在确认之前）—— 对删除类对话框这是更安全的默认。
+useFocusTrap({ container: box, active: () => props.open })
 
 const props = defineProps<{
   open: boolean
@@ -26,6 +32,11 @@ function onKey(e: KeyboardEvent): void {
     e.preventDefault()
     emit('cancel')
   } else if (e.key === 'Enter') {
+    // 焦点若已经落在某个按钮上，交给按钮自己处理 —— 否则 Tab 到「取消」再按 Enter 会
+    // 同时触发按钮的 click（取消）与本监听（确认），结果是「想取消却确认了」。
+    // 删除类操作不可撤销，这一处必须以按钮的实际焦点为准。
+    const el = e.target as HTMLElement | null
+    if (el && el.tagName === 'BUTTON') return
     e.preventDefault()
     emit('confirm')
   }
@@ -37,7 +48,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div v-if="open" class="modal-mask" @mousedown.self="emit('cancel')">
-    <div class="modal glass" role="alertdialog" aria-modal="true" :aria-label="title">
+    <div ref="box" class="modal glass" role="alertdialog" aria-modal="true" :aria-label="title">
       <h3 class="modal__title">{{ title }}</h3>
       <p class="modal__msg">{{ message }}</p>
       <div class="modal__acts">

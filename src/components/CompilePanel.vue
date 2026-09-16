@@ -5,9 +5,15 @@ import { useI18n } from '../i18n'
 import type { FileNode } from '../../electron/shared/ipc-channels'
 import type { ExportKind } from '../export/types'
 import { baseName } from '../utils/path'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 const { t } = useI18n()
 const L = t.ui
+
+const box = ref<HTMLElement | null>(null)
+// 本面板是「挂载即打开」（父级用 v-if 控制），故 active 恒为 true。
+// 补上焦点陷阱与 Esc 关闭 —— 此前两者都缺，与站内其余面板口径不一致。
+useFocusTrap({ container: box, active: () => true, onEscape: () => emit('close') })
 
 const props = defineProps<{
   /** 笔记库文件树（含子目录），用于按树序列出 .md */
@@ -91,7 +97,7 @@ function confirm(): void {
 
 <template>
   <div class="overlay" @click.self="emit('close')">
-    <div class="panel glass" role="dialog" :aria-label="L.compileTitle">
+    <div ref="box" class="panel glass" role="dialog" :aria-label="L.compileTitle">
       <div class="panel__head">
         <Icon name="layers" :size="15" class="panel__icon" />
         <span class="panel__title">{{ L.compileTitle }}</span>

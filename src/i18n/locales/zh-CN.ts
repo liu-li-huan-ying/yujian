@@ -325,6 +325,8 @@ const zhCN = {
     snapshotEmpty: '暂无快照，保存或点击「保存快照」留档',
     snapshotRestore: '恢复',
     snapshotDelete: '删除',
+    snapshotDeleteConfirm: '删除快照确认',
+    snapshotDeleteConfirmMsg: '确定要删除这个版本快照吗？此操作不可撤销。',
     snapshotCount: '{n} 份',
     snapshotTimezone: '本机时区：{tz}',
     diffAdd: '新增',
@@ -332,6 +334,7 @@ const zhCN = {
     /* ── 版本快照 Phase A：标签 / 任意两点对比 / 筛选 ── */
     snapshotTags: '标签',
     snapshotAddTag: '添加标签',
+    snapshotRemoveTag: '移除标签「{tag}」',
     snapshotTagPlaceholder: '输入标签名…',
     snapshotNoTag: '无标签',
     snapshotSetA: '设为对比A',

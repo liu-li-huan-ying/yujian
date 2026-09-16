@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { getFocusable, nextFocusable } from '../utils/focusTrap'
 
 export interface MenuItem {
   /** 菜单项唯一标识，供父组件区分动作 */
@@ -43,11 +44,21 @@ function onItem(item: MenuItem): void {
   emit('close')
 }
 
+const box = ref<HTMLElement | null>(null)
+
 function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     e.preventDefault()
     emit('close')
+    return
   }
+  // 方向键在菜单项间移动焦点（到头回绕）。此前只有 Esc 能关，菜单对键盘用户
+  // 基本是死的：能 Tab 进这些 button，却没有 ↑/↓ 导航，也读不出「我在第几项」。
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+  const list = getFocusable(box.value)
+  if (list.length === 0) return
+  e.preventDefault()
+  nextFocusable(list, document.activeElement, e.key === 'ArrowUp')?.focus()
 }
 
 /** 点击菜单外部（含其它节点的右键）→ 关闭 */
@@ -55,8 +66,12 @@ function onOutside(): void {
   emit('close')
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', onKey)
+  // 打开即把焦点送进菜单第一项：否则焦点还留在触发元素上，方向键无处可去。
+  // 等一帧是因为菜单刚挂载、DOM 还没上屏。
+  await nextTick()
+  getFocusable(box.value)[0]?.focus()
   // 延迟一帧再挂外部监听，避免「打开菜单的那次点击」立刻把它关掉
   window.setTimeout(() => window.addEventListener('mousedown', onOutside), 0)
 })
@@ -68,7 +83,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="ctx glass" :style="pos" role="menu" @mousedown.stop @contextmenu.prevent>
+  <div ref="box" class="ctx glass" :style="pos" role="menu" @mousedown.stop @contextmenu.prevent>
     <template v-for="(item, i) in items" :key="item.separator ? `sep-${i}` : item.action">
       <div v-if="item.separator" class="ctx__sep" />
       <button

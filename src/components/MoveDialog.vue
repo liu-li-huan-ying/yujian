@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { FileNode } from '../../electron/shared/ipc-channels'
 import { useI18n } from '../i18n'
 import Icon from './Icon.vue'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 const props = defineProps<{
   open: boolean
@@ -27,6 +28,14 @@ const { t } = useI18n()
 const L = t.ui
 
 const selected = ref<string | null>(null)
+const box = ref<HTMLElement | null>(null)
+// 焦点陷阱 + Esc 关闭：此前本框既无焦点管理也无 Esc，与站内其余面板（Backlinks /
+// LinkCheck / Moc / Tag / Backup / Integrity / 写作辅助都有 Esc）口径不一致。
+useFocusTrap({
+  container: box,
+  active: () => props.open,
+  onEscape: () => emit('cancel'),
+})
 
 /** 打开时默认选中库根（最常用目标之一） */
 watch(
@@ -93,7 +102,7 @@ function confirm(): void {
 
 <template>
   <div v-if="open" class="move-mask" @click.self="emit('cancel')">
-    <div class="move glass" role="dialog" aria-modal="true" :aria-label="L.moveTitle">
+    <div ref="box" class="move glass" role="dialog" aria-modal="true" :aria-label="L.moveTitle">
       <header class="move__head">
         <Icon name="folder" :size="14" />
         <span class="move__title">{{ L.moveTitle }}</span>

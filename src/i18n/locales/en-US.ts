@@ -326,6 +326,8 @@ const enUS = {
     snapshotEmpty: 'No snapshots yet. Save or click "Save snapshot" to keep one.',
     snapshotRestore: 'Restore',
     snapshotDelete: 'Delete',
+    snapshotDeleteConfirm: 'Delete snapshot',
+    snapshotDeleteConfirmMsg: 'Delete this snapshot? This action cannot be undone.',
     snapshotCount: '{n} snapshots',
     snapshotTimezone: 'Local timezone: {tz}',
     diffAdd: 'Added',
@@ -333,6 +335,7 @@ const enUS = {
     /* ── Snapshots Phase A: tags / arbitrary diff / filter ── */
     snapshotTags: 'Tags',
     snapshotAddTag: 'Add tag',
+    snapshotRemoveTag: 'Remove tag "{tag}"',
     snapshotTagPlaceholder: 'Tag name…',
     snapshotNoTag: 'No tags',
     snapshotSetA: 'Set A',

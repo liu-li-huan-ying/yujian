@@ -24,7 +24,9 @@ watch(
   async (idx) => {
     if (idx < 0 || !listEl.value) return
     await nextTick()
-    const el = listEl.value.children[idx] as HTMLElement | undefined
+    // 注意：listEl 挂在 <nav> 上，它的 children[idx] 是 <ul>（只有一个子节点），
+    // 直接取会滚错对象 —— 必须下钻到 ul 的第 idx 个 <li>。
+    const el = listEl.value.querySelector('ul')?.children[idx] as HTMLElement | undefined
     el?.scrollIntoView({ block: 'nearest' })
   }
 )
@@ -38,15 +40,17 @@ watch(
 
     <nav ref="listEl" class="outline__body" :aria-label="L.outline">
       <ul v-if="items.length" class="outline__list">
-        <li
-          v-for="item in items"
-          :key="item.index"
-          class="outline__item"
-          :class="{ 'is-active': item.index === activeIndex }"
-          :style="{ paddingLeft: 12 + (item.level - 1) * 16 + 'px' }"
-          @click="emit('select', item.index)"
-        >
-          <span class="outline__txt">{{ item.text }}</span>
+        <!-- 用真正的 <button>：此前是 <li @click>，键盘完全够不着（不能 Tab、不能回车跳转） -->
+        <li v-for="item in items" :key="item.index" class="outline__row">
+          <button
+            type="button"
+            class="outline__item"
+            :class="{ 'is-active': item.index === activeIndex }"
+            :style="{ paddingLeft: 12 + (item.level - 1) * 16 + 'px' }"
+            @click="emit('select', item.index)"
+          >
+            <span class="outline__txt">{{ item.text }}</span>
+          </button>
         </li>
       </ul>
       <div v-else class="empty-state">
@@ -122,7 +126,14 @@ watch(
   list-style: none;
 }
 
+/* 大纲项是 <button>，需要抹掉浏览器默认外观（保留既有字号与配色） */
 .outline__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  font-family: inherit;
   position: relative;
   padding: 5px 10px 5px 12px;
   font-size: 12.5px;

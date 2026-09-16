@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Icon from './Icon.vue'
 import { useI18n } from '../i18n'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 const { t } = useI18n()
 const L = t.ui
+
+const box = ref<HTMLElement | null>(null)
+// 冲突框不提供「取消」（必须三选一才能继续），故只加焦点陷阱、不接 Esc。
+useFocusTrap({ container: box, active: () => props.open })
 
 const props = defineProps<{
   open: boolean
@@ -127,7 +132,7 @@ function fileBase(p: string | null): string {
 
 <template>
   <div v-if="open" class="mask" @mousedown.self.prevent>
-    <div class="dialog glass" role="alertdialog" aria-modal="true" :aria-label="L.conflict">
+    <div ref="box" class="dialog glass" role="alertdialog" aria-modal="true" :aria-label="L.conflict">
       <header class="dlg__head">
         <Icon name="alert" :size="16" class="dlg__icon" />
         <div class="dlg__titles">
