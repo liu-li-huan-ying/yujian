@@ -2090,7 +2090,7 @@ Chromium 的 SUID 沙箱要求 `chrome-sandbox` 属 root 且 mode 4755，CI runn
 `runElectron` 在 `linux` 上以 `['--no-sandbox', IN_ELECTRON]` 启动（非 Linux 不传，
 保持常规平台的沙箱强度）。应用内的 `MD_EDITOR_COMPAT_MODE` 只负责 GPU 相关开关。
 
-## 5.40 视觉打磨：图谱提亮 + 两处药丸托盘的语言提示统一（2026-09-16，已落地）
+## 5.40 视觉打磨：图谱提亮 + 编辑器内各处药丸托盘的语言提示统一（2026-09-16，已落地）
 
 用户反馈两点：**① 关系图谱「暗淡不美观」；② 列表操作的药丸托盘要和正文行内工具条
 一样美化、一样有语言提示。**
@@ -2120,16 +2120,27 @@ Chromium 的 SUID 沙箱要求 `chrome-sandbox` 属 root 且 mode 4755，CI runn
 ⚠️ 提亮后**必须重新核验观感**（本次用无头 Edge 截「改前/改后」并排对照页 + 2× 放大看光晕）。
 数值推理判断不出「好不好看」——这类改动截图是唯一可信的验收手段。
 
-### 5.40.2 两处药丸托盘：语言提示与视觉必须同源
+### 5.40.2 四处药丸托盘：语言提示与视觉必须同源
 
-编辑区有两处「药丸托盘」，此前待遇不一致：
+编辑区实际有**四处**「药丸托盘」，此前待遇各不相同：
 
 | 托盘 | 位置 | 语言提示（改前） |
 | --- | --- | --- |
 | 块操作手柄 | 块左缘左侧竖排胶囊（＋ / ⠿） | **无** —— Crepe 源码里是裸 `div`，既无 `title` 也无 `aria-label` |
 | 行内工具条 | 选中文字浮出的横排胶囊 | 有 —— Crepe 从 `label` / `keymap` 生成 `title` + `aria-label` + `aria-keyshortcuts` |
+| **公式符号条** | 公式编辑面板顶部的符号条（`.yj-me-syms`） | **有等于没有** —— `title` 就是 `\frac{}{}` 这种 LaTeX 字面量，读屏更是念不出 |
+| **表格手柄弹出条** | 表格列/行手柄展开的黑色药丸条（本轨迹**第四处**） | **无** —— `h('button', { onPointerdown }, h(Icon, ...))`，七个按钮全是裸 icon |
 
-修法分两半：
+⚠️ **第一次只改了两处就交活了，第三处是用户截图指出来的；改完第三处用户又说「不是这个」——
+真正的目标其实是第四处（表格）。** 教训有两条：
+① 做「N 处同源」类改动时，必须先做一次**穷尽盘点**（全库搜小按钮容器、`role="toolbar"`、
+`28px` 按钮样式、`h('button'` 与 `h('div', { class: ... })`），否则「我记得有 N 处」的 N
+往往小于真实值。本项目的盘点是靠一个 Explore 子代理跑出来的。
+② 用户说「药丸托盘」时，**先问清是哪一个**再动手——四处托盘在同一个编辑器里长得都像「胶囊里一排小图标」，
+靠猜会连错两次。事后看，用户给的关键信息是「点击表格上方黑色半圆形小按钮出现的」
+「作用是左对齐、中间对齐、右对齐」——**「功能语义」比「外观描述」更能唯一定位**。
+
+修法分四半：
 
 **① 补语言提示（`src/editor/features/trayLabels.ts`）**
 Crepe 的 BlockEdit 特性**没有**暴露手柄文案配置项（只有两个图标字段），
@@ -2139,25 +2150,107 @@ Crepe 的 BlockEdit 特性**没有**暴露手柄文案配置项（只有两个�
 `decorateBlockHandles(root, { add, drag })` 纯 DOM 逻辑（不 import vue、不碰 IPC），
 可被 `bundle()` 直接测；找不到元素时**静默返回 0**（结构变了也不能炸编辑器初始化）。
 
-**② 补工具条提示 + 统一视觉（`src/styles/editor.css`）**
-- Crepe 的 `toolbar-item` 渲染 `title: item.shortcut ? \`${label} (${shortcut})\` : label`。
-  加粗/斜体/删除线/行内代码带 `keymap` → **已被 Crepe 自动解析成 `Ctrl+B` 等**，无需干预；
-  而**链接 / 公式没有 `keymap`** → 借 `shortcut` 位挂一句操作提示
-  （「选中文字后粘贴或输入网址」/「不选中内容时插入空公式」），
-  注入的「插入双链」项同样带上「输入 [[ 亦可唤起候选」。
-  在 `buildToolbar` 里经 `builder.getGroup('function').group.items` 改（`GroupBuilder` 只暴露
-  `group` / `addItem` / `clear`，**没有 `items` 快捷属性**，故必须从 `group.items` 上找）。
-- 视觉：块手柄图标由 `--hue-text-3` 提到 **`--hue-text-2` / opacity .9**，
-  与行内工具条**逐字同款**；hover/active 一律 `--hue-active` 底 + `--hue-accent` 图标。
-  两处令牌同源后，同屏并排不再像两个软件。
+同模块的 `decorateTableHandles(root, labels)` 处理第四处托盘，覆盖 6 组元素
+（列手柄本体 / 列弹出条 4 枚按钮 / 行手柄本体 / 行弹出条 1 枚 / 两条细线的 `.add-button`）。
+⚠️ **`tableBlockConfig` 只接受 `renderButton: (type) => string`** —— 官网/类型定义里
+**没有任何文案字段**，所以这里只能 DOM 补，不能靠配置（改 Crepe 版本时先复核 `config.d.ts`）。
+⚠️ **顺序映射是这处的唯一危险点**：列弹出条内 4 枚按钮的 `h()` 顺序固定为
+`[左对齐, 居中, 右对齐, 删除本列]`（见 `@milkdown/components/lib/table-block/index.js` 第 917~920 行），
+错位会把「删除本列」的提示贴到对齐按钮上 —— 故 `[J8]` 逐枚断言文案，并做过注入故障验证
+（把 `alignLeft`/`alignCenter` 对调 → 6 条断言报红，还原恢复绿）。
 
-⚠️ 这条「托盘一致性」约定是**产品级**的：以后任一处新增按钮/hover 效果，
-另一处要同步 —— 否则又会出现「一个有提示、一个没有」的不对等。
+⚠️ **表格节点是按需创建的**：`new TableNodeView(...)` 只在文档里真的出现表格时才跑，
+故 `crepe.create()` 之后补一次**不足以**覆盖「用户后来插入的表格」。
+接线因此是双点：`create()` 后补一次（覆盖打开时就有的表格）+ `markdownUpdated` 里补一次
+（覆盖新插入的表格）。后者是**幂等覆盖同值**，不判脏、不碰保存链路，故不会引起
+「打开即自动保存」那类事故（§5.30 的门闩在事务层，与此无关）。
 
-### 回归
+**② 符号表抽成纯模块（`src/utils/mathSymbols.ts`）**
+符号表原先硬编码在 `MathEditPanel.vue` 的 `<script setup>` 里 —— **SFC 无法被 `bundle()`
+打进测试**（`bundle()` 只处理 TS），于是「每个符号都必须有人类可读名 + 短语说明」
+这条产品约定**没有任何门禁**，下一个人加符号时随手写个 `{ cmd }` 就漏了提示。
+抽表后数据与渲染分离（§5.33 同一思路），`[J7]` 段 10 条断言得以落地：
+每组 ≤8、tip 非空、**tip ≠ cmd 本身**、**label 是字形而非 `\` 开头的命令**、cmd 不可重复。
 
-`test-core` 新增 `[J6]` 段 8 条（用最小 DOM 桩跑真实选择器与属性语义，含幂等与「找不到元素不抛错」负向对照）；
-`docs/PHASE3-UI-DESIGN.md` §4.3 图谱规格已同步。
+**③ 补工具条提示（`buildToolbar`）**
+Crepe 的 `toolbar-item` 渲染 `title: item.shortcut ? \`${label} (${shortcut})\` : label`。
+加粗/斜体/删除线/行内代码带 `keymap` → **已被 Crepe 自动解析成 `Ctrl+B` 等**，无需干预；
+而**链接 / 公式没有 `keymap`** → 借 `shortcut` 位挂一句操作提示
+（「选中文字后粘贴或输入网址」/「不选中内容时插入空公式」），
+注入的「插入双链」项同样带上「输入 [[ 亦可唤起候选」。
+在 `buildToolbar` 里经 `builder.getGroup('function').group.items` 改（`GroupBuilder` 只暴露
+`group` / `addItem` / `clear`，**没有 `items` 快捷属性**，故必须从 `group.items` 上找）。
+
+**④ 统一视觉（`src/styles/editor.css` 与各组件 scoped 样式）**
+块手柄图标由 `--hue-text-3` 提到 **`--hue-text-2` / opacity .9**，
+公式符号条与表格托盘同款（并把硬编码 `rgba(127,127,127,.14)` hover 换成 `--hue-active` + accent 字）；
+hover/active 一律 `--hue-active` 底 + `--hue-accent` 图标。四处令牌同源后，同屏并排不再像四个软件。
+
+表格这处另有三点必须覆盖（都是 Crepe 默认行为，不覆盖就仍是「另一个软件」）：
+- 图标 fill 默认走 `--crepe-color-outline`（= `--hue-border-subtle`），比块手柄的 `t2` **暗一档**；
+- 弹出条默认是**实心** `--crepe-color-surface`，而另三处浮层都是玻璃（`.glass` 同款）；
+- 按钮 hover 时圆角由 `4px` **跳到** `8px`，观感像「抖了一下」——改成恒定圆角 + 底色反馈。
+⚠️ 列/行手柄本体必须保留 `cursor: grab`（它是拖拽把手），**不能被「有 title 就给 pointer」
+的统一规则抢掉** —— 故规则写成 `[data-role$='-drag-handle']` 优先级更高、显式覆盖回 grab/grabbing。
+
+顺手补齐：图谱控制条分段按钮的 `title`/`aria-label`（原先只有图标按钮有）、
+标题栏编辑模式切换、快照面板与 diff 面板的视图切换 pill —— 全部补 `title` + `aria-label` + `aria-pressed`，
+并把图谱 hover 的 `var(--hue-highlight, rgba(127,127,127,.1))` 换成 `var(--bg-hover)`
+（那个硬编码灰兜底是死代码，但不符合「hover 一律走 --bg-hover / --hue-active」的约定）。
+
+⚠️ **刻意不改的两处**（有明确设计意图，改了反而更差）：
+`ActivityBar` 的 `.act__btn` 与 `.vbtn` 类 pill —— 它们的 `--hue-text-3` 是**未激活态**，
+用来让「当前视图」的 accent 高亮跳出来（VS Code 式侧栏语义）。把它们提亮到 `t2`
+会压平激活/未激活的对比。**「统一」不等于「所有地方同一个色号」**，
+判断依据是「这个 dim 是不是在承担状态表达」。
+
+### 5.40.3 全库盘点：同类「裸元素 + 视觉不同源」的清点与收口
+
+第四处托盘修完后做了一次**穷尽盘点**（这是 §5.40.2 教训的正式落地，不再靠「我记得」），
+范围覆盖 Crepe 全部 12 个 feature 目录、`@milkdown/components/lib/**` 全部组件、
+`src/**/*.vue` 全部 45 个组件、`src/styles/*.css`。结论：**第四处不是孤例，是模板中最完整的一处。**
+
+盘点结果（按用户可感知度排序）：
+
+| 位置 | 问题 | 处置 |
+| --- | --- | --- |
+| 链接预览浮层：打开/编辑/移除链接 | 是 `<span class="milkdown-icon button …">`，**连 `role` 都没有**，读屏完全不可达；图标沿用 5.5% 白 | ✅ 已修（`decorateInlineTrays` + 补 `role="button"`/`tabindex` + 统一图标亮度） |
+| 链接编辑浮层：确认 | 同上（span 无 role） | ✅ 已修（同一条链路） |
+| 图片块：上传 / 确认 / 切说明 | 裸 `<label>` 与裸 `<div>`，无 title 无 aria | ✅ 已修（同一条链路） |
+| 行内图片：上传 / 确认 | 同上 | ✅ 已修（同一条链路） |
+| `ElementEditPopover`：关闭钮 + 次级按钮 | `color: t3`（比托盘暗一档）+ 两处硬编码 `rgba(127,127,127,…)` 灰兜底 | ✅ 已修（t2/0.9 + `--hue-active`/`--bg-hover`） |
+| `IntegrityPanel` / `LinkCheckPanel` 的语义徽章 | 写死 `#5fa8a0` / `#6a8caf` / `#b08968`，换皮肤不变色 | ✅ 已修（改用 `--hue-accent` + `color-mix` 派生，保留三色可分性） |
+| `GraphView` 控制条 / 左下提示条 | 自带 `backdrop-filter: blur(10px)`，与全局 `--material-blur`(28px) **不同源**，玻璃质感有可感差异 | ✅ 已修（删掉本地声明，材质全部交 `.glass`） |
+| 代码块「预览/编辑切换」 | 无名 `<button class="preview-toggle-button">`；且**项目已传 `previewToggleText` 却没被 Crepe 消费**（Crepe 把它当图标名用，文本渲染成空白） | ✅ 已修（`decorateInlineTrays` 补 `title`/`aria-label`/`role`，CSS 统一 hover 底 + 6px 圆角；宿主 `setupTrayObserver` 守「纯交互触发才出现」的浮层） |
+| 语言选择器搜索框的「清空」 | 裸 `<div class="clear-icon">`，无 title 无 aria，且是 `<div>` 无 role | ✅ 已修（同一条链路：补 `role="button"` + 文案；hover `--hue-active` 底，原本 Crepe 零 hover 反馈） |
+| slash 菜单项 | 有可见文字 label，可用性不受影响 | ➖ 不改（补 `role=menuitem` 收益极低） |
+| top-bar / AI / latex 浮层 | — | ➖ 不改：项目均**未启用**或该浮层已被我们整体隐藏接管 |
+
+⚠️ **本轮方法论**：盘点不是「读代码猜」，而是三层交叉验证 ——
+① 在 `node_modules` 里搜 `h("button"` / `h("div", {class…})` 找裸可点元素；
+② 在 `src/**/*.vue` 里反查 icon-only 按钮是否已带 `title`;
+③ 在 CSS 里搜硬编码颜色与 `--crepe-color-*` 残留。
+⚠️ **且子代理给的报告必须自己复核**：本轮报告的行号全部实测过（`link-tooltip/index.js` 的 4 处
+`class: "button …"`、`image-block/index.js` 的 3 处、`image-inline/index.js` 的 2 处、以及各 CSS 行号），
+未复核的结论不得写进清单。
+
+### 5.40.4 回归
+
+`test-core` 药丸托盘相关共五段：`[J6]` 8 条（块手柄）、`[J7]` 10 条（符号表）、`[J8]` 20 条（表格手柄）、
+`[J9]` **24 条**（图片/链接/**代码块**共 10 处全量命中 + 链接浮层三枚 + 清空图标 + 预览切换按钮
+**均须补 `role="button"`** + 幂等 + 空安全 + 部分命中计数 + 代码块两处各自独立命中 + 文案缺失不写 title 负向对照）。
+守卫**均已做注入故障验证**：`[J7]` 把 `\frac{}{}` 的 label/tip 退回 LaTeX 字面量 → 2 条报红；
+`[J8]` 把 `alignLeft`/`alignCenter` 对调 → 6 条报红；`[J9]` 注入两种故障 —— 删掉清空图标选择器 → 4 条报红 /
+把 `removeLink` 文案置空 → 4 条报红；全部还原后恢复全绿。总数 **330 → 392**。
+
+**⚠️ 本轮新增的关键教训（第五处托盘）：**
+- **「配置项存在 ≠ 被消费」**：项目早就传了 `previewToggleText`，但 Crepe 的 `code-block` 组件把
+  `previewToggleButton()` 的返回值**当图标名**塞进 `h(Icon, {icon})`，于是文本被当成找不到的图标渲染成空白——
+  这是上游的用法错配，**文案只能从 DOM 层补，不能靠配置项**。盘点时若只看到「有配置项」就放过，会漏掉这处。
+- **「按需创建的浮层」必须靠观察器守**：代码块切换按钮仅当该块有预览才建、语言清空图标仅当输入框非空才现、
+  图片/链接浮层同理——它们既不在 `create()` 也不在 `markdownUpdated` 上，**纯交互触发**，两处都够不着。
+  故在宿主侧加了 `setupTrayObserver`（subtree+childList，`queueMicrotask` 合并、只在新增元素节点时触发、
+  幂等覆盖、卸载时 disconnect），与 `markdownUpdated` 的装饰调用同源。
 
 ## 附录 A：开工前必做的环境配置
 

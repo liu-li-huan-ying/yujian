@@ -22,7 +22,7 @@ import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
 import { highlightSchema, inlineMarkInputRules, subSchema, supSchema } from './features/inlineMarks'
 import { remarkInlineMarks } from './features/inlineMarksSyntax'
 import { beginIngest, createIngestPlugin } from './features/ingestGate'
-import { decorateBlockHandles } from './features/trayLabels'
+import { decorateBlockHandles, decorateTableHandles, decorateInlineTrays } from './features/trayLabels'
 import {
   mathInlineNodeViewPlugin,
   renderMathBlockPreview,
@@ -78,6 +78,8 @@ const emit = defineEmits<{
 const host = ref<HTMLDivElement | null>(null)
 let crepe: Crepe | null = null
 let imgObserver: MutationObserver | null = null
+/** 药丸托盘观察器：见 setupTrayObserver（守「浮层一出现就补提示」） */
+let trayObserver: MutationObserver | null = null
 /**
  * 留存中的 frontmatter 块（`---\n...\n---`，LF 归一）。Crepe 没有 remark-frontmatter，
  * 序列化会把 YAML 头整段丢干净——这正是「打开内容地图，过一会 MOC 标记丢失、重开也读不到」
@@ -399,6 +401,51 @@ function setupImageResolver(): void {
 }
 
 /**
+ * 药丸托盘「出现即补提示」的兜底观察器。
+ *
+ * 为什么必须有它：`decorateInlineTrays` 覆盖的 10 处里，有多处是**按需渲染**的浮层 ——
+ * 代码块的「预览/编辑切换」仅当该块有预览时才建；语言下拉的「清空」仅当输入框非空时才出现；
+ * 图片上传预览、链接悬停浮层同理。`create()` 之后补一次只能覆盖「此刻已存在」的节点，
+ * `markdownUpdated` 也只能覆盖「随文档变化的」，而**纯交互触发的浮层**（点开语言下拉）
+ * 两处都够不着 —— 于是那些按钮始终没提示。
+ *
+ * 实现要点：
+ *  - 回调里只做「安排一次微任务」：DOM 变动可能连续来几十条，逐条调用 querySelector 既浪费
+ *    又可能读到中间态，故用 `queueMicrotask` 合并成每轮一次。
+ *  - 只在**新增了元素节点**时触发，属性变动不触发（避免自己 setAttribute 引起自激循环）。
+ *  - 幂等：装饰函数只覆盖同样的值，重复跑无副作用。
+ */
+function setupTrayObserver(): void {
+  if (!host.value) return
+  let scheduled = false
+  trayObserver = new MutationObserver((mutations) => {
+    let added = false
+    for (const mu of mutations) {
+      if (mu.type === 'childList' && mu.addedNodes.length > 0) {
+        // 只在新增的是「元素」时才算数：文本节点变动与我们无关
+        for (const n of Array.from(mu.addedNodes)) {
+          if (n.nodeType === 1) {
+            added = true
+            break
+          }
+        }
+      }
+      if (added) break
+    }
+    if (!added || scheduled) return
+    scheduled = true
+    queueMicrotask(() => {
+      scheduled = false
+      if (!host.value) return
+      // 直接用 i18n（此函数在 init 之外，拿不到 init 内的局部 L），保证切语言后取到的是新文案
+      decorateTableHandles(host.value, i18n.blockEdit.tableHandle)
+      decorateInlineTrays(host.value, i18n.blockEdit.inlineTray)
+    })
+  })
+  trayObserver.observe(host.value, { subtree: true, childList: true })
+}
+
+/**
  * Ctrl/⌘+点击链接 → 用系统默认浏览器打开（普通点击不拦截，保持可编辑）。
  * 仅处理 http(s) 链接；锚点 / 文档内跳转 / 相对路径交由编辑器自身处理。
  */
@@ -562,6 +609,10 @@ async function init(defaultValue?: string): Promise<void> {
     listener.markdownUpdated((_ctx, markdown) => {
       // 序列化结果只是正文；拼回留存的 frontmatter 再向上 emit，保证保真层与磁盘内容带 YAML 头
       emit('update:modelValue', reattachFrontmatter(currentFrontmatter, markdown, currentSep))
+      // 表格节点是按需创建的：新插入的表格其手柄此刻才存在，故在文档变化后补一次语言提示。
+      // 本就存在的表格会被幂等覆盖成同样的值，无副作用；不在这里判脏、不碰保存链路。
+      decorateTableHandles(host.value, L.blockEdit.tableHandle)
+      decorateInlineTrays(host.value, L.blockEdit.inlineTray)
     })
   })
 
@@ -639,7 +690,18 @@ async function init(defaultValue?: string): Promise<void> {
   // 块操作手柄补语言提示：Crepe 的手柄是裸 div（无 title / aria-label），
   // 与行内工具条的语言提示待遇不一致。手柄整个生命周期只建一次，故此处补一次即可。
   decorateBlockHandles(host.value, { add: L.blockEdit.handleAdd, drag: L.blockEdit.handleDrag })
+  // 表格手柄药丸托盘的同一待遇：Crepe 只给图标不给文案，故按同一张表补齐。
+  // 注意：表格节点是**按需创建**的（插入表格时才 new TableNodeView），
+  // 故此处补的是「此刻已存在的表格」；新建表格由 watch 在文档变化后补一次。
+  decorateTableHandles(host.value, L.blockEdit.tableHandle)
+  // 图片块 / 链接浮层上的裸图标按钮：同样只给图标、且链接浮层那几枚连 role 都没有。
+  // 这两处浮层也是按需创建的（图片上传预览、悬停链接时才出现），故 create() 后补一次不够，
+  // 由下游 watch + 浮层挂载时机兜底（见 markdownUpdated 与下面的 MutationObserver）。
+  decorateInlineTrays(host.value, L.blockEdit.inlineTray)
   setupImageResolver()
+  // 药丸托盘兜底：图片预览、链接悬停、代码块工具条、语言下拉这些**纯交互触发**的浮层，
+  // 出现时机既不在 create() 也不在 markdownUpdated 上，只能靠观察器守（详见函数注释）。
+  setupTrayObserver()
   // Ctrl/⌘+点击链接跳转：普通点击保持可编辑，仅修饰键按下时打开外部浏览器
   host.value?.addEventListener('click', onEditorClick)
   // 脚注双向跳转（点引用跳定义、点定义 dt 跳回引用）
@@ -660,6 +722,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   imgObserver?.disconnect()
   imgObserver = null
+  trayObserver?.disconnect()
+  trayObserver = null
   host.value?.removeEventListener('click', onEditorClick)
   host.value?.removeEventListener('click', onFootnoteClick)
   host.value?.removeEventListener('click', onWikilinkClick)

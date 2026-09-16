@@ -23,6 +23,9 @@
  *  J4. 序列化损坏检测 —— frontmatter 变 *** / 双链被转义 / 正常文档不误报（electron/main/corruptionDetect.ts）
  *  J5. 灌入门闩 —— 程序化灌入不回显、用户编辑照常回显（src/editor/features/ingestGate.ts）
  *  J6. 药丸托盘语言提示 —— 块操作手柄补齐 title/aria-label（src/editor/features/trayLabels.ts）
+ *  J7. 公式符号表 —— 每个符号须有字形 label 与人话 tip（src/utils/mathSymbols.ts）
+ *  J8. 药丸托盘语言提示 —— 表格手柄弹出条 + 细线增行增列补齐 title/aria-label
+ *  J9. 药丸托盘语言提示 —— 图片块 / 链接浮层 / 代码块的裸图标按钮（同上文件）
  *  K. 标签页重映射 —— 文件夹移动按前缀整体改写（src/store/tabs.ts）
  *  L. 关系图谱派生 —— 节点 / 边由索引派生，本地子图 BFS / 全局度降序截断（electron/main/vaultIndex.ts）
  *  M. 命令面板内核 —— 模糊匹配 + 命令目录（src/utils/fuzzy.ts, src/utils/commands.ts）
@@ -1309,6 +1312,328 @@ section('[J6] 药丸托盘语言提示 —— 块操作手柄补齐 title/aria-l
     check('手柄：找不到元素时返回 0 且不抛错', n === 0, `n=${n}`)
     const n2 = decorateBlockHandles(null, labels)
     check('手柄：root 为 null 时返回 0 且不抛错', n2 === 0, `n=${n2}`)
+  }
+}
+
+section('[J7] 公式符号表 —— 每个符号必须「有字形 + 有人话提示」（src/utils/mathSymbols.ts）')
+// 目的：守住用户截图反馈的那条 —— 符号按钮曾只显示 `\frac{}{}` 且 title 就是命令本身，
+// 悬停等于没提示。抽表 + 门禁后，谁再往表里塞一个缺 label/tip 的符号都会红。
+{
+  const { buildSymbolGroups, symbolTip, MAX_SYMBOLS_PER_GROUP } = await import(
+    (await bundle('src/utils/mathSymbols.ts', 'mathSymbols.mjs')).url
+  )
+  const names = { greek: '希腊', operators: '运算', structure: '结构', markup: '标注' }
+  const groups = buildSymbolGroups(names)
+
+  check('符号表：4 组', groups.length === 4, `n=${groups.length}`)
+  check(
+    '符号表：每组 ≤ 上限',
+    groups.every((g) => g.items.length <= MAX_SYMBOLS_PER_GROUP),
+    groups.map((g) => g.items.length).join(','),
+  )
+  check('符号表：分组名透传', groups.every((g) => typeof g.label === 'string' && g.label.length > 0))
+
+  const all = groups.flatMap((g) => g.items)
+  check('符号表：非空', all.length > 0, `n=${all.length}`)
+
+  // ① 每个符号都必须有人类可读提示（说人话，不能只是 LaTeX 字面量）
+  const noTip = all.filter((s) => !s.tip || s.tip.trim().length === 0)
+  check('符号表：每个符号都有 tip', noTip.length === 0, noTip.map((s) => s.cmd).join('|'))
+
+  // ② tip 不得等于 cmd 本身（那等于没写提示 —— 正是原 bug）
+  const tipIsCmd = all.filter((s) => s.tip.trim() === s.cmd.trim())
+  check('符号表：tip 不等于 cmd 本身', tipIsCmd.length === 0, tipIsCmd.map((s) => s.cmd).join('|'))
+
+  // ③ 显示字形必须存在，且不得是反斜杠开头的 LaTeX 命令（按钮上写 \alpha 就是没优化）
+  const badLabel = all.filter((s) => !s.label || s.label.trim().length === 0 || s.label.trim().startsWith('\\'))
+  check('符号表：label 是字形而非 LaTeX 命令', badLabel.length === 0, badLabel.map((s) => s.cmd).join('|'))
+
+  // ④ cmd 必须非空（否则点按钮什么都不插入）
+  const noCmd = all.filter((s) => !s.cmd || s.cmd.trim().length === 0)
+  check('符号表：每个符号都有 cmd', noCmd.length === 0)
+
+  // ⑤ cmd 不得重复（同一片段放两次是复制粘贴事故）
+  const cmds = all.map((s) => s.cmd)
+  check('符号表：cmd 无重复', new Set(cmds).size === cmds.length, `${cmds.length} vs ${new Set(cmds).size}`)
+
+  // ⑥ 悬停提示格式：`人话 · LaTeX 片段`，两者都要在
+  const tips = all.map((s) => symbolTip(s))
+  check(
+    '符号表：提示格式为「人话 · 片段」',
+    all.every((s, i) => tips[i] === `${s.tip} · ${s.cmd}`),
+    tips[0],
+  )
+}
+
+section('[J8] 药丸托盘语言提示 —— 表格手柄补齐 title/aria-label（src/editor/features/trayLabels.ts）')
+// 目的：守住第四处药丸托盘（表格列/行手柄弹出条）与另几处「语言提示待遇一致」。
+// Crepe 只暴露图标配置、**没有**任何文案字段，靠 decorateTableHandles 在 DOM 上补。
+// 关键风险是「顺序映射写错」——列手柄弹出条里 4 枚按钮是
+// [左对齐, 居中, 右对齐, 删列]，错位会把「删除本列」提示贴到对齐按钮上。
+// 故这里用带真实选择器语义的 DOM 桩，断言**每一枚**按钮拿到的是**对的那句**。
+{
+  /** 极简 DOM 桩：实现 querySelector / querySelectorAll / getAttribute / setAttribute */
+  function makeEl(attrs = {}, kids = {}) {
+    const store = { ...attrs }
+    return {
+      getAttribute: (k) => (k in store ? store[k] : null),
+      setAttribute: (k, v) => {
+        store[k] = String(v)
+      },
+      querySelector: (sel) => kids[sel] ?? null,
+      querySelectorAll: (sel) => kids[sel] ?? [],
+      _attrs: store,
+    }
+  }
+  /** 按 selector → 元素 的映射构造 root（未登记的 selector 一律返回 null，等价于结构变化） */
+  function makeRoot(map) {
+    return {
+      querySelector: (sel) => map[sel] ?? null,
+      querySelectorAll: () => [],
+    }
+  }
+
+  const { decorateTableHandles } = await import(
+    (await bundle('src/editor/features/trayLabels.ts', 'trayLabels.mjs')).url
+  )
+  const labels = {
+    dragCol: '拖拽移动本列',
+    dragRow: '拖拽移动本行',
+    alignLeft: '本列左对齐',
+    alignCenter: '本列居中对齐',
+    alignRight: '本列右对齐',
+    deleteCol: '删除本列',
+    deleteRow: '删除本行',
+    addRow: '在下方插入行',
+    addCol: '在右侧插入列',
+  }
+
+  const COL_SEL = ".milkdown-table-block .cell-handle[data-role='col-drag-handle']"
+  const ROW_SEL = ".milkdown-table-block .cell-handle[data-role='row-drag-handle']"
+  const ADD_ROW_SEL = ".milkdown-table-block .line-handle[data-role='x-line-drag-handle'] .add-button"
+  const ADD_COL_SEL = ".milkdown-table-block .line-handle[data-role='y-line-drag-handle'] .add-button"
+
+  // 1) 正常结构：6 组元素各拿到对应文案，且列弹出条 4 枚按钮**顺序**必须对
+  {
+    const l = makeEl()
+    const c = makeEl()
+    const r = makeEl()
+    const dc = makeEl()
+    const col = makeEl({}, { '.button-group button': [l, c, r, dc] })
+    const dr = makeEl()
+    const row = makeEl({}, { '.button-group button': [dr] })
+    const addRow = makeEl()
+    const addCol = makeEl()
+    const root = makeRoot({
+      [COL_SEL]: col,
+      [ROW_SEL]: row,
+      [ADD_ROW_SEL]: addRow,
+      [ADD_COL_SEL]: addCol,
+    })
+
+    const n = decorateTableHandles(root, labels)
+    // 2 个手柄本体 + 4 列按钮 + 1 行按钮 + 2 细线按钮 = 9
+    check('表格手柄：补到 9 个元素', n === 9, `n=${n}`)
+    check('表格手柄：列手柄本体拿到「拖拽移动本列」', col._attrs['aria-label'] === labels.dragCol, col._attrs['aria-label'])
+    check('表格手柄：行手柄本体拿到「拖拽移动本行」', row._attrs['aria-label'] === labels.dragRow, row._attrs['aria-label'])
+    // 顺序映射是本节的核心回归点
+    check('表格手柄：第 1 枚 = 左对齐', l._attrs['aria-label'] === labels.alignLeft, l._attrs['aria-label'])
+    check('表格手柄：第 2 枚 = 居中对齐', c._attrs['aria-label'] === labels.alignCenter, c._attrs['aria-label'])
+    check('表格手柄：第 3 枚 = 右对齐', r._attrs['aria-label'] === labels.alignRight, r._attrs['aria-label'])
+    check('表格手柄：第 4 枚 = 删除本列（顺序未错位）', dc._attrs['aria-label'] === labels.deleteCol, dc._attrs['aria-label'])
+    check('表格手柄：行弹出条 = 删除本行', dr._attrs['aria-label'] === labels.deleteRow, dr._attrs['aria-label'])
+    check('表格手柄：细线 x = 在下方插入行', addRow._attrs['aria-label'] === labels.addRow, addRow._attrs['aria-label'])
+    check('表格手柄：细线 y = 在右侧插入列', addCol._attrs['aria-label'] === labels.addCol, addCol._attrs['aria-label'])
+    check('表格手柄：title 与 aria-label 同源', col._attrs.title === labels.dragCol && dc._attrs.title === labels.deleteCol)
+    check('表格手柄：补上 button 语义便于读屏聚焦', l._attrs.role === 'button' && addRow._attrs.role === 'button')
+  }
+
+  // 2) 幂等：重复调用只覆盖同值，不叠加
+  {
+    const l = makeEl()
+    const col = makeEl({}, { '.button-group button': [l, makeEl(), makeEl(), makeEl()] })
+    const root = makeRoot({ [COL_SEL]: col })
+    decorateTableHandles(root, labels)
+    decorateTableHandles(root, labels)
+    check('表格手柄：重复打标签幂等', l._attrs['aria-label'] === labels.alignLeft, l._attrs['aria-label'])
+  }
+
+  // 3) 负向对照：结构变化时必须静默跳过，绝不抛错炸掉编辑器初始化
+  {
+    const n = decorateTableHandles(makeRoot({}), labels)
+    check('表格手柄：找不到表格时返回 0 且不抛错', n === 0, `n=${n}`)
+    const n2 = decorateTableHandles(null, labels)
+    check('表格手柄：root 为 null 时返回 0 且不抛错', n2 === 0, `n=${n2}`)
+  }
+
+  // 4) 只有列手柄（无行手柄/细线）时也要能单独生效，且计数正确
+  {
+    const l = makeEl()
+    const col = makeEl({}, { '.button-group button': [l, makeEl(), makeEl(), makeEl()] })
+    const n = decorateTableHandles(makeRoot({ [COL_SEL]: col }), labels)
+    check('表格手柄：缺其它组时仍按存在的组计数', n === 5, `n=${n}`)
+  }
+
+  // 5) 按钮缺失：某组按钮少一枚时不得抛错，且已存在的仍被标注
+  {
+    const l = makeEl()
+    const col = makeEl({}, { '.button-group button': [l] })
+    const n = decorateTableHandles(makeRoot({ [COL_SEL]: col }), labels)
+    check('表格手柄：按钮少于预期时不抛错且已存在的被标注', n === 2, `n=${n}`)
+    check('表格手柄：仅有的那枚拿到第 1 个文案', l._attrs['aria-label'] === labels.alignLeft)
+  }
+
+  // 6) 负向对照：文案为空串时不得写入空 title（空 title 会毁掉浏览器原生气泡）
+  {
+    const l = makeEl()
+    const col = makeEl({}, { '.button-group button': [l] })
+    const empty = { ...labels, alignLeft: '' }
+    const n = decorateTableHandles(makeRoot({ [COL_SEL]: col }), empty)
+    check('表格手柄：文案为空时不写入空 title', l._attrs.title === undefined, String(l._attrs.title))
+    check('表格手柄：文案为空时不计入计数', n === 1, `n=${n}`)
+  }
+}
+
+section('[J9] 药丸托盘语言提示 —— 图片块 / 链接浮层 / 代码块的裸图标按钮（src/editor/features/trayLabels.ts）')
+// 目的：守住「只长着图标的小按钮」这个更大的集合。
+// 这几处比表格更隐蔽：
+//   · 链接预览浮层的三枚是 `<span class="milkdown-icon button …">`，**连 role 都没有**，
+//     读屏完全不可达 —— 只加 title 是不够的；
+//   · 代码块语言搜索框的「清空」是 `<div class="clear-icon">`，同样没有 role；
+//   · 代码块的「预览/编辑切换」`<button class="preview-toggle-button">` 无 title/aria。
+// 断言重点是「按唯一 class 全量命中」，防止将来 Crepe 改了 class 后静默全漏。
+{
+  function makeEl(attrs = {}) {
+    const store = { ...attrs }
+    return {
+      getAttribute: (k) => (k in store ? store[k] : null),
+      setAttribute: (k, v) => {
+        store[k] = String(v)
+      },
+      _attrs: store,
+    }
+  }
+  /** selector → 元素；未登记的返回 null（等价于「Crepe 改了结构」） */
+  function makeRoot(map) {
+    return { querySelector: (sel) => map[sel] ?? null, querySelectorAll: () => [] }
+  }
+
+  const { decorateInlineTrays } = await import(
+    (await bundle('src/editor/features/trayLabels.ts', 'trayLabels.mjs')).url
+  )
+  const labels = {
+    upload: '上传本地图片',
+    confirm: '确认',
+    editCaption: '编辑图片说明',
+    openLink: '打开链接',
+    editLink: '编辑链接',
+    removeLink: '移除链接',
+    previewToggle: '切换预览 / 编辑',
+    clearSearch: '清空搜索',
+  }
+
+  // 选择器清单必须与实现一致；这里显式列出，作为「Crepe 改结构时会被发现」的锚点
+  const SEL = {
+    upload: '.milkdown-image-block .placeholder .uploader',
+    imgConfirm: '.milkdown-image-block .confirm',
+    inlineConfirm: '.milkdown-image-inline .confirm',
+    editCaption: '.milkdown-image-block .operation-item',
+    openLink: '.milkdown-link-preview .link-icon',
+    editLink: '.milkdown-link-preview .link-edit-button',
+    removeLink: '.milkdown-link-preview .link-remove-button',
+    linkConfirm: '.milkdown-link-edit .confirm',
+    previewToggle: '.milkdown-code-block .preview-toggle-button',
+    clearSearch: '.milkdown-code-block .clear-icon',
+  }
+
+  // 1) 全量命中：10 处各拿到对应文案
+  {
+    const els = Object.fromEntries(Object.entries(SEL).map(([k]) => [k, makeEl()]))
+    const map = {}
+    for (const [k, sel] of Object.entries(SEL)) map[sel] = els[k]
+    const n = decorateInlineTrays(makeRoot(map), labels)
+    check('图片/链接/代码块托盘：补到 10 个元素', n === 10, `n=${n}`)
+    check('图片/链接/代码块托盘：上传 = 「上传本地图片」', els.upload._attrs['aria-label'] === labels.upload)
+    check('图片/链接/代码块托盘：图片块确认 = 「确认」', els.imgConfirm._attrs['aria-label'] === labels.confirm)
+    check('图片/链接/代码块托盘：行内图确认 = 「确认」', els.inlineConfirm._attrs['aria-label'] === labels.confirm)
+    check('图片/链接/代码块托盘：切说明 = 「编辑图片说明」', els.editCaption._attrs['aria-label'] === labels.editCaption)
+    check('图片/链接/代码块托盘：打开链接', els.openLink._attrs['aria-label'] === labels.openLink)
+    check('图片/链接/代码块托盘：编辑链接', els.editLink._attrs['aria-label'] === labels.editLink)
+    check('图片/链接/代码块托盘：移除链接', els.removeLink._attrs['aria-label'] === labels.removeLink)
+    check('图片/链接/代码块托盘：链接编辑确认', els.linkConfirm._attrs['aria-label'] === labels.confirm)
+    check(
+      '图片/链接/代码块托盘：预览切换按钮有提示',
+      els.previewToggle._attrs['aria-label'] === labels.previewToggle,
+    )
+    check(
+      '图片/链接/代码块托盘：语言搜索清空有提示',
+      els.clearSearch._attrs['aria-label'] === labels.clearSearch,
+    )
+    // 关键：链接浮层那三枚是 span，必须补上可点语义
+    check(
+      '图片/链接/代码块托盘：链接浮层三枚补上 button 语义（原本是裸 span）',
+      els.openLink._attrs.role === 'button' &&
+        els.editLink._attrs.role === 'button' &&
+        els.removeLink._attrs.role === 'button',
+    )
+    // 清空图标是 <div>，与链接浮层同类问题（无 role）
+    check(
+      '图片/链接/代码块托盘：语言搜索清空补上 button 语义（原本是裸 div）',
+      els.clearSearch._attrs.role === 'button',
+    )
+    check(
+      '图片/链接/代码块托盘：预览切换补上 button 语义',
+      els.previewToggle._attrs.role === 'button',
+    )
+    check('图片/链接/代码块托盘：title 与 aria-label 同源', els.openLink._attrs.title === labels.openLink)
+  }
+
+  // 2) 幂等
+  {
+    const el = makeEl()
+    const root = makeRoot({ [SEL.openLink]: el })
+    decorateInlineTrays(root, labels)
+    decorateInlineTrays(root, labels)
+    check('图片/链接/代码块托盘：重复打标签幂等', el._attrs['aria-label'] === labels.openLink)
+  }
+
+  // 3) 负向对照：结构变化 / 空 root 必须静默跳过
+  {
+    check('图片/链接/代码块托盘：找不到元素时返回 0 且不抛错', decorateInlineTrays(makeRoot({}), labels) === 0)
+    check('图片/链接/代码块托盘：root 为 null 时返回 0 且不抛错', decorateInlineTrays(null, labels) === 0)
+  }
+
+  // 4) 部分存在时按命中数计数（缺的那几处不该让整批失败）
+  {
+    const el = makeEl()
+    const n = decorateInlineTrays(makeRoot({ [SEL.removeLink]: el }), labels)
+    check('图片/链接/代码块托盘：仅命中一处时计数为 1', n === 1, `n=${n}`)
+  }
+
+  // 5) 文案为空时不写空 title
+  {
+    const el = makeEl()
+    const n = decorateInlineTrays(makeRoot({ [SEL.openLink]: el }), { ...labels, openLink: '' })
+    check('图片/链接/代码块托盘：文案为空时不写入空 title', el._attrs.title === undefined, String(el._attrs.title))
+    check('图片/链接/代码块托盘：文案为空时不计入计数', n === 0, `n=${n}`)
+  }
+
+  // 6) 代码块新增的两处也各自独立：只传它们、其余缺失时仍应命中
+  {
+    const toggle = makeEl()
+    const clear = makeEl()
+    const map = { [SEL.previewToggle]: toggle, [SEL.clearSearch]: clear }
+    const n = decorateInlineTrays(makeRoot(map), labels)
+    check('图片/链接/代码块托盘：仅代码块两处存在时命中 2', n === 2, `n=${n}`)
+    // 负向对照：文案漏传时该处不计入（证明「不传就补不上」这条链路真的生效）。
+    // 用全新元素，避免复用上一轮已被打上标签的实例而掩盖问题。
+    const clear2 = makeEl()
+    const n2 = decorateInlineTrays(
+      makeRoot({ [SEL.previewToggle]: toggle, [SEL.clearSearch]: clear2 }),
+      { ...labels, clearSearch: undefined },
+    )
+    check('图片/链接/代码块托盘：清空文案缺失时只命中 1', n2 === 1, `n=${n2}`)
+    check('图片/链接/代码块托盘：清空文案缺失时不写 title', clear2._attrs.title === undefined)
   }
 }
 

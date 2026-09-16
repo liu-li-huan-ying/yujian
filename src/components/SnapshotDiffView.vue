@@ -78,9 +78,29 @@ onBeforeUnmount(() => {
         <b class="stat--del">−{{ stats.del }}</b>
       </span>
       <span v-if="hasDiff" class="diff__src" :title="L.snapshotPickTip">{{ L.snapshotDiffSource.replace('{src}', source) }}</span>
-      <span class="diff__views" v-if="hasDiff">
-        <button type="button" class="vbtn vbtn--mini" :class="{ on: view === 'unified' }" @click="emit('update:view', 'unified')">{{ L.snapshotViewUnified }}</button>
-        <button type="button" class="vbtn vbtn--mini" :class="{ on: view === 'split' }" @click="emit('update:view', 'split')">{{ L.snapshotViewSplit }}</button>
+      <span class="diff__views" v-if="hasDiff" role="group" :aria-label="L.snapshotViews">
+        <button
+          type="button"
+          class="vbtn vbtn--mini"
+          :class="{ on: view === 'unified' }"
+          :title="L.snapshotViewUnifiedHint"
+          :aria-label="L.snapshotViewUnifiedHint"
+          :aria-pressed="view === 'unified'"
+          @click="emit('update:view', 'unified')"
+        >
+          {{ L.snapshotViewUnified }}
+        </button>
+        <button
+          type="button"
+          class="vbtn vbtn--mini"
+          :class="{ on: view === 'split' }"
+          :title="L.snapshotViewSplitHint"
+          :aria-label="L.snapshotViewSplitHint"
+          :aria-pressed="view === 'split'"
+          @click="emit('update:view', 'split')"
+        >
+          {{ L.snapshotViewSplit }}
+        </button>
       </span>
       <button v-if="mode === 'ab'" type="button" class="diff__clear" :title="L.snapshotClearCompare" @click="emit('clear')">
         <Icon name="x" :size="12" />

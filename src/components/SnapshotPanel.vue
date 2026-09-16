@@ -214,11 +214,27 @@ function fmtTime(ts: number): string {
     <header class="snap__head">
       <span class="snap__title">{{ L.snapshots }}</span>
       <span class="snap__count">{{ L.snapshotCount.replace('{n}', String(snapshots.branchList.length)) }}</span>
-      <span class="snap__views">
-        <button type="button" class="vbtn" :class="{ on: view === 'list' }" @click="view = 'list'">
+      <span class="snap__views" role="group" :aria-label="L.snapshotViews">
+        <button
+          type="button"
+          class="vbtn"
+          :class="{ on: view === 'list' }"
+          :title="L.snapshotViewListHint"
+          :aria-label="L.snapshotViewListHint"
+          :aria-pressed="view === 'list'"
+          @click="view = 'list'"
+        >
           {{ L.snapshotViewList }}
         </button>
-        <button type="button" class="vbtn" :class="{ on: view === 'timeline' }" @click="view = 'timeline'">
+        <button
+          type="button"
+          class="vbtn"
+          :class="{ on: view === 'timeline' }"
+          :title="L.snapshotViewTimelineHint"
+          :aria-label="L.snapshotViewTimelineHint"
+          :aria-pressed="view === 'timeline'"
+          @click="view = 'timeline'"
+        >
           {{ L.snapshotViewTimeline }}
         </button>
       </span>

@@ -207,7 +207,34 @@ Phase 3 结束后，面板数量将从 7 个涨到 15+。若沿用「新增功�
 | 代码块 | 全宽专注编辑区（可展开为浮层），顶部语言下拉 + 复制按钮；行号可开关；**语法高亮与编辑区内完全一致**（避免割裂）                               |
 | 公式  | 上半 LaTeX 源码输入（等宽 14px），下半实时预览；常用符号工具条（分 4 组，每组 ≤8 个）；底部显示 `\label` 与编号状态                |
 
-**状态**：工具条按钮 28×28，默认 `--hue-text-3`、hover `--hue-text-1`、active `--hue-accent`、disabled opacity .4；危险操作（删除表格/列）用 `--hue-danger` 且需二次确认。
+**公式符号条（§4.4 三级规格，2026-09-16 补）**：按钮显示**视觉字形**而非 LaTeX 命令
+（`α` / `×` / `a/b` / `√`，不是 `\alpha` / `\frac{}{}`）；`title` 与 `aria-label` 取
+**「人话 · 片段」**（如 `分数 · \frac{}{}`）——既一眼认出、又能顺带学语法。
+符号表在 `src/utils/mathSymbols.ts`（纯数据，`[J7]` 门禁保证「每个符号都有字形 + 人话提示，
+且 tip ≠ cmd 本身」，防止退回「悬停只有 `\frac{}{}`」）。
+
+**状态**：工具条按钮 28×28，默认 `--hue-text-2` / opacity .9、hover `--hue-active` 底 + `--hue-accent` 字、
+active `--hue-accent`、disabled opacity .4；危险操作（删除表格/列）用 `--hue-danger` 且需二次确认。
+⚠️ 这一套「图标亮度 + hover 语义」在编辑区**所有药丸托盘**必须完全一致，见 ARCHITECTURE §5.40.2 / §5.40.3。
+
+**表格手柄弹出条 + 图片/链接浮层小按钮（2026-09-16 补，见 ARCHITECTURE §5.40.2 / §5.40.3）**：
+- **表格列/行手柄弹出条**：图标 22×22、默认 `--hue-text-2` / opacity .9，hover `--hue-active` 底 + accent 图标；
+  弹出条本体是玻璃（`.glass` 同款），**不再用 Crepe 默认的实心面**；按钮圆角**恒定 6px**
+  （Crepe 默认 hover 会从 4px 跳到 8px，观感像「抖一下」）。
+  ⚠️ 手柄本体（`[data-role$='-drag-handle']`）必须保留 `cursor: grab`，不能被「有 title 就给 pointer」的统一规则抢掉。
+- **图片块 / 链接浮层的裸图标按钮**：同一套亮度与 hover 语义（`--hue-text-2`/0.9 → `--hue-active` + accent）。
+  ⚠️ 链接预览浮层的三枚在 DOM 里是 `<span>`，由 `decorateInlineTrays` 补 `role="button"` + `tabindex`
+  —— 这是**可访问性语义**修复，不只是加提示。
+- **代码块工具条的两枚裸图标按钮（2026-09-16 补，见 ARCHITECTURE §5.40.3）**：
+  - 右上角「预览/编辑切换」`<button class="preview-toggle-button">`：Crepe 把 `previewToggleText`
+    **当图标名**用、文本渲染成空白，故文案只能从 DOM 层补；CSS 把图标统一到 `--hue-text-2`/0.9 +
+    hover `--hue-active` 底（Crepe 默认**零 hover 反馈**，是本处最明显缺失），首尾胶囊圆角压回 6px。
+  - 语言下拉搜索框「清空」`<div class="clear-icon">`：是 `<div>`、**无 role**，与链接浮层同类问题，由
+    `decorateInlineTrays` 补 `role="button"` + `title`/`aria-label`；hover 同款 `--hue-active` 底。
+  - ⚠️ 这两枚都是**纯交互触发才出现**的浮层（切换钮仅当块有预览、清空仅当输入框非空），`create()` 与
+    `markdownUpdated` 都够不着 —— 由宿主侧 `setupTrayObserver`（subtree+childList + `queueMicrotask`
+    合并、新增元素节点才触发、幂等、卸载 disconnect）守「出现即补」，与 `markdownUpdated` 装饰调用同源。
+- 上述所有语言提示的单一来源是 `src/editor/features/trayLabels.ts`（纯 DOM 逻辑，被 `[J6]`/`[J8]`/`[J9]` 守护）。
 
 ### 4.5 完整性自检 / 备份 / lint（任务型浮层）
 

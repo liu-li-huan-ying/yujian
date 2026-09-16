@@ -433,16 +433,21 @@ defineExpose({ refresh: run })
   line-height: 1.4;
   padding: 1px 6px;
   border-radius: 999px;
-  color: #fff;
+  color: var(--hue-on-accent);
 }
+/* 三枚徽章是**语义分类码**（双链 / 普通链接 / 图片），刻意用三种色相区分。
+   但色相不能写死：写死 #6a8caf/#5fa8a0/#b08968 会让换皮肤后徽章卡在旧颜色上，
+   与面板其它部分不同源。做法是「以强调色为基准、用 color-mix 调色相」——
+   主分类（普通链接）直接用 --hue-accent 本身，另两类各偏一档，
+   于是整组徽章随皮肤走，且仍保持相互可辨。 */
 .row__kind--wikilink {
-  background: #6a8caf;
+  background: color-mix(in srgb, var(--hue-accent) 62%, #6a8caf);
 }
 .row__kind--mdlink {
-  background: #5fa8a0;
+  background: var(--hue-accent);
 }
 .row__kind--image {
-  background: #b08968;
+  background: color-mix(in srgb, var(--hue-accent) 40%, #b08968);
 }
 
 .row__body {

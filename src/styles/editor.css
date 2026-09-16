@@ -319,6 +319,136 @@
   border-bottom-right-radius: var(--radius-md);
 }
 
+/* ── 表格药丸托盘（列/行手柄 + 其弹出条 + 细线增行增列）视觉统一 ──
+   这是编辑区**第四处**药丸托盘（前三处：块操作手柄、行内工具条、公式符号条），
+   语言提示的补齐见 src/editor/features/trayLabels.ts 的 decorateTableHandles。
+   Crepe 默认这套手柄走 `--crepe-color-*`：
+     · 图标 fill = --crepe-color-outline（= --hue-border-subtle），**比块手柄的
+       --hue-text-2 暗一档** → 同一屏里几处托盘亮度不一致，这正是用户说的「没变化」；
+     · hover 底 = --crepe-color-hover（--bg-hover，几乎无色的白 5%），
+       与块手柄/行内工具条的 --hue-active（accent 16% 底 + accent 图标）不是一套语言；
+     · 按钮 hover 还把圆角从 4px 跳到 8px，观感像「抖了一下」。
+   故此处整体改写成与另几处托盘同源的材质：t2/0.9 图标、--hue-active 底、
+   accent 图标、圆角恒定、过渡曲线同 --dur-fast/--ease。 */
+.milkdown .milkdown-table-block .cell-handle {
+  background-color: var(--hue-surface);
+  box-shadow: var(--hue-shadow-1);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-table-block .cell-handle:hover {
+  background-color: var(--hue-active);
+}
+/* 展开弹出条时本体回到中性面：否则整条胶囊都在 accent 底上，像被按下未弹起 */
+.milkdown .milkdown-table-block .cell-handle:has(.button-group:hover),
+.milkdown .milkdown-table-block .cell-handle:has(.button-group:not([data-show='false'])) {
+  background-color: var(--hue-surface);
+}
+.milkdown .milkdown-table-block .cell-handle svg,
+.milkdown .milkdown-table-block .line-handle .add-button svg {
+  fill: var(--hue-text-2);
+  opacity: 0.9;
+  transition:
+    fill var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+/* 本体自身被悬停时才点亮 accent；若在弹出条内悬停，本体只作底衬（见下条） */
+.milkdown .milkdown-table-block .cell-handle:hover:not(:has(.button-group:hover)) svg {
+  fill: var(--hue-accent);
+  opacity: 1;
+}
+
+/* 弹出条：与全局 .glass 同款玻璃，而不是 Crepe 默认的实心 --hue-surface。
+   位置/阴影/::after 的 8px 悬停缓冲带原样保留（那是 Crepe 的鼠标可达性设计）。 */
+.milkdown .milkdown-table-block .cell-handle .button-group {
+  background: rgba(32, 37, 38, 0.66);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 18px 48px rgba(0, 0, 0, 0.38);
+  /* 药丸托盘统一圆角：由 8px 提到与全局面板同源的 --radius-md */
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+}
+[data-skin][data-mode='light'] .milkdown .milkdown-table-block .cell-handle .button-group {
+  background: rgba(245, 248, 246, 0.78);
+  border: 1px solid rgba(20, 30, 28, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 18px 48px rgba(20, 30, 28, 0.18);
+}
+.milkdown .milkdown-table-block .cell-handle .button-group button {
+  margin: 3px;
+  border-radius: 6px;
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-radius var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-table-block .cell-handle .button-group button svg {
+  width: 22px;
+  height: 22px;
+  fill: var(--hue-text-2);
+  opacity: 0.9;
+  transition:
+    fill var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-table-block .cell-handle .button-group button:hover {
+  /* 圆角不再跳变：与块手柄同样的「底色 + 强调图标」反馈，忽略 Crepe 的 8px */
+  border-radius: 6px;
+  background: var(--hue-active);
+}
+.milkdown .milkdown-table-block .cell-handle .button-group button:hover svg {
+  fill: var(--hue-accent);
+  opacity: 1;
+}
+.milkdown .milkdown-table-block .cell-handle .button-group button:active {
+  background: var(--hue-active);
+}
+.milkdown .milkdown-table-block .cell-handle .button-group button:active svg {
+  fill: var(--hue-accent);
+  opacity: 1;
+}
+/* 补齐「语言提示」后的可发现性暗示：有 title 的按钮用 pointer 光标 */
+.milkdown .milkdown-table-block .cell-handle[title],
+.milkdown .milkdown-table-block .cell-handle .button-group button[title],
+.milkdown .milkdown-table-block .line-handle .add-button[title] {
+  cursor: pointer;
+}
+/* 手柄本体仍要保留抓取语义（拖拽列/行），不能被上面的 pointer 抢掉 */
+.milkdown .milkdown-table-block .cell-handle[data-role$='-drag-handle'] {
+  cursor: grab;
+}
+.milkdown .milkdown-table-block .cell-handle[data-role$='-drag-handle']:active {
+  cursor: grabbing;
+}
+
+/* 细线手柄（鼠标移到行/列缝隙时出现的「+」）：与药丸托盘同源材质 */
+.milkdown .milkdown-table-block .line-handle {
+  background-color: var(--hue-accent);
+}
+.milkdown .milkdown-table-block .line-handle .add-button {
+  background-color: var(--hue-surface);
+  box-shadow: var(--hue-shadow-1);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-radius var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-table-block .line-handle .add-button:hover {
+  background-color: var(--hue-active);
+}
+.milkdown .milkdown-table-block .line-handle .add-button:hover svg {
+  fill: var(--hue-accent);
+  opacity: 1;
+}
+.milkdown .milkdown-table-block .line-handle .add-button:active {
+  background-color: var(--hue-active);
+}
+
 /* ── 图片：圆角 + 发丝边，说明文字弱化为玉质 ── */
 .milkdown .milkdown-image-block > .image-wrapper img {
   border-radius: var(--radius-md);
@@ -358,12 +488,14 @@
    把手落到文字上），而是保留 floating-ui 算出的块左缘，仅用 transform
    向左挪 12px 形成与正文的呼吸缝。缩进块（列表）的手柄随之右移，
    始终在块左缘左侧 —— 视觉一致、永不遮字。 */
-/* ── 两处药丸托盘视觉统一 ─────────────────────
-   编辑区有两处「药丸托盘」：
+/* ── 药丸托盘视觉统一（共四处，必须同源）────────
+   编辑区有四处「药丸托盘」，材质与令牌必须同源（同一 `--hue-*` 家族、
+   同一圆角/阴影/过渡），否则在同一屏里并排出现会像两个不同软件：
    ① 块操作手柄（本段）—— 常驻在块左缘左侧的竖排胶囊：＋ 新增 / ⠿ 拖拽；
-   ② 行内工具条（下两段）—— 选中文字后浮出的横向胶囊：B/I/链接/公式…
-   二者材质与令牌必须同源（同一 `--hue-*` 家族、同一圆角/阴影/过渡），
-   否则在同一屏里并排出现会像两个不同软件。 */
+   ② 行内工具条（下两段）—— 选中文字后浮出的横向胶囊：B/I/链接/公式…；
+   ③ 公式符号条（MathEditPanel.vue 的 .yj-me-syms）—— 公式浮层里的符号按钮；
+   ④ 表格手柄弹出条（上方 .milkdown-table-block 段）—— 列/行手柄展开的对齐/删除条。
+   语言提示（title / aria-label）的补齐见 src/editor/features/trayLabels.ts。 */
 .milkdown .milkdown-block-handle {
   transform: translateX(-12px) !important;
   gap: 2px;
@@ -440,6 +572,119 @@
     0 18px 48px rgba(20, 30, 28, 0.18);
 }
 /* 菜单项 hover/选中沿用玉质令牌（Crepe 默认用 --crepe-color-*，已重映射） */
+
+/* ── 图片块与链接浮层上的裸图标按钮：与四处药丸托盘同源 ──
+   这两处（图片上传/确认/切说明、链接打开/编辑/删除）此前沿用 Crepe 默认：
+   `fill: --crepe-color-outline`（5.5% 白，几乎不可见）+ hover 白 5%。
+   语言提示的补齐见 trayLabels.ts 的 decorateInlineTrays —— 那几枚原本连 `title`
+   都没有，链接浮层那三枚更是 `<span>` 无 role，读屏完全不可达。
+   视觉这里统一为：t2/0.9 图标 → hover `--hue-active` 底 + accent 图标。 */
+.milkdown .milkdown-image-block .placeholder .uploader,
+.milkdown .milkdown-image-block .confirm,
+.milkdown .milkdown-image-inline .confirm,
+.milkdown .milkdown-image-block .operation-item,
+.milkdown .milkdown-link-preview .link-icon,
+.milkdown .milkdown-link-preview .link-edit-button,
+.milkdown .milkdown-link-preview .link-remove-button,
+.milkdown .milkdown-link-edit .confirm {
+  cursor: pointer;
+  border-radius: 6px;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-image-block .placeholder .uploader svg,
+.milkdown .milkdown-image-block .confirm svg,
+.milkdown .milkdown-image-inline .confirm svg,
+.milkdown .milkdown-image-block .operation-item svg,
+.milkdown .milkdown-link-preview .link-icon svg,
+.milkdown .milkdown-link-preview .link-edit-button svg,
+.milkdown .milkdown-link-preview .link-remove-button svg,
+.milkdown .milkdown-link-edit .confirm svg {
+  fill: var(--hue-text-2);
+  opacity: 0.9;
+  transition:
+    fill var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-image-block .placeholder .uploader:hover,
+.milkdown .milkdown-image-block .confirm:hover,
+.milkdown .milkdown-image-inline .confirm:hover,
+.milkdown .milkdown-image-block .operation-item:hover,
+.milkdown .milkdown-link-preview .link-icon:hover,
+.milkdown .milkdown-link-preview .link-edit-button:hover,
+.milkdown .milkdown-link-preview .link-remove-button:hover,
+.milkdown .milkdown-link-edit .confirm:hover {
+  background: var(--hue-active);
+}
+.milkdown .milkdown-image-block .placeholder .uploader:hover svg,
+.milkdown .milkdown-image-block .confirm:hover svg,
+.milkdown .milkdown-image-inline .confirm:hover svg,
+.milkdown .milkdown-image-block .operation-item:hover svg,
+.milkdown .milkdown-link-preview .link-icon:hover svg,
+.milkdown .milkdown-link-preview .link-edit-button:hover svg,
+.milkdown .milkdown-link-preview .link-remove-button:hover svg,
+.milkdown .milkdown-link-edit .confirm:hover svg {
+  fill: var(--hue-accent);
+  opacity: 1;
+}
+/* 链接浮层里的三枚是 span，需要显式 inline-flex 才有像样的可点面积 */
+.milkdown .milkdown-link-preview .link-icon,
+.milkdown .milkdown-link-preview .link-edit-button,
+.milkdown .milkdown-link-preview .link-remove-button,
+.milkdown .milkdown-link-edit .confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+}
+
+/* ── 代码块工具条按钮：同源口径（第五处药丸托盘的延伸）──
+   `preview-toggle-button`（右上角预览/编辑切换）与 `clear-icon`（语言搜索框清空）
+   是 Crepe 里另外两枚**只长着图标**的按钮。语言提示由 trayLabels.ts 补齐；
+   视觉上它们此前沿用默认：
+     · 切换按钮 —— fill = --crepe-color-on-surface-variant（= --hue-text-3）→ 偏灰
+     · 清空图标 —— fill = --crepe-color-primary（= --hue-accent）→ 已是强调色但不统一
+   统一为与其余各托盘**同一口径**：图标维持 t2（清空那枚保持 accent 不降级，
+   因为它是「破坏性动作」唯一入口，宁可更显眼）、hover 用 --hue-active 底。
+   注意这两枚在 Crepe 默认样式里 hover **没有任何底色变化**（切到预览/清空都无反馈），
+   是本处最明显的缺失，故重点补 hover。 */
+.milkdown .milkdown-code-block .tools .tools-button-group button,
+.milkdown .milkdown-code-block .search-box .clear-icon {
+  border-radius: 6px;
+  transition:
+    background var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-code-block .search-box .clear-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+}
+.milkdown .milkdown-code-block .tools .tools-button-group button svg {
+  fill: var(--hue-text-2);
+  opacity: 0.9;
+  transition:
+    fill var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+.milkdown .milkdown-code-block .tools .tools-button-group button:hover {
+  background: var(--hue-active);
+}
+.milkdown .milkdown-code-block .tools .tools-button-group button:hover svg {
+  fill: var(--hue-accent);
+  opacity: 1;
+}
+.milkdown .milkdown-code-block .search-box .clear-icon:hover {
+  background: var(--hue-active);
+}
+/* Crepe 默认给工具条首尾按钮各切一个 100px 圆角（做「胶囊组」），
+   但玉笺的托盘圆角体系是统一的 --radius-md/6px，此处压回同源口径。 */
+.milkdown .milkdown-code-block .tools .tools-button-group button:first-child,
+.milkdown .milkdown-code-block .tools .tools-button-group button:last-child {
+  border-radius: 6px;
+}
 
 /* ── 行内公式编辑：隐藏 Crepe 自带文本框，改由玉笺公式浮层接管 ──
    Crepe 的 Latex 特性会在 math_inline 被整块选中时弹出 .milkdown-latex-inline-edit，

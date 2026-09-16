@@ -504,8 +504,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   line-height: 1.4;
   padding: 1px 6px;
   border-radius: 999px;
-  color: #fff;
-  background: #5fa8a0;
+  /* 走令牌而非写死 #5fa8a0：换皮肤 / 幻色时徽章必须跟着走，
+     否则「青瓷」之外的主题上这枚徽章会突兀地卡在旧色。 */
+  color: var(--hue-on-accent);
+  background: var(--hue-accent);
 }
 .row__body {
   flex: 1;

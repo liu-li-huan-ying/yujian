@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ElementEditPopover from './ElementEditPopover.vue'
 import { renderLatexContent, renderMathToSvg } from '../render/mathjax'
+import { buildSymbolGroups, symbolTip, type MathSymbol } from '../utils/mathSymbols'
 import { i18n } from '../i18n'
 
 /**
@@ -41,28 +42,15 @@ const input = ref<HTMLTextAreaElement | null>(null)
 const preview = ref<HTMLDivElement | null>(null)
 
 /* ── 符号工具条：4 组，每组 ≤8（规格 §4.4） ──
-   片段里写 `{}` 表示「插入后光标落进括号里」，见 insertSymbol。 */
-const GROUPS = [
-  {
-    label: L.groups.greek,
-    items: ['\\alpha', '\\beta', '\\gamma', '\\delta', '\\theta', '\\lambda', '\\mu', '\\pi'],
-  },
-  {
-    label: L.groups.operators,
-    items: ['\\times', '\\div', '\\pm', '\\cdot', '\\leq', '\\geq', '\\neq', '\\approx'],
-  },
-  {
-    label: L.groups.structure,
-    items: ['^{}', '_{}', '\\frac{}{}', '\\sqrt{}', '\\sum', '\\int', '\\lim', '\\prod'],
-  },
-  {
-    label: L.groups.markup,
-    items: ['\\left(', '\\right)', '\\begin{matrix}', '\\hline', '\\text{}', '\\label{}', '\\eqref{}', '\\tag{}'],
-  },
-]
+   表在 src/utils/mathSymbols.ts（纯数据，可被 test-core 断言「每个符号都有 label + tip」）。
+   片段里写 `{}` 表示「插入后光标落进括号里」，见 insertSymbol。
+   视觉与提示口径必须与编辑区另两处药丸托盘（块操作手柄 / 行内工具条）一致，
+   见 styles/editor.css 注释。 */
+const GROUPS = computed(() => buildSymbolGroups(L.groups))
 
 /** 插入符号并把光标落到第一个 `{}` 内 —— 少一次手动移光标，手感差很多 */
-function insertSymbol(snippet: string): void {
+function insertSymbol(s: MathSymbol): void {
+  const snippet = s.cmd
   const ta = input.value
   if (!ta) return
   const start = ta.selectionStart
@@ -167,17 +155,18 @@ onBeforeUnmount(() => {
     :width="560"
     @dismiss="onDismiss"
   >
-    <div class="yj-me-syms">
-      <div v-for="g in GROUPS" :key="g.label" class="yj-me-group">
+    <div class="yj-me-syms" role="toolbar" :aria-label="L.symbols">
+      <div v-for="g in GROUPS" :key="g.label" class="yj-me-group" :aria-label="g.label">
         <button
           v-for="s in g.items"
-          :key="s"
+          :key="s.cmd"
           type="button"
           class="yj-me-sym"
-          :title="s"
+          :title="symbolTip(s)"
+          :aria-label="symbolTip(s)"
           @click="insertSymbol(s)"
         >
-          {{ s }}
+          {{ s.label }}
         </button>
       </div>
     </div>
@@ -222,7 +211,10 @@ onBeforeUnmount(() => {
 .yj-me-group:last-child {
   border-right: none;
 }
-/* 工具条按钮 28×28（规格 §4.4 状态） */
+/* 符号药丸：视觉与编辑区另两处托盘（块操作手柄 / 行内工具条）同源 ——
+   图标（这里是符号字形）用 --hue-text-2 / opacity .9，hover 一律 --hue-active 底
+   且字色转 accent，active 沿用同一套，不再用 t3 灰与硬编码 rgba。
+   规格 §4.4「工具条按钮 28×28」保持。 */
 .yj-me-sym {
   min-width: 28px;
   height: 28px;
@@ -230,17 +222,24 @@ onBeforeUnmount(() => {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--hue-text-3);
+  color: var(--hue-text-2);
+  opacity: 0.9;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 .yj-me-sym:hover {
-  background: rgba(127, 127, 127, 0.14);
-  color: var(--hue-text-1);
+  background: var(--hue-active);
+  color: var(--hue-accent);
+  opacity: 1;
 }
 .yj-me-sym:active {
+  background: var(--hue-active);
   color: var(--hue-accent);
   border-color: var(--hue-accent);
 }
@@ -262,7 +261,7 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   border: 1px solid var(--hue-border-subtle);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--hue-surface-2);
   color: var(--hue-text-1);
   /* 等宽 14px（规格 §4.4） */
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -283,7 +282,7 @@ onBeforeUnmount(() => {
   padding: 12px;
   border: 1px solid var(--hue-border-subtle);
   border-radius: 6px;
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--hue-surface-2);
 }
 .yj-me-preview :deep(svg) {
   max-width: 100%;
@@ -312,7 +311,7 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 .yj-me-tag.dim {
-  background: rgba(127, 127, 127, 0.14);
+  background: var(--hue-surface-2);
   color: var(--hue-text-3);
 }
 .yj-me-none {

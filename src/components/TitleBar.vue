@@ -225,11 +225,14 @@ onMounted(() => {
 
       <!-- 模式 / 凝神（面板开关已移至左缘活动栏，此处不再重复） -->
       <div class="grp">
-        <div class="seg">
+        <div class="seg" role="group" :aria-label="L.modeLabel">
           <button
             class="seg__item"
             :class="{ 'seg__item--on': mode === 'wysiwyg' }"
             type="button"
+            :title="L.modeWysiwygHint"
+            :aria-label="L.modeWysiwygHint"
+            :aria-pressed="mode === 'wysiwyg'"
             @click="emit('update:mode', 'wysiwyg')"
           >
             {{ L.modeWysiwyg }}
@@ -238,6 +241,9 @@ onMounted(() => {
             class="seg__item"
             :class="{ 'seg__item--on': mode === 'source' }"
             type="button"
+            :title="L.modeSourceHint"
+            :aria-label="L.modeSourceHint"
+            :aria-pressed="mode === 'source'"
             @click="emit('update:mode', 'source')"
           >
             {{ L.modeSource }}
@@ -248,6 +254,8 @@ onMounted(() => {
           type="button"
           :class="{ 'tbtn--on': focusActive }"
           :title="L.focusTitle"
+          :aria-label="L.focusTitle"
+          :aria-pressed="focusActive"
           @click="emit('toggle-focus')"
         >
           <Icon name="moon" />

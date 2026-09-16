@@ -33,6 +33,29 @@ const zhCN = {
     /** 块操作手柄语言提示（Crepe 原生缺 title / aria-label，由 trayLabels 补齐） */
     handleAdd: '在下方插入块',
     handleDrag: '拖拽移动此块',
+    /** 表格手柄药丸托盘语言提示（同上，Crepe 只给图标不给文案） */
+    tableHandle: {
+      dragCol: '拖拽移动本列',
+      dragRow: '拖拽移动本行',
+      alignLeft: '本列左对齐',
+      alignCenter: '本列居中对齐',
+      alignRight: '本列右对齐',
+      deleteCol: '删除本列',
+      deleteRow: '删除本行',
+      addRow: '在下方插入行',
+      addCol: '在右侧插入列',
+    },
+    /** 图片块 / 链接浮层上的裸图标按钮（同上，Crepe 只给图标不给文案） */
+    inlineTray: {
+      upload: '上传本地图片',
+      confirm: '确认',
+      editCaption: '编辑图片说明',
+      openLink: '打开链接',
+      editLink: '编辑链接',
+      removeLink: '移除链接',
+      previewToggle: '切换预览 / 编辑',
+      clearSearch: '清空搜索',
+    },
   },
 
   /* ── Crepe Placeholder ── */
@@ -90,6 +113,8 @@ const zhCN = {
     empty: '（空公式）',
     noLabel: '未定义 \\label',
     noNumber: '无编号',
+    /** 符号工具条的读屏名称 */
+    symbols: '常用符号',
     groups: {
       greek: '希腊/字母',
       operators: '运算',
@@ -116,6 +141,9 @@ const zhCN = {
     imgHost: '图床',
     modeWysiwyg: '渲染模式',
     modeSource: '源码',
+    modeLabel: '编辑模式',
+    modeWysiwygHint: '所见即所得，直接编辑排版结果',
+    modeSourceHint: '编辑 Markdown 原文',
     statusSaved: '已保存',
     statusUnsaved: '未保存',
     statusNoFile: '未选择文件',
@@ -319,6 +347,9 @@ const zhCN = {
     /* ── 版本快照 Phase B：时间轴 / 血缘视图 + 轻量草稿分支 ── */
     snapshotViewList: '列表',
     snapshotViewTimeline: '时间轴',
+    snapshotViews: '视图切换',
+    snapshotViewListHint: '按时间倒序平铺全部快照',
+    snapshotViewTimelineHint: '按分支画时间轴，看清版本血缘',
     snapshotBranch: '分支',
     snapshotMainBranch: '主线',
     snapshotNewDraft: '另起草稿',
@@ -341,6 +372,8 @@ const zhCN = {
     snapshotDiffSource: '摘取来源：{src}',
     snapshotViewUnified: '统一',
     snapshotViewSplit: '并排',
+    snapshotViewUnifiedHint: '改动与上下文合在一起看',
+    snapshotViewSplitHint: '左右两栏对照新旧版本',
     snapshotPickedShort: '已摘取',
     /* ── 写作统计（批次二）── */
     stats: '统计',
@@ -446,6 +479,11 @@ const zhCN = {
     graphLocal: '本地子图',
     graphGlobal: '全局',
     graphHops: '跳数',
+    /** 图谱控制条的分段按钮提示（「跳数」用 {n} 占位） */
+    graphMode: '视图范围',
+    graphLocalHint: '只看当前笔记及其邻居',
+    graphGlobalHint: '显示整个笔记库',
+    graphHopsHint: '显示 {n} 跳以内的邻居',
     graphZoomIn: '放大',
     graphZoomOut: '缩小',
     graphFit: '适应窗口',

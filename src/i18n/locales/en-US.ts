@@ -33,6 +33,29 @@ const enUS = {
     /** Block-handle hints (Crepe ships no title / aria-label; filled by trayLabels) */
     handleAdd: 'Insert block below',
     handleDrag: 'Drag to move this block',
+    /** Table handle pill-tray hints (same reason: icons only, no text) */
+    tableHandle: {
+      dragCol: 'Drag to move this column',
+      dragRow: 'Drag to move this row',
+      alignLeft: 'Align column left',
+      alignCenter: 'Align column center',
+      alignRight: 'Align column right',
+      deleteCol: 'Delete this column',
+      deleteRow: 'Delete this row',
+      addRow: 'Insert row below',
+      addCol: 'Insert column right',
+    },
+    /** Bare icon buttons on image blocks / link popovers (same reason: icons only) */
+    inlineTray: {
+      upload: 'Upload a local image',
+      confirm: 'Confirm',
+      editCaption: 'Edit image caption',
+      openLink: 'Open link',
+      editLink: 'Edit link',
+      removeLink: 'Remove link',
+      previewToggle: 'Toggle preview / edit',
+      clearSearch: 'Clear search',
+    },
   },
 
   /* ── Crepe Placeholder ── */
@@ -90,6 +113,8 @@ const enUS = {
     empty: '(empty formula)',
     noLabel: 'No \\label defined',
     noNumber: 'Unnumbered',
+    /** Screen-reader name of the symbol toolbar */
+    symbols: 'Common symbols',
     groups: {
       greek: 'Greek/letters',
       operators: 'Operators',
@@ -116,6 +141,9 @@ const enUS = {
     imgHost: 'Img Host',
     modeWysiwyg: 'WYSIWYG',
     modeSource: 'Source',
+    modeLabel: 'Edit mode',
+    modeWysiwygHint: 'What you see is what you get — edit the rendered layout',
+    modeSourceHint: 'Edit the raw Markdown source',
     statusSaved: 'Saved',
     statusUnsaved: 'Unsaved',
     statusNoFile: 'No file',
@@ -320,6 +348,9 @@ const enUS = {
     /* ── Snapshots Phase B: timeline / lineage view + lightweight draft branches ── */
     snapshotViewList: 'List',
     snapshotViewTimeline: 'Timeline',
+    snapshotViews: 'View',
+    snapshotViewListHint: 'All snapshots newest first',
+    snapshotViewTimelineHint: 'Timeline by branch, showing version lineage',
     snapshotBranch: 'Branch',
     snapshotMainBranch: 'main',
     snapshotNewDraft: 'New draft',
@@ -342,6 +373,8 @@ const enUS = {
     snapshotDiffSource: 'Pick source: {src}',
     snapshotViewUnified: 'Unified',
     snapshotViewSplit: 'Split',
+    snapshotViewUnifiedHint: 'Changes inline with surrounding context',
+    snapshotViewSplitHint: 'Old and new side by side',
     snapshotPickedShort: 'Picked',
     /* ── Writing stats (Batch 2) ── */
     stats: 'Stats',
@@ -448,6 +481,11 @@ const enUS = {
     graphLocal: 'Local',
     graphGlobal: 'Global',
     graphHops: 'Hops',
+    /** Hints for the graph control-bar segment buttons ({n} = hop count) */
+    graphMode: 'View scope',
+    graphLocalHint: 'Show only the current note and its neighbours',
+    graphGlobalHint: 'Show the entire vault',
+    graphHopsHint: 'Show neighbours within {n} hop(s)',
     graphZoomIn: 'Zoom in',
     graphZoomOut: 'Zoom out',
     graphFit: 'Fit to window',

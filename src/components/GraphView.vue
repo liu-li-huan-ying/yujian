@@ -560,12 +560,15 @@ watch(viewKind, () => scheduleDraw())
   <div class="graph">
     <!-- 控制条：玻璃小胶囊，浮于右上 -->
     <div class="graph__ctrl glass">
-      <div class="graph__seg">
+      <div class="graph__seg" role="group" :aria-label="G.graphMode">
         <button
           class="graph__segbtn"
           :class="{ 'graph__segbtn--on': effectiveMode === 'local' }"
           type="button"
           :disabled="!centerPath"
+          :title="G.graphLocalHint"
+          :aria-label="G.graphLocalHint"
+          :aria-pressed="effectiveMode === 'local'"
           @click="setMode('local')"
         >
           {{ G.graphLocal }}
@@ -574,19 +577,24 @@ watch(viewKind, () => scheduleDraw())
           class="graph__segbtn"
           :class="{ 'graph__segbtn--on': effectiveMode === 'global' }"
           type="button"
+          :title="G.graphGlobalHint"
+          :aria-label="G.graphGlobalHint"
+          :aria-pressed="effectiveMode === 'global'"
           @click="setMode('global')"
         >
           {{ G.graphGlobal }}
         </button>
       </div>
 
-      <div v-if="effectiveMode === 'local'" class="graph__seg" :aria-label="G.graphHops">
+      <div v-if="effectiveMode === 'local'" class="graph__seg" role="group" :aria-label="G.graphHops">
         <button
           v-for="h in ([1, 2, 3] as const)"
           :key="h"
           class="graph__segbtn"
           :class="{ 'graph__segbtn--on': hops === h }"
           type="button"
+          :title="G.graphHopsHint.replace('{n}', String(h))"
+          :aria-label="G.graphHopsHint.replace('{n}', String(h))"
           :aria-pressed="hops === h"
           @click="setHops(h)"
         >
@@ -701,7 +709,10 @@ watch(viewKind, () => scheduleDraw())
   cursor: grabbing;
 }
 
-/* 控制条：浮于右上，玻璃小胶囊 */
+/* 控制条：浮于右上，玻璃小胶囊。
+   背景/描边/模糊**全部交给 .glass**（tokens.css 的单一事实来源）——
+   此处曾自带 backdrop-filter: blur(10px)，与全局 --material-blur(28px) 数值不同源，
+   导致这块玻璃与其它浮层有可感的质感差。不要再在这里写 backdrop-filter。 */
 .graph__ctrl {
   position: absolute;
   top: 12px;
@@ -712,7 +723,6 @@ watch(viewKind, () => scheduleDraw())
   gap: 6px;
   padding: 5px 6px;
   border-radius: var(--radius-lg, 12px);
-  backdrop-filter: blur(10px);
 }
 
 .graph__seg {
@@ -750,7 +760,9 @@ watch(viewKind, () => scheduleDraw())
 .graph__segbtn:hover:not(:disabled),
 .graph__iconbtn:hover {
   color: var(--hue-text-1);
-  background: var(--hue-highlight, rgba(127, 127, 127, 0.1));
+  /* hover 底衬统一走 --bg-hover（与标题栏 / 活动栏 / 搜索栏同一套），
+     不再依赖 --hue-highlight 的硬编码灰兜底 —— 那是「近黑底上一块脏灰」。 */
+  background: var(--bg-hover);
 }
 .graph__segbtn:disabled {
   opacity: 0.4;
@@ -780,7 +792,7 @@ watch(viewKind, () => scheduleDraw())
 .graph__hint--left {
   left: 12px;
   bottom: 12px;
-  backdrop-filter: blur(10px);
+  /* 同 .graph__ctrl：材质交 .glass，此处不重复声明 backdrop-filter */
 }
 .graph__hint--center {
   left: 50%;

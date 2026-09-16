@@ -161,14 +161,22 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--hue-text-3);
+  /* 与编辑区各处药丸托盘同款：图标 t2 / 0.9，hover 走 --hue-active + accent，
+     不再用更暗的 t3 与硬编码灰兜底（那正是「同屏像两个软件」的来源）。 */
+  color: var(--hue-text-2);
+  opacity: 0.9;
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
 }
 .yj-ep-x:hover {
-  background: rgba(127, 127, 127, 0.14);
-  color: var(--hue-text-1);
+  background: var(--hue-active);
+  color: var(--hue-accent);
+  opacity: 1;
 }
 .yj-ep-foot {
   display: flex;
@@ -181,10 +189,15 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border-radius: 6px;
   border: 1px solid var(--hue-border-subtle);
-  background: rgba(127, 127, 127, 0.08);
+  /* 次级按钮底走 --bg-hover（与全局 hover 同一来源），不再硬编码白 8% */
+  background: var(--bg-hover);
   color: var(--hue-text-1);
   font-size: 13px;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.yj-ep-btn:hover {
+  background: var(--hue-active);
 }
 .yj-ep-btn.primary {
   background: var(--hue-accent);
