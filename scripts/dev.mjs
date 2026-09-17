@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureMirrorEnv } from './mirror-env.mjs'
 
 /**
  * 宿主 IDE（WorkBuddy、VS Code 等）本身是 Electron 应用，
@@ -15,6 +16,9 @@ import { fileURLToPath } from 'node:url'
  */
 delete process.env.ELECTRON_RUN_AS_NODE
 
+// 注入 Electron / electron-builder 下载镜像（不再写进 .npmrc，避免 npm 未知配置警告）
+ensureMirrorEnv()
+
 const here = dirname(fileURLToPath(import.meta.url))
 const binDir = join(here, '..', 'node_modules', '.bin')
 const isWin = process.platform === 'win32'
@@ -22,11 +26,11 @@ const bin = join(binDir, isWin ? 'electron-vite.cmd' : 'electron-vite')
 
 const args = process.argv.slice(2)
 
-const child = spawn(bin, args, {
-  stdio: 'inherit',
-  shell: isWin,
-  env: process.env
-})
+// 用 cmd /c 直接执行 .cmd，避免 shell:true + args 触发的 DEP0190 弃用警告。
+// 参数以数组传入（而非拼接成 shell 字符串），既无转义隐患，也不再触发该弃用告警。
+const child = isWin
+  ? spawn('cmd', ['/c', bin, ...args], { stdio: 'inherit', env: process.env })
+  : spawn(bin, args, { stdio: 'inherit', env: process.env })
 
 child.on('exit', (code) => process.exit(code ?? 0))
 child.on('error', (err) => {
