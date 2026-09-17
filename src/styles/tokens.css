@@ -16,7 +16,6 @@
   --h-crumb: 30px;
   --h-statusbar: 26px;
   --h-tabbar: 34px;
-  --w-sidebar: 224px;
   --w-outline: 196px;
   /* 内容列宽：随窗口等比例变宽（不是放大字号，而是每行多显示几个字）。
      用 clamp 把列宽绑定到视口宽度：默认 ~1280px 窗口≈720px（与旧固定值一致），
@@ -30,16 +29,66 @@
   --h-row: 28px;
 
   /* ── 结构层：圆角与动效 ─────────────────────── */
+  /* 圆角由「元素所属的面」决定，不由尺寸决定：
+     xs 面内极小件 · sm 面内元素 · md 面上的控件 · lg 自身成面 · xl 居中大浮层
+     xl = 14px 是**从实作反推**的：8 个设置类大浮层各自独立选了 14px，
+     说明该层级的实际值就是 14，写成 12 反而要把它们全部改掉。 */
+  --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+  --radius-full: 50%;
 
   --ease: cubic-bezier(0.2, 0, 0.2, 1);
   /* 凝神 2.0 进退场专用：呼吸感更强的缓出曲线（幕间重叠时序见 styles/zen.css） */
   --ease-zen: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 120ms;
   --dur-base: 180ms;
-  --dur-slow: 280ms;
+
+  /* ── 结构层：刻度（设计体系 v2.0）─────────────
+     「原则 → 刻度 → 强制」的第二环。缺了刻度，原则无法落成具体数字，
+     几何值只能即兴发挥——历史遗留 22 种字号 / 24 种圆角 / 25 种间距就是这么来的。
+     命名一律带 px 数值，读代码时不必心算格数。
+     完整纪律与收敛目标见 docs/UI-DESIGN.md §3。 */
+
+  /* 间距：**不设令牌**，只在文档与 check:design 里表达栅格纪律。
+     理由（实测后定的，不是偷懒）：间距是本项目**唯一从不换档**的维度，
+     而它在源码里有 620 处。令牌化会让 `padding: 8px 12px` 变成
+     `padding: var(--space-8) var(--space-12)`——可读性下降、DevTools 多一跳，
+     换来的只是「能整体改档」这一个永远不会用到的能力。
+     纪律改用门禁直接表达：取值须落在 4pt 栅格（X 轴允许 6/10/14 半格，
+     1/2px 仅限描边接缝）。见 scripts/check-design.mjs。
+     对照：字号 / 圆角 / 层级有令牌，因为它们确有「成体系变化」的场景
+     （字号需整体调密、圆角与层级是真语义）。 */
+
+  /* 字号 · 界面族每级 1px 递进（UI 需要精确的层级差），
+     内容族跳跃递进（标题需要明确落差）。
+     半像素字号（10.5/11.5/12.5/13.5）为历史遗留，只减不增。 */
+  --fs-10: 10px; /* 徽标计数 */
+  --fs-11: 11px; /* 微标注、分组标题、键位胶囊 */
+  --fs-12: 12px; /* UI 辅助、说明文字 */
+  --fs-13: 13px; /* UI 主文本（默认） */
+  --fs-14: 14px; /* 代码块、对话框标题 */
+  --fs-15: 15px; /* 行内代码 */
+  --fs-16: 16px; /* 正文 */
+  --fs-18: 18px; /* H3 */
+  --fs-22: 22px; /* H2 */
+  --fs-28: 28px; /* H1 */
+
+  /* 层级 z-index · 语义阶梯
+     禁止再写裸数字：同一数字承载多个语义是遮挡事故的根
+     （历史：60 同时是右键菜单与设置浮层；toast 50 被模态 80 盖住，
+     操作反馈在对话框打开时完全看不见）。 */
+  --z-local: 1; /* 面内升起：粘性表头、当前项、拖拽占位 */
+  --z-raised: 2; /* 面内第二层：引导线接片、拖拽预览 */
+  --z-sticky: 10; /* 跨面吸附：阅读进度手势区、凝神渐隐幕 */
+  --z-panel: 30; /* 独立面板：停靠面板、侧栏检查面板、统计气泡 */
+  --z-popover: 40; /* 附着浮层：下拉、右键菜单、自动补全、编辑区内浮层 */
+  --z-overlay: 60; /* 居中大浮层：帮助/偏好/外观/图床/快捷键/编译/导出预览 */
+  --z-modal: 80; /* 模态：确认、移动、冲突、命令面板 */
+  --z-toast: 100; /* 操作反馈，必须压过模态 */
 
   /* ── 材质层：玉的配方（所有皮肤共用）─────────── */
   --material-highlight-top: rgba(255, 255, 255, 0.055);
@@ -52,10 +101,12 @@
   /* 极细噪点：消除塑料感与渐变色带，肉眼几乎不可见但质感差异明显 */
   --noise-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 
-  /* ── 结构层：层级透明度 ─────────────────────── */
+  /* ── 结构层：层级透明度 ───────────────────────
+     只留 `--bg-hover`：它随明暗切换（亮色同名覆盖见下），是中性悬停底的唯一入口。
+     禁用的 v1 遗留：`--border-subtle` / `--border-default`（零引用，已删）、
+     `--bg-app` / `--text-primary`（零引用）、`--bg-input`（并入 `--bg-hover`）。
+     边框一律走色相层 `--hue-border-subtle` / `--hue-border-strong`。 */
   --bg-hover: rgba(255, 255, 255, 0.05);
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.1);
 
   /* ── 行内标记色（兜底值，各皮肤会覆盖）─────────
      为什么单独设令牌而不是写死：高亮 / 键帽必须随皮肤走，
@@ -73,7 +124,6 @@
 
 [data-skin='celadon'][data-mode='dark'] {
   --hue-base: #23292b;
-  --hue-bar: #1f2527;
   --hue-tint-1: 126, 196, 182;
   --hue-tint-2: 95, 168, 160;
   --hue-mark: 226, 190, 120;
@@ -93,7 +143,6 @@
 
 [data-skin='celadon'][data-mode='light'] {
   --hue-base: #eff2f0;
-  --hue-bar: #f3f5f3;
   --hue-tint-1: 184, 214, 206;
   --hue-tint-2: 196, 222, 216;
   --hue-mark: 200, 158, 52;
@@ -120,7 +169,6 @@
 
 [data-skin='sky'][data-mode='dark'] {
   --hue-base: #212a2f;
-  --hue-bar: #1d242a;
   --hue-tint-1: 140, 190, 214;
   --hue-tint-2: 94, 157, 190;
   --hue-mark: 228, 186, 118;
@@ -140,7 +188,6 @@
 
 [data-skin='sky'][data-mode='light'] {
   --hue-base: #eef2f4;
-  --hue-bar: #f2f5f7;
   --hue-tint-1: 168, 205, 222;
   --hue-tint-2: 190, 216, 228;
   --hue-mark: 195, 148, 44;
@@ -167,7 +214,6 @@
 
 [data-skin='moon'][data-mode='dark'] {
   --hue-base: #23282c;
-  --hue-bar: #1f2428;
   --hue-tint-1: 180, 196, 206;
   --hue-tint-2: 147, 167, 180;
   --hue-mark: 214, 198, 158;
@@ -187,7 +233,6 @@
 
 [data-skin='moon'][data-mode='light'] {
   --hue-base: #f0f2f4;
-  --hue-bar: #f4f6f7;
   --hue-tint-1: 200, 212, 220;
   --hue-tint-2: 208, 219, 226;
   --hue-mark: 168, 142, 76;
@@ -214,7 +259,6 @@
 
 [data-skin='dai'][data-mode='dark'] {
   --hue-base: #262430;
-  --hue-bar: #21202b;
   --hue-tint-1: 178, 168, 212;
   --hue-tint-2: 139, 124, 184;
   --hue-mark: 234, 186, 128;
@@ -234,7 +278,6 @@
 
 [data-skin='dai'][data-mode='light'] {
   --hue-base: #f0eef4;
-  --hue-bar: #f4f2f7;
   --hue-tint-1: 206, 198, 224;
   --hue-tint-2: 216, 209, 230;
   --hue-mark: 190, 142, 66;
@@ -261,7 +304,6 @@
 
 [data-skin='amber'][data-mode='dark'] {
   --hue-base: #2a2620;
-  --hue-bar: #251f19;
   --hue-tint-1: 221, 186, 120;
   --hue-tint-2: 199, 154, 78;
   --hue-mark: 132, 202, 180;
@@ -281,7 +323,6 @@
 
 [data-skin='amber'][data-mode='light'] {
   --hue-base: #f4f1ea;
-  --hue-bar: #f7f4ed;
   --hue-tint-1: 224, 202, 158;
   --hue-tint-2: 230, 210, 172;
   --hue-mark: 56, 138, 118;
@@ -385,6 +426,8 @@
 }
 
 [data-skin][data-mode='light'] {
+  /* 中性悬停底（亮色）：暗调微影，与暗色侧同一强度观感 */
+  --bg-hover: rgba(0, 0, 0, 0.045);
   --hue-surface: #ffffff;
   --hue-surface-2: #f6f8f7;
   /* 亮色下强调色偏深，用白字 */
@@ -398,6 +441,8 @@
   --hue-scrollbar-track: transparent;
   /* 文本选区高亮：亮色下 tint 明度本就高，略降透明度避免压过正文 */
   --hue-selection: rgba(var(--hue-tint-1), 0.3);
+  /* 结构性边界：见暗色侧同名令牌说明 */
+  --hue-border-strong: color-mix(in srgb, var(--hue-text-3) 70%, transparent);
 }
 
 /* ============================================================
@@ -408,7 +453,6 @@
   :root {
     --dur-fast: 0ms;
     --dur-base: 0ms;
-    --dur-slow: 0ms;
   }
 }
 

@@ -199,7 +199,7 @@ defineExpose({ refresh: run })
   position: absolute;
   top: 10px;
   right: 16px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 372px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
@@ -230,16 +230,16 @@ defineExpose({ refresh: run })
   color: var(--hue-accent);
 }
 .lc__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
 .lc__count {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   color: var(--hue-on-accent);
   background: var(--hue-danger, #f34f45);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   min-width: 18px;
   text-align: center;
@@ -286,7 +286,7 @@ defineExpose({ refresh: run })
   height: 24px;
   padding: 0 9px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--hue-text-2);
   font-size: 11.5px;
@@ -311,7 +311,7 @@ defineExpose({ refresh: run })
 }
 .fchip__n {
   font-variant-numeric: tabular-nums;
-  font-size: 10px;
+  font-size: var(--fs-10);
   opacity: 0.8;
 }
 
@@ -320,7 +320,7 @@ defineExpose({ refresh: run })
   align-items: center;
   justify-content: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
   padding: 22px 8px;
@@ -330,7 +330,7 @@ defineExpose({ refresh: run })
   color: var(--hue-danger, #f34f45);
 }
 .lc__empty--ok {
-  color: #6fcf97;
+  color: var(--hue-success);
 }
 .lc__spin {
   animation: lc-spin 0.9s linear infinite;
@@ -345,11 +345,11 @@ defineExpose({ refresh: run })
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-2);
 }
 .lc__break {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 
@@ -428,11 +428,11 @@ defineExpose({ refresh: run })
 .row__kind {
   flex: 0 0 auto;
   margin-top: 1px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   line-height: 1.4;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--hue-on-accent);
 }
 /* 三枚徽章是**语义分类码**（双链 / 普通链接 / 图片），刻意用三种色相区分。
@@ -472,14 +472,14 @@ defineExpose({ refresh: run })
   white-space: nowrap;
 }
 .row__line {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-accent);
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
 }
 .row__target {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   overflow: hidden;
   text-overflow: ellipsis;

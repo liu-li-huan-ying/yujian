@@ -148,7 +148,7 @@ function confirm(): void {
 .move-mask {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -184,7 +184,7 @@ function confirm(): void {
 
 .move__sub {
   margin: 6px 0 10px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   overflow: hidden;
   text-overflow: ellipsis;

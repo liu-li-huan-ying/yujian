@@ -320,7 +320,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: absolute;
   top: 10px;
   right: 16px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 520px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
@@ -351,16 +351,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: var(--hue-accent);
 }
 .ic__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
 .ic__count {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   color: var(--hue-on-accent);
   background: var(--hue-danger, #f34f45);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   min-width: 18px;
   text-align: center;
@@ -406,7 +406,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   height: 24px;
   padding: 0 9px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--hue-text-2);
   font-size: 11.5px;
@@ -431,7 +431,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .fchip__n {
   font-variant-numeric: tabular-nums;
-  font-size: 10px;
+  font-size: var(--fs-10);
   opacity: 0.8;
 }
 
@@ -440,7 +440,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   align-items: center;
   justify-content: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
   padding: 22px 8px;
@@ -450,7 +450,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: var(--hue-danger, #f34f45);
 }
 .ic__empty--ok {
-  color: #6fcf97;
+  color: var(--hue-success);
 }
 .ic__spin {
   animation: ic-spin 0.9s linear infinite;
@@ -489,7 +489,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   margin-top: 5px;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 .row__sev--err {
   background: var(--hue-danger, #f34f45);
@@ -499,11 +499,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .row__cat {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   line-height: 1.4;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   /* 走令牌而非写死 #5fa8a0：换皮肤 / 幻色时徽章必须跟着走，
      否则「青瓷」之外的主题上这枚徽章会突兀地卡在旧色。 */
   color: var(--hue-on-accent);
@@ -609,7 +609,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: rgb(var(--hue-mark));
 }
 .hl__title {
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 600;
   color: var(--hue-text-1);
 }
@@ -617,7 +617,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-width: 18px;
   height: 16px;
   padding: 0 5px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--hue-accent);
   color: var(--hue-on-accent);
   font-size: 10.5px;
@@ -658,7 +658,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   background: transparent;
   color: var(--hue-text-1);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-11);
   cursor: pointer;
   transition: filter var(--dur-fast) var(--ease);
 }
@@ -697,7 +697,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: var(--hue-mark);
 }
 .sw__title {
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 600;
   color: var(--hue-text-1);
 }
@@ -705,7 +705,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-width: 18px;
   height: 16px;
   padding: 0 5px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--hue-accent);
   color: var(--hue-on-accent);
   font-size: 10.5px;
@@ -733,13 +733,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: var(--fs-11);
 }
 .sw__sev {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 .sw__sev--warn {
   background: rgb(var(--hue-mark));

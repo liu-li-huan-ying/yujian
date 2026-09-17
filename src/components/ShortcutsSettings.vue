@@ -304,7 +304,7 @@ function doResetAll(): void {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 62;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -317,7 +317,7 @@ function doResetAll(): void {
   max-height: 74vh;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   padding: 18px 20px 14px;
   color: var(--hue-text-1);
 }
@@ -331,7 +331,7 @@ function doResetAll(): void {
 
 .panel__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-15);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -340,10 +340,10 @@ function doResetAll(): void {
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
-  font-size: 18px;
+  font-size: var(--fs-18);
   line-height: 1;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
@@ -356,7 +356,7 @@ function doResetAll(): void {
 
 .intro {
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.6;
   color: var(--hue-text-3);
 }
@@ -367,7 +367,7 @@ function doResetAll(): void {
   height: 32px;
   padding: 0 11px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--hue-highlight);
   color: var(--hue-text-1);
   font-size: 12.5px;
@@ -392,7 +392,7 @@ function doResetAll(): void {
 
 .grp__title {
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 500;
   color: var(--hue-text-3);
   letter-spacing: 0.05em;
@@ -404,7 +404,7 @@ function doResetAll(): void {
   gap: 10px;
   flex-wrap: wrap;
   padding: 5px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   transition: background var(--dur-fast) var(--ease);
 }
 
@@ -431,12 +431,12 @@ function doResetAll(): void {
 .row__badge {
   flex: 0 0 auto;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   /* 注意：`--hue-accent` 是**完整色值**（如 #5fa8a0），不能塞进 rgba()；
      要「强调色的半透明底」只能用三元组令牌（--hue-tint-*）或现成的 --hue-active。 */
   background: var(--hue-active);
   color: var(--hue-accent);
-  font-size: 10px;
+  font-size: var(--fs-10);
 }
 
 /* 键位胶囊：点它进入录入态 */
@@ -445,11 +445,11 @@ function doResetAll(): void {
   min-width: 76px;
   padding: 3px 9px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: rgba(var(--hue-key), 0.16);
   color: var(--hue-text-2);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   text-align: center;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
@@ -486,10 +486,10 @@ function doResetAll(): void {
   width: 46px;
   padding: 3px 0;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--hue-text-3);
-  font-size: 11px;
+  font-size: var(--fs-11);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
@@ -508,7 +508,7 @@ function doResetAll(): void {
 .err {
   flex: 1 0 100%;
   margin: 2px 0 4px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 
@@ -528,7 +528,7 @@ function doResetAll(): void {
 .cf__txt {
   flex: 1 1 auto;
   /* UI-DESIGN §4.7 规格：冲突红字 12px */
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-danger);
 }
 
@@ -536,10 +536,10 @@ function doResetAll(): void {
   flex: 0 0 auto;
   padding: 2px 9px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--hue-text-2);
-  font-size: 11px;
+  font-size: var(--fs-11);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
@@ -556,14 +556,14 @@ function doResetAll(): void {
 
 .empty {
   margin: 6px 0 14px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
 }
 
 .fixedhint {
   margin: 6px 8px 0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.6;
   color: var(--hue-text-3);
 }
@@ -581,7 +581,7 @@ function doResetAll(): void {
 
 .foot__count {
   flex: 1 1 auto;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 
@@ -594,7 +594,7 @@ function doResetAll(): void {
   flex: 0 0 auto;
   padding: 4px 11px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
   font-size: 11.5px;

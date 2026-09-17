@@ -44,7 +44,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 .loadbar {
   position: absolute;
   inset: 0 0 auto 0;
-  z-index: 30;
+  z-index: var(--z-panel);
   pointer-events: none;
 }
 
@@ -58,7 +58,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
 .loadbar__fill {
   height: 100%;
   width: 40%;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(
     90deg,
     transparent 0%,
@@ -115,7 +115,7 @@ const emit = defineEmits<{ (e: 'retry'): void }>()
   background: var(--hue-active);
   color: var(--hue-text-1);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-12);
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease),

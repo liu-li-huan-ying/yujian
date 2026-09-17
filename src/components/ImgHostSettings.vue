@@ -124,7 +124,7 @@ onMounted(() => {
 
 <template>
   <div class="overlay" @click.self="emit('close')">
-    <div class="dialog jade">
+    <div class="dialog glass">
       <header class="dialog__head">
         <h2 class="dialog__title">{{ U.imgHostSettingsTitle }}</h2>
         <button class="dialog__x" :title="U.imgHostClose" @click="emit('close')">×</button>
@@ -184,7 +184,7 @@ onMounted(() => {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -195,11 +195,11 @@ onMounted(() => {
   width: min(440px, 92vw);
   max-height: 86vh;
   overflow: auto;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   padding: 18px 20px 16px;
-  background: var(--hue-editor, #1c1e1f);
-  border: 1px solid var(--hue-border-strong, var(--hue-border-subtle));
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+  /* 材质由 .glass 单一来源提供（与帮助 / 偏好 / 外观 / 快捷键同款玻璃浮层）。
+     此处曾写 `class="dialog jade"` + 本条 background：jade 被这条 background 完全覆盖，
+     类名成了谎言，观感也与其他 6 个设置浮层不一致。设计规则见 docs/UI-DESIGN.md §2。 */
 }
 
 .dialog__head {
@@ -211,7 +211,7 @@ onMounted(() => {
 
 .dialog__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-15);
   font-weight: 600;
   color: var(--hue-text-1);
 }
@@ -242,18 +242,18 @@ onMounted(() => {
 }
 
 .field__label {
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-2);
 }
 
 .field__input {
   height: 32px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--hue-border-subtle);
   background: var(--hue-highlight, rgba(255, 255, 255, 0.04));
   color: var(--hue-text-1);
-  font-size: 13px;
+  font-size: var(--fs-13);
   outline: none;
 }
 
@@ -266,16 +266,16 @@ select.field__input {
 }
 
 .field__hint {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   line-height: 1.4;
 }
 
 .feedback {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-12);
   padding: 7px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .feedback--ok {
@@ -284,7 +284,7 @@ select.field__input {
 }
 
 .feedback--err {
-  color: #f3b4af;
+  color: var(--hue-danger);
   background: rgba(224, 79, 69, 0.14);
 }
 
@@ -301,9 +301,9 @@ select.field__input {
 }
 
 .btn {
-  font-size: 12px;
+  font-size: var(--fs-12);
   padding: 7px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--hue-border-subtle);
   background: var(--hue-highlight, rgba(255, 255, 255, 0.05));
   color: var(--hue-text-1);
@@ -311,7 +311,7 @@ select.field__input {
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--hue-border-strong, var(--hue-accent));
+  border-color: var(--hue-accent);
 }
 
 .btn:disabled {

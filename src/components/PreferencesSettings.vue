@@ -130,7 +130,7 @@ function toggle(key: keyof TypographyState): void {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,7 +140,7 @@ function toggle(key: keyof TypographyState): void {
 .panel {
   width: 360px;
   max-width: calc(100vw - 32px);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   padding: 18px 20px 22px;
   color: var(--hue-text-1);
 }
@@ -154,7 +154,7 @@ function toggle(key: keyof TypographyState): void {
 
 .panel__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-15);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -163,10 +163,10 @@ function toggle(key: keyof TypographyState): void {
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
-  font-size: 18px;
+  font-size: var(--fs-18);
   line-height: 1;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
@@ -183,7 +183,7 @@ function toggle(key: keyof TypographyState): void {
 
 .sec__title {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
   color: var(--hue-text-3);
   letter-spacing: 0.04em;
@@ -202,7 +202,7 @@ function toggle(key: keyof TypographyState): void {
   width: 100%;
   padding: 12px 13px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--hue-highlight);
   color: var(--hue-text-1);
   text-align: left;
@@ -225,8 +225,8 @@ function toggle(key: keyof TypographyState): void {
   width: 16px;
   height: 16px;
   margin-top: 1px;
-  border-radius: 50%;
-  border: 2px solid var(--hue-border-strong, var(--hue-border-subtle));
+  border-radius: var(--radius-full);
+  border: 2px solid var(--hue-border-strong);
   position: relative;
 }
 
@@ -238,7 +238,7 @@ function toggle(key: keyof TypographyState): void {
   content: '';
   position: absolute;
   inset: 3px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-accent);
 }
 
@@ -249,7 +249,7 @@ function toggle(key: keyof TypographyState): void {
 }
 
 .opt__label {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 500;
 }
 
@@ -266,7 +266,7 @@ function toggle(key: keyof TypographyState): void {
   width: 30px;
   height: 17px;
   margin-top: 2px;
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--hue-highlight);
   box-shadow: inset 0 0 0 1px var(--hue-border-subtle);
   transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
@@ -279,7 +279,7 @@ function toggle(key: keyof TypographyState): void {
   left: 2px;
   width: 13px;
   height: 13px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-text-2);
   transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
@@ -316,7 +316,7 @@ function toggle(key: keyof TypographyState): void {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   color: var(--hue-text-1);
   text-align: left;
@@ -338,8 +338,8 @@ function toggle(key: keyof TypographyState): void {
   width: 15px;
   height: 15px;
   margin-top: 1px;
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 1px var(--hue-border-strong, var(--hue-border-subtle));
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--hue-border-strong);
   transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 

@@ -100,7 +100,7 @@ function selectMode(key: ModeKey): void {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -110,7 +110,7 @@ function selectMode(key: ModeKey): void {
 .panel {
   width: 360px;
   max-width: calc(100vw - 32px);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   padding: 18px 20px 22px;
   color: var(--hue-text-1);
 }
@@ -124,7 +124,7 @@ function selectMode(key: ModeKey): void {
 
 .panel__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-15);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -133,10 +133,10 @@ function selectMode(key: ModeKey): void {
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
-  font-size: 18px;
+  font-size: var(--fs-18);
   line-height: 1;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
@@ -153,7 +153,7 @@ function selectMode(key: ModeKey): void {
 
 .sec__title {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
   color: var(--hue-text-3);
   letter-spacing: 0.04em;
@@ -170,7 +170,7 @@ function selectMode(key: ModeKey): void {
   position: relative;
   height: 64px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   overflow: hidden;
   padding: 0;
@@ -194,7 +194,7 @@ function selectMode(key: ModeKey): void {
   right: 0;
   bottom: 7px;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 600;
   color: var(--hue-text-1);
   text-shadow: none;
@@ -208,7 +208,7 @@ function selectMode(key: ModeKey): void {
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--hue-highlight);
 }
 
@@ -216,11 +216,11 @@ function selectMode(key: ModeKey): void {
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 12px;
+  font-size: var(--fs-12);
   padding: 6px 0;
   color: var(--hue-text-3);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 

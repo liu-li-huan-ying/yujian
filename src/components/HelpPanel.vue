@@ -62,7 +62,7 @@ const rootMode = ref(
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -75,7 +75,7 @@ const rootMode = ref(
   max-height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   padding: 18px 20px 20px;
   color: var(--hue-text-1);
 }
@@ -89,7 +89,7 @@ const rootMode = ref(
 
 .panel__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-15);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -101,7 +101,7 @@ const rootMode = ref(
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
   cursor: pointer;
@@ -127,7 +127,7 @@ const rootMode = ref(
 /* ── 使用指南 ── */
 .guide__title {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-14);
   font-weight: 600;
 }
 
@@ -144,7 +144,7 @@ const rootMode = ref(
 
 .guide__h {
   margin: 0 0 5px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-accent);
 }
@@ -158,7 +158,7 @@ const rootMode = ref(
 
 .guide__about {
   white-space: pre-line;
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.8;
   color: var(--hue-text-3);
   font-family: var(--font-mono);

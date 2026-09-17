@@ -717,12 +717,12 @@ watch(viewKind, () => scheduleDraw())
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 2;
+  z-index: var(--z-raised);
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 5px 6px;
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--radius-lg);
 }
 
 .graph__seg {
@@ -730,7 +730,7 @@ watch(viewKind, () => scheduleDraw())
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   background: var(--bg-hover, rgba(127, 127, 127, 0.08));
 }
 
@@ -738,10 +738,10 @@ watch(viewKind, () => scheduleDraw())
 .graph__iconbtn {
   height: 24px;
   border: 0;
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--hue-text-2);
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
@@ -781,10 +781,10 @@ watch(viewKind, () => scheduleDraw())
 /* 提示条 */
 .graph__hint {
   position: absolute;
-  z-index: 2;
+  z-index: var(--z-raised);
   padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-11);
   color: var(--hue-text-2);
   pointer-events: none;
   white-space: nowrap;
@@ -808,7 +808,7 @@ watch(viewKind, () => scheduleDraw())
   align-items: center;
   justify-content: center;
   color: var(--hue-text-3);
-  font-size: 13px;
+  font-size: var(--fs-13);
   text-align: center;
   padding: 0 40px;
 }
@@ -821,7 +821,7 @@ watch(viewKind, () => scheduleDraw())
   padding: 56px 16px 20px;
 }
 .graph__listhead {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   margin: 0 4px 8px;
 }
@@ -832,10 +832,10 @@ watch(viewKind, () => scheduleDraw())
   width: 100%;
   padding: 7px 10px;
   border: 0;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
-  font-size: 13px;
+  font-size: var(--fs-13);
   text-align: left;
   cursor: pointer;
 }
@@ -851,7 +851,7 @@ watch(viewKind, () => scheduleDraw())
   flex: 0 0 auto;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-text-3);
 }
 .graph__rowdot--center {
@@ -867,15 +867,15 @@ watch(viewKind, () => scheduleDraw())
 }
 .graph__rowbadge {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: var(--fs-10);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--hue-accent);
   background: var(--hue-active);
 }
 .graph__tag {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 </style>

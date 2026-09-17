@@ -290,7 +290,7 @@ useFocusTrap({ container: box, active: () => true, initial: () => inputEl.value 
 .cp-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--z-modal);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -323,7 +323,7 @@ useFocusTrap({ container: box, active: () => true, initial: () => inputEl.value 
 
 .cp__input {
   height: 40px;
-  font-size: 16px;
+  font-size: var(--fs-16);
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-md);
@@ -347,7 +347,7 @@ useFocusTrap({ container: box, active: () => true, initial: () => inputEl.value 
 
 .cp__group {
   margin: 6px 6px 2px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   letter-spacing: 0.05em;
   color: var(--hue-text-3);
 }
@@ -403,7 +403,7 @@ useFocusTrap({ container: box, active: () => true, initial: () => inputEl.value 
   font-family: var(--font-mono);
   font-size: 10.5px;
   line-height: 1.4;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: rgba(var(--hue-key), 0.16);
   color: var(--hue-text-2);
   white-space: nowrap;
@@ -412,7 +412,7 @@ useFocusTrap({ container: box, active: () => true, initial: () => inputEl.value 
 .cp__empty {
   margin: 0;
   padding: 16px 10px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
 }

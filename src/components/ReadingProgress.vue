@@ -206,7 +206,7 @@ const thumbStyle = computed(() => ({
   right: 0;
   bottom: 0;
   width: 16px;
-  z-index: 6;
+  z-index: var(--z-sticky);
   cursor: pointer;
   opacity: 0;
   transition: opacity var(--dur-base) var(--ease);
@@ -224,7 +224,7 @@ const thumbStyle = computed(() => ({
   top: 8px;
   bottom: 8px;
   width: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: rgba(var(--hue-tint-2), 0.14);
 }
 
@@ -234,7 +234,7 @@ const thumbStyle = computed(() => ({
   right: 6px;
   top: 8px;
   width: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(
     180deg,
     var(--hue-accent) 0%,
@@ -251,7 +251,7 @@ const thumbStyle = computed(() => ({
   right: 3px;
   width: 9px;
   height: 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--hue-accent);
   box-shadow: 0 0 10px rgba(var(--hue-tint-2), 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.25);

@@ -155,7 +155,7 @@ function near(a: number, b: number): boolean {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -169,7 +169,7 @@ function near(a: number, b: number): boolean {
 .panel {
   width: 460px;
   max-width: calc(100vw - 32px);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   padding: 18px 20px 16px;
   color: var(--hue-text-1);
 }
@@ -182,7 +182,7 @@ function near(a: number, b: number): boolean {
 
 .panel__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-15);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -191,10 +191,10 @@ function near(a: number, b: number): boolean {
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
-  font-size: 18px;
+  font-size: var(--fs-18);
   line-height: 1;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
@@ -232,12 +232,12 @@ function near(a: number, b: number): boolean {
 }
 
 .row__label {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 500;
 }
 
 .row__hint {
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.4;
   color: var(--hue-text-3);
 }
@@ -247,7 +247,7 @@ function near(a: number, b: number): boolean {
   flex-shrink: 0;
   gap: 2px;
   padding: 2px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--hue-highlight);
   border: 1px solid var(--hue-border-subtle);
 }
@@ -258,7 +258,7 @@ function near(a: number, b: number): boolean {
   color: var(--hue-text-2);
   font-size: 11.5px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
@@ -278,7 +278,7 @@ function near(a: number, b: number): boolean {
   width: 34px;
   height: 19px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--hue-border-subtle);
   position: relative;
   cursor: pointer;
@@ -292,7 +292,7 @@ function near(a: number, b: number): boolean {
   left: 2px;
   width: 15px;
   height: 15px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-text-2);
   transition: left var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
@@ -311,10 +311,10 @@ function near(a: number, b: number): boolean {
   width: 100%;
   height: 32px;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--hue-accent);
   color: var(--hue-on-accent);
-  font-size: 13px;
+  font-size: var(--fs-13);
   cursor: pointer;
   transition: filter var(--dur-fast) var(--ease);
 }

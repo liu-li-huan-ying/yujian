@@ -108,7 +108,7 @@ defineSlots<{
 .tmenu__list {
   position: absolute;
   top: calc(100% + 6px);
-  z-index: 40;
+  z-index: var(--z-popover);
   min-width: 196px;
   padding: 5px;
   border-radius: var(--radius-md);
@@ -176,7 +176,7 @@ defineSlots<{
 
 .tmenu__hint {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   letter-spacing: 0.02em;
 }

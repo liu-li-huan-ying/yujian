@@ -1431,7 +1431,7 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 **（2）渲染：Canvas 2D + d3-force**
 
 * 依赖先翻仓库：`d3-force` **已在 `node_modules`**（mermaid 的传递依赖）。因其纯 JS、无 node-gyp（红线 3），提升为**直接依赖** `d3-force ^3.0.0`（+ `@types/d3-force`）即可安全复用，**未引入任何编译型依赖**。平移 / 缩放 / 拖拽在 Canvas 上自行实现，故不需 `d3-zoom` / `d3-drag`。
-* **Canvas 而非 SVG**：节点数多时 SVG DOM 会拖垮渲染（UI-DESIGN §4.3）。
+* **Canvas 而非 SVG**：节点数多时 SVG DOM 会拖垮渲染（规格见 `docs/PHASE3-UI-DESIGN.md` §4.3）。
 * 底用 `--hue-editor` 纯净实色，**不叠玉质纹理**；节点分三级：中心 r8 走 `--hue-accent`、一跳 r5 走 `--hue-text-2`、二跳及更远 r3.5 走 `--hue-text-3` 且默认不显标签（悬停才出）。
 * 主题适配：Canvas 不能直接用 CSS 变量 → 每次绘制经 `getComputedStyle` 取计算值（`--hue-editor` / `--hue-accent` / `--hue-text-1/2/3`），切皮肤自动跟随。
   * ⚠️ `--hue-*` 是**完整色值**（如 `#5fa8a0`）而非三元组，与 `--hue-mark` / `--hue-tint-*` 那组三元组不同 → `withAlpha()` 需自行解析成 `rgba()`，别照抄 `rgb(var(--hue-mark))` 写法。

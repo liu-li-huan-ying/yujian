@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="moc glass" role="dialog" :aria-label="L.mocTitle">
+  <div class="moc" role="region" :aria-label="L.mocTitle">
     <div class="moc__head">
       <Icon name="map" :size="15" class="moc__icon" />
       <span class="moc__title">{{ L.mocTitle }}</span>
@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 10px;
   left: 16px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 340px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
@@ -300,16 +300,16 @@ onBeforeUnmount(() => {
   color: var(--hue-accent);
 }
 .moc__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
 .moc__count {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   color: var(--hue-on-accent);
   background: var(--hue-accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   min-width: 18px;
   text-align: center;
@@ -427,7 +427,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin: 0 0 10px;
   padding: 9px 10px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.55;
   color: var(--hue-text-2);
   background: var(--hue-surface);
@@ -494,18 +494,18 @@ onBeforeUnmount(() => {
 /* 计数徽标：min-width 钉死居中，位数变化不抖动（动态布局铁律 #2） */
 .moc__badge {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   color: var(--hue-text-3);
   background: var(--hue-active);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   min-width: 20px;
   text-align: center;
 }
 .moc__trunc {
   margin: 4px 2px 0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 
@@ -567,7 +567,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .row__dir {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   overflow: hidden;
   text-overflow: ellipsis;

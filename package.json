@@ -16,7 +16,7 @@
     "test": "node scripts/test-core.mjs",
     "e2e:open": "electron-vite build && node scripts/e2e-open-no-write.mjs",
     "stress:table": "node scripts/stress-table.mjs",
-    "check": "npm run typecheck && npm run lint && npm run check:encoding && npm test && npm run verify:md && npm run verify:corpus && npm run check:structure",
+    "check": "npm run typecheck && npm run lint && npm run check:encoding && npm run check:design && npm test && npm run verify:md && npm run verify:corpus && npm run check:structure",
     "clean": "node scripts/clean.mjs",
     "lint": "eslint . --ext .ts,.vue",
     "lint:fix": "eslint . --ext .ts,.vue --fix",
@@ -29,6 +29,7 @@
     "release:mac": "electron-vite build && electron-builder --mac --publish=onTag",
     "release:linux": "electron-vite build && electron-builder --linux --publish=onTag",
     "check:encoding": "node scripts/check-encoding.mjs",
+    "check:design": "node scripts/check-design.mjs",
     "perf:index": "node scripts/perf-index.mjs",
     "readme:assets": "node scripts/gen-readme-assets.mjs",
     "check:structure": "node scripts/check-structure.mjs"

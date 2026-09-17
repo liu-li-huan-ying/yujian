@@ -164,7 +164,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: absolute;
   top: 10px;
   right: 16px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 320px;
   max-width: calc(100% - 32px);
   padding: 12px;
@@ -194,7 +194,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: var(--hue-accent);
 }
 .bk__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
@@ -218,7 +218,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .bk__desc {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.5;
   color: var(--hue-text-3);
 }
@@ -260,7 +260,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   padding: 4px 2px;
 }
@@ -271,8 +271,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
-  color: #6fcf97;
+  font-size: var(--fs-12);
+  color: var(--hue-success);
   padding: 4px 2px;
   line-height: 1.5;
 }

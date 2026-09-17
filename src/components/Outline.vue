@@ -96,7 +96,7 @@ watch(
 
 .outline__head {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   display: flex;
   align-items: center;
   height: var(--h-crumb);
@@ -105,7 +105,7 @@ watch(
 }
 
 .outline__title {
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
   color: var(--hue-text-2);
   letter-spacing: 0.04em;
@@ -113,7 +113,7 @@ watch(
 
 .outline__body {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -169,7 +169,7 @@ watch(
   transform: translateY(-50%);
   width: 2px;
   height: 16px;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--hue-accent);
 }
 
@@ -204,7 +204,7 @@ watch(
 .empty-state__hint {
   margin: 0;
   max-width: 150px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.7;
   color: var(--hue-text-3);
 }

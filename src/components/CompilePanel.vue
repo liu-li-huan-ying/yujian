@@ -214,7 +214,7 @@ function confirm(): void {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -230,7 +230,7 @@ function confirm(): void {
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border-radius: var(--radius-lg, 14px);
+  border-radius: var(--radius-lg);
   animation: cp-in 0.18s ease both;
 }
 
@@ -244,14 +244,14 @@ function confirm(): void {
   color: var(--hue-accent, #248077);
 }
 .panel__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1, #e8e9e7);
 }
 .panel__count {
-  font-size: 11px;
+  font-size: var(--fs-11);
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--hue-accent, #248077);
   background: var(--hue-active, rgba(95, 168, 160, 0.16));
 }
@@ -262,7 +262,7 @@ function confirm(): void {
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2, #a3a7a5);
   cursor: pointer;
@@ -282,7 +282,7 @@ function confirm(): void {
 .panel__body {
   flex: 1;
   min-height: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   overflow: auto;
   background: rgba(var(--hue-tint-1, 95, 168, 160), 0.06);
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.08));
@@ -305,7 +305,7 @@ function confirm(): void {
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 .row:hover {
   background: rgba(var(--hue-tint-1, 95, 168, 160), 0.1);
@@ -354,7 +354,7 @@ function confirm(): void {
   width: 22px;
   height: 22px;
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.1));
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2, #a3a7a5);
   cursor: pointer;
@@ -418,7 +418,7 @@ function confirm(): void {
   /* 凹陷玻璃：比面板更深一档，配合内阴影表达「刻入」层次（呼应 §10.1 Depth 原则） */
   background: rgba(0, 0, 0, 0.22);
   border: 1px solid var(--hue-border-subtle, rgba(255, 255, 255, 0.08));
-  border-radius: var(--radius-md, 6px);
+  border-radius: var(--radius-md);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
   box-sizing: border-box;
   transition: border-color var(--dur-fast) var(--ease),
@@ -475,8 +475,9 @@ function confirm(): void {
   box-shadow: 0 0 0 3px rgba(var(--hue-tint-2, 36, 128, 119), 0.22);
 }
 .select option {
-  color: #1c1e1f;
-  background: #fcfcfb;
+  /* 原生下拉列表由 Chromium 自绘；跟随主题，若某平台忽略这两条则退回系统默认（同样可读） */
+  color: var(--hue-text-1);
+  background: var(--hue-surface);
 }
 [data-skin][data-mode='light'] .select {
   background: rgba(20, 30, 28, 0.05)
@@ -527,8 +528,8 @@ function confirm(): void {
   gap: 5px;
   height: 28px;
   padding: 0 12px;
-  font-size: 12px;
-  border-radius: 8px;
+  font-size: var(--fs-12);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.1));
   background: transparent;
   color: var(--hue-text-1, #e8e9e7);

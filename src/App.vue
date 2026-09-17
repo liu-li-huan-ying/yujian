@@ -979,7 +979,7 @@ onBeforeUnmount(() => {
           @replaced="onSearchReplaced"
           @find-highlight="onFindHighlight"
         />
-        <div v-if="leftBottom !== 'none'" class="dock-slot dock-slot--left">
+        <div v-if="leftBottom !== 'none'" class="dock-slot dock-slot--left jade">
           <TagPanel
             v-if="leftBottom === 'tags'"
             :vault-path="vaultPath"
@@ -1088,7 +1088,7 @@ onBeforeUnmount(() => {
           :active-index="host?.activeHeadingIndex ?? -1"
           @select="onOutlineSelect"
         />
-        <div v-if="rightBottom !== 'none'" class="dock-slot dock-slot--right">
+        <div v-if="rightBottom !== 'none'" class="dock-slot dock-slot--right jade">
           <BacklinksPanel
             v-if="rightBottom === 'backlinks'"
             :vault-path="vaultPath"
@@ -1284,7 +1284,12 @@ onBeforeUnmount(() => {
 .dock-col--right :deep(.outline) {
   width: 100% !important;
 }
-/* 中和玻璃浮层面板的绝对定位，使其作为停靠列内的填满块 */
+/* 把「浮动卡」压成「停靠块」。
+   ⚠️ 设计规则（docs/UI-DESIGN.md §2.2）：材质的依据是「是否叠在内容之上」，
+   与常驻/临时无关。标签 / 内容地图 / 反链 / 快照这几个面板最初是浮动卡（absolute +
+   固定宽 + 玻璃），被停靠列收编后**仍在自证浮动身份**——材质已改由本槽的 .jade 承担，
+   但它们的定位与尺寸仍在这里被中和。彻底剥离这层身份（含 role="dialog" 残留）已列为
+   架构债，见 §9.3；在那之前这里是容器接管组件身份的**唯一**合法例外。 */
 .dock-slot :deep(.tags),
 .dock-slot :deep(.moc),
 .dock-slot :deep(.bl),
@@ -1314,13 +1319,13 @@ onBeforeUnmount(() => {
 
 .statusbar__inner {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 100%;
   padding: 0 14px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 
@@ -1342,10 +1347,10 @@ onBeforeUnmount(() => {
   border: 1px solid var(--hue-border-subtle);
   background: rgba(var(--hue-tint-1), 0.1);
   color: var(--hue-text-2);
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 1.3;
   transition:
@@ -1360,7 +1365,7 @@ onBeforeUnmount(() => {
 }
 .stat-chip .u {
   font-style: normal;
-  font-size: 10px;
+  font-size: var(--fs-10);
   opacity: 0.7;
   margin-left: 1px;
 }
@@ -1372,11 +1377,11 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(var(--hue-mark), 0.6);
   background: rgba(var(--hue-mark), 0.14);
   color: rgb(var(--hue-mark));
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 1.3;
   transition:
@@ -1392,7 +1397,7 @@ onBeforeUnmount(() => {
   display: inline-block;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   margin-right: 5px;
   vertical-align: middle;
 }
@@ -1409,10 +1414,10 @@ onBeforeUnmount(() => {
   border: 1px solid var(--hue-border-subtle);
   background: rgba(var(--hue-tint-1), 0.12);
   color: var(--hue-text-2);
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 1.3;
   letter-spacing: 0.02em;
@@ -1430,14 +1435,14 @@ onBeforeUnmount(() => {
   left: 50%;
   bottom: 56px;
   transform: translateX(-50%);
-  z-index: 50;
+  z-index: var(--z-toast);
   max-width: min(80vw, 560px);
   padding: 9px 16px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   font-size: 12.5px;
   color: var(--hue-text-1);
   background: rgba(var(--hue-tint-1), 0.72);
-  border: 1px solid var(--hue-border-strong, var(--hue-border-subtle));
+  border: 1px solid var(--hue-border-subtle);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(28px) saturate(170%);
   -webkit-backdrop-filter: blur(28px) saturate(170%);

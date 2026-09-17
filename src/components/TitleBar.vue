@@ -394,7 +394,7 @@ onMounted(() => {
 /* 可拖拽区域：撑满剩余空间，把操作按钮挤到右侧 */
 .bar__drag {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -406,7 +406,7 @@ onMounted(() => {
 }
 
 .bar__name {
-  font-size: 13px;
+  font-size: var(--fs-13);
   color: var(--hue-text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -416,14 +416,14 @@ onMounted(() => {
 .bar__dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-accent);
   flex-shrink: 0;
 }
 
 .bar__actions {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -532,7 +532,7 @@ onMounted(() => {
 /* ── 自绘窗口控制按钮 ── */
 .win {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   display: flex;
   height: 100%;
   -webkit-app-region: no-drag;

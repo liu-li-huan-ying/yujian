@@ -72,7 +72,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .modal-mask {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -88,7 +88,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .modal__title {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-14);
   font-weight: 600;
   color: var(--hue-text-1);
 }

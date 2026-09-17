@@ -11,6 +11,7 @@
 | 文档 | 性质 | 权威性 |
 | --- | --- | --- |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 架构与实现现状；§5.x 按特性分批记录「为什么这么做」 | **架构唯一事实源**。与代码冲突时以代码为准，并立即改本文档 |
+| [`UI-DESIGN.md`](UI-DESIGN.md) | 设计体系 **v2.0**：内核（材质/高度）、刻度（字号/圆角/层级）、色相与可访问性下限、组件面归属、**治理与设计门禁** | **设计唯一事实源**（"为什么长这样"）。令牌值以 `src/styles/tokens.css` 为准、图标以 `Icon.vue` 为准；违反它会被 `check:design` 拦下 |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | 面向用户的变更记录（仓库根） | **变更唯一事实源** |
 | [`../README.md`](../README.md) / [`../README_EN.md`](../README_EN.md) | 面向使用者的介绍与上手 | 不描述内部实现 |
 
@@ -43,10 +44,12 @@
 | [`PHASE3-UI-DESIGN.md`](PHASE3-UI-DESIGN.md) · [`PHASE3-LAYOUT-REDESIGN.md`](PHASE3-LAYOUT-REDESIGN.md) · [`PHASE3-UI-MOCKUP.html`](PHASE3-UI-MOCKUP.html) | Phase 3 界面设计与布局改造（HTML 为可交互设计稿） |
 | [`SNAPSHOT-GIT-DESIGN.md`](SNAPSHOT-GIT-DESIGN.md) | 快照 × Git 结合方案 |
 | [`FOCUS-MODE-2.0-DESIGN.md`](FOCUS-MODE-2.0-DESIGN.md) | 凝神模式 2.0 |
-| [`UI-DESIGN.md`](UI-DESIGN.md) | 早期视觉规范（玉质/玻璃语言、`--hue-*` 色板由来） |
 | [`PRODUCT-POLISH-IDEAS.md`](PRODUCT-POLISH-IDEAS.md) | 产品打磨点子池（未排期） |
 
 **计划文档在特性落地后不再更新**，落地后的实际行为一律看 `ARCHITECTURE.md`。
+
+> ⚠️ `UI-DESIGN.md` **已从本区升入 §一 权威现状**（v2.0 起它是设计唯一事实源 + 有 CI 门禁）。
+> 历史上它曾被登记为「早期视觉规范」，那是它还没有强制机制时的定位。
 
 ## 五、生成物与资源
 
@@ -60,5 +63,8 @@
 
 1. **代码与测试是事实**。文档与之冲突 → 改文档，不改事实。
 2. `ARCHITECTURE.md` 管架构、`CHANGELOG.md` 管变更，两者不重复表述同一件事。
-3. 审计 / 评审报告只对「当时」负责，不追改；进度看最新一份的落实结果节。
-4. 设计 / 计划文档在实现后即冻结，仅作决策留痕。
+3. `UI-DESIGN.md` 管**视觉与交互的判据**（"为什么长这样"），且**有牙齿**：
+   `npm run check:design` 会拦下违反它的代码。它与 `ARCHITECTURE.md` 的分工是
+   「好不好看 / 该不该这样」 vs 「怎么实现的」——不要互相抄。
+4. 审计 / 评审报告只对「当时」负责，不追改；进度看最新一份的落实结果节。
+5. 设计 / 计划文档在实现后即冻结，仅作决策留痕（`UI-DESIGN.md` 除外，它是活文档）。

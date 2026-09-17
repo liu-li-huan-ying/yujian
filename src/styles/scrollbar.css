@@ -26,7 +26,7 @@
   /* 透明边框 + padding-box 裁剪 → 滑块两侧留出 2px 呼吸感，更纤细精致 */
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   transition: background var(--dur-fast) var(--ease);
 }
 

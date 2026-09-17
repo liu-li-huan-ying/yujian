@@ -114,15 +114,15 @@ function tabName(path: string): string {
   position: fixed;
   top: 10px;
   left: 50%;
-  z-index: 55;
+  z-index: var(--z-popover);
   height: 32px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 8px 0 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   max-width: min(80vw, 640px);
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-2);
   transform: translateX(-50%) translateY(-160%);
   opacity: 0;
@@ -165,7 +165,7 @@ function tabName(path: string): string {
   height: 24px;
   padding: 0 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
   font-size: 11.5px;
@@ -196,7 +196,7 @@ function tabName(path: string): string {
   max-width: 320px;
   max-height: 40vh;
   overflow-y: auto;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 5px;
   display: flex;
   flex-direction: column;
@@ -208,9 +208,9 @@ function tabName(path: string): string {
   background: transparent;
   color: var(--hue-text-2);
   text-align: left;
-  font-size: 12px;
+  font-size: var(--fs-12);
   padding: 6px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;

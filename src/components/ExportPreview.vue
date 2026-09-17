@@ -125,7 +125,7 @@ onBeforeUnmount(() => {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border-radius: var(--radius-lg, 14px);
+  border-radius: var(--radius-lg);
   animation: ep-in 0.18s ease both;
 }
 
@@ -156,14 +156,14 @@ onBeforeUnmount(() => {
   color: var(--hue-accent, #248077);
 }
 .panel__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
 .panel__tag {
-  font-size: 11px;
+  font-size: var(--fs-11);
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--hue-accent, #248077);
   background: var(--hue-active, rgba(95, 168, 160, 0.16));
 }
@@ -174,7 +174,7 @@ onBeforeUnmount(() => {
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
   cursor: pointer;
@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
 .panel__body {
   flex: 1;
   min-height: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: #fcfcfb;
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.08));
@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 2px;
   padding: 5px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--hue-border-subtle, rgba(255, 255, 255, 0.06));
 }
 .panel__name {
@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .panel__hint {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-2);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -262,8 +262,8 @@ onBeforeUnmount(() => {
   gap: 5px;
   height: 28px;
   padding: 0 12px;
-  font-size: 12px;
-  border-radius: 8px;
+  font-size: var(--fs-12);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--hue-border-subtle, rgba(0, 0, 0, 0.1));
   background: transparent;
   color: var(--hue-text-1);

@@ -149,7 +149,7 @@ mark {
 }
 sup, sub { line-height: 0; font-size: 0.78em; }
 kbd {
-  font-family: var(--yj-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.84em;
   background: #ffffff;
   color: #1b1d1c;

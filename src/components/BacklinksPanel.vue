@@ -125,7 +125,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="bl glass" role="dialog" aria-label="反链面板">
+  <div class="bl" role="region" aria-label="反链面板">
     <div class="bl__head">
       <Icon name="backlink" :size="15" class="bl__icon" />
       <span class="bl__title">{{ L.backlinks }}</span>
@@ -233,7 +233,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: absolute;
   top: 10px;
   right: 16px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 372px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
@@ -264,16 +264,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: var(--hue-accent);
 }
 .bl__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
 .bl__count {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   color: var(--hue-on-accent);
   background: var(--hue-accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   min-width: 18px;
   text-align: center;
@@ -312,7 +312,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   align-items: center;
   justify-content: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
   padding: 22px 8px;
@@ -375,7 +375,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   white-space: nowrap;
 }
 .row__line {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-accent);
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;

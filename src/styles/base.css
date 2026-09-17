@@ -12,7 +12,7 @@ body,
 
 body {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-13);
   line-height: 1.6;
   color: var(--hue-text-1);
   background: var(--hue-editor);
@@ -22,10 +22,10 @@ body {
 
 button {
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-2);
   background: transparent;
-  border: 0.5px solid var(--border-default);
+  border: 0.5px solid var(--hue-border-subtle);
   border-radius: var(--radius-md);
   padding: 5px 12px;
   cursor: pointer;
@@ -39,11 +39,11 @@ button:hover {
 /* ── 通用 pill 按钮（视图切换用：面板视图切换 + diff 统一/并排）── */
 .vbtn {
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   border: 0;
   background: transparent;
   color: var(--hue-text-3);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease),

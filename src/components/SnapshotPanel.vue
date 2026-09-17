@@ -226,7 +226,7 @@ function fmtTime(ts: number): string {
 </script>
 
 <template>
-  <div class="snap glass" :class="{ 'snap--tl': view === 'timeline', 'snap--split': diffView === 'split' }" role="dialog" :aria-label="L.snapDialog">
+  <div class="snap" :class="{ 'snap--tl': view === 'timeline', 'snap--split': diffView === 'split' }" role="region" :aria-label="L.snapDialog">
     <header class="snap__head">
       <span class="snap__title">{{ L.snapshots }}</span>
       <span class="snap__count">{{ L.snapshotCount.replace('{n}', String(snapshots.branchList.length)) }}</span>
@@ -470,7 +470,7 @@ function fmtTime(ts: number): string {
   position: absolute;
   top: 10px;
   right: 16px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 340px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
@@ -497,13 +497,13 @@ function fmtTime(ts: number): string {
   gap: 8px;
 }
 .snap__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--hue-text-1);
 }
 .snap__count {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   font-variant-numeric: tabular-nums;
 }
@@ -516,7 +516,7 @@ function fmtTime(ts: number): string {
   gap: 2px;
   background: var(--hue-highlight);
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .snap__x {
@@ -551,9 +551,9 @@ function fmtTime(ts: number): string {
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--hue-text-2);
   cursor: pointer;
@@ -565,7 +565,7 @@ function fmtTime(ts: number): string {
 .bchip__dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-text-3);
   flex: 0 0 auto;
 }
@@ -573,7 +573,7 @@ function fmtTime(ts: number): string {
   font-weight: 500;
 }
 .bchip__n {
-  font-size: 10px;
+  font-size: var(--fs-10);
   color: var(--hue-text-3);
   font-variant-numeric: tabular-nums;
 }
@@ -604,10 +604,10 @@ function fmtTime(ts: number): string {
 .draftinput {
   width: 160px;
   height: 24px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   padding: 0 10px;
   border: 1px solid var(--hue-accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--hue-surface);
   color: var(--hue-text-1);
   outline: none;
@@ -649,7 +649,7 @@ function fmtTime(ts: number): string {
   border-radius: var(--radius-md);
   background: var(--hue-accent);
   color: var(--hue-on-accent);
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -673,9 +673,9 @@ function fmtTime(ts: number): string {
 }
 .ftag {
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--hue-text-2);
   cursor: pointer;
@@ -714,7 +714,7 @@ function fmtTime(ts: number): string {
   gap: 6px;
 }
 .snap__empty {
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
   padding: 20px 8px;
@@ -739,7 +739,7 @@ function fmtTime(ts: number): string {
 }
 .row:hover {
   background: var(--hue-surface-2);
-  border-color: var(--hue-border-default);
+  border-color: var(--hue-border-subtle);
   box-shadow: var(--hue-shadow-1);
 }
 .row.on {
@@ -766,7 +766,7 @@ function fmtTime(ts: number): string {
   min-width: 0;
 }
 .row__time {
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -778,7 +778,7 @@ function fmtTime(ts: number): string {
 .row__note {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -792,7 +792,7 @@ function fmtTime(ts: number): string {
   flex: 1;
 }
 .row__delta {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -814,11 +814,11 @@ function fmtTime(ts: number): string {
 .cmpbtn {
   width: 20px;
   height: 20px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   line-height: 1;
   font-weight: 600;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--hue-text-3);
   cursor: pointer;
@@ -849,8 +849,8 @@ function fmtTime(ts: number): string {
   align-items: center;
   gap: 3px;
   padding: 1px 9px;
-  font-size: 11px;
-  border-radius: 999px;
+  font-size: var(--fs-11);
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--hue-accent) 16%, transparent);
   color: var(--hue-text-1);
   cursor: pointer;
@@ -866,7 +866,7 @@ function fmtTime(ts: number): string {
 .chip__x {
   font-style: normal;
   opacity: 0.5;
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1;
 }
 .chip--add {
@@ -883,10 +883,10 @@ function fmtTime(ts: number): string {
 .taginput {
   width: 96px;
   height: 22px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   padding: 0 9px;
   border: 1px solid var(--hue-accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--hue-surface);
   color: var(--hue-text-1);
   outline: none;
@@ -941,10 +941,10 @@ function fmtTime(ts: number): string {
   width: 9px;
   height: 9px;
   transform: translateY(-50%);
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-surface-2);
-  border: 1.5px solid var(--hue-border-default);
-  z-index: 1;
+  border: 1px solid var(--hue-border-subtle);
+  z-index: var(--z-local);
   transition:
     background var(--dur-fast) var(--ease),
     border-color var(--dur-fast) var(--ease),
@@ -973,7 +973,7 @@ function fmtTime(ts: number): string {
   padding: 6px 4px 12px 0;
 }
 .tl-now .row__time--now {
-  font-size: 12px;
+  font-size: var(--fs-12);
 }
 
 /* ── 操作按钮 ── */

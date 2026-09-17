@@ -431,7 +431,7 @@ function onMoreSelect(action: string): void {
   pointer-events: none;
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease);
-  z-index: 2;
+  z-index: var(--z-raised);
 }
 .tabbar__fade.is-on {
   opacity: 1;
@@ -490,7 +490,7 @@ function onMoreSelect(action: string): void {
   text-align: center;
   text-overflow: clip;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
   letter-spacing: 0.015em;
 }
@@ -503,14 +503,14 @@ function onMoreSelect(action: string): void {
 .tab :deep(.rename-input) {
   height: 20px;
   padding: 0 4px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   letter-spacing: 0.015em;
 }
 
 .tab__dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--hue-accent);
   flex-shrink: 0;
 }
@@ -567,7 +567,7 @@ function onMoreSelect(action: string): void {
   padding: 0 9px;
   border-left: 1px solid var(--hue-border-subtle);
   color: var(--hue-text-3);
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   user-select: none;

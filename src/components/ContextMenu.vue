@@ -104,9 +104,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .ctx {
   position: fixed;
-  z-index: 60;
+  z-index: var(--z-popover);
   width: 188px;
-  max-height: var(--menu-max-h, 280px);
+  max-height: 280px;
   overflow-y: auto;
   padding: 4px;
   border-radius: var(--radius-md);

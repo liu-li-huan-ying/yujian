@@ -100,14 +100,14 @@ const metaText = computed(() =>
 
 .results__meta {
   padding: 2px 8px 8px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 
 .results__truncated {
   padding: 4px 8px;
   margin: 0 2px 6px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.4;
   color: rgb(var(--hue-mark));
   background: rgba(var(--hue-mark), 0.12);
@@ -146,10 +146,10 @@ const metaText = computed(() =>
 
 .file__count {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-accent);
   background: rgba(var(--hue-tint-2), 0.2);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 1px 7px;
 }
 
@@ -186,7 +186,7 @@ const metaText = computed(() =>
   width: 30px;
   text-align: right;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   user-select: none;
 }
@@ -194,7 +194,7 @@ const metaText = computed(() =>
 .hit__text {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.5;
   color: var(--hue-text-2);
   overflow: hidden;
@@ -205,7 +205,7 @@ const metaText = computed(() =>
 :deep(mark) {
   background: var(--hue-accent);
   color: var(--hue-on-accent);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   padding: 0 1px;
 }
 </style>

@@ -874,7 +874,7 @@ function startDrag(e: PointerEvent): void {
 
 .sidebar__head {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -899,7 +899,7 @@ function startDrag(e: PointerEvent): void {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.1em;
@@ -909,7 +909,7 @@ function startDrag(e: PointerEvent): void {
 
 /* 主标题：当前 vault 文件夹名，超长省略，完整路径留作 hover title */
 .sidebar__name {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 500;
   line-height: 1.3;
   color: var(--hue-text-1);
@@ -957,7 +957,7 @@ function startDrag(e: PointerEvent): void {
 
 .sidebar__body {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-local);
   flex: 1;
   min-height: 0;
   padding: 2px 6px 10px;
@@ -991,7 +991,7 @@ function startDrag(e: PointerEvent): void {
 
 .empty-state__title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 500;
   line-height: 1.5;
   color: var(--hue-text-2);
@@ -1000,7 +1000,7 @@ function startDrag(e: PointerEvent): void {
 .empty-state__hint {
   margin: 0;
   max-width: 168px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.7;
   color: var(--hue-text-3);
 }
@@ -1047,7 +1047,7 @@ function startDrag(e: PointerEvent): void {
   top: 0;
   right: -2px;
   bottom: 0;
-  z-index: 2;
+  z-index: var(--z-raised);
   width: 4px;
   cursor: col-resize;
 }
@@ -1062,7 +1062,7 @@ function startDrag(e: PointerEvent): void {
 .search {
   position: sticky;
   top: -2px;
-  z-index: 2;
+  z-index: var(--z-raised);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1070,7 +1070,7 @@ function startDrag(e: PointerEvent): void {
   padding: 0 8px;
   height: 30px;
   border-radius: var(--radius-md);
-  background: var(--bg-input, var(--bg-hover));
+  background: var(--bg-hover);
   border: 1px solid var(--hue-border-subtle);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   color: var(--hue-text-3);
@@ -1101,7 +1101,7 @@ function startDrag(e: PointerEvent): void {
   background: transparent;
   cursor: pointer;
   color: var(--hue-text-3);
-  font-size: 15px;
+  font-size: var(--fs-15);
   line-height: 1;
   padding: 0 2px 2px;
   border-radius: var(--radius-sm);
@@ -1166,7 +1166,7 @@ function startDrag(e: PointerEvent): void {
   background: rgba(255, 255, 255, 0.04);
   color: var(--hue-text-1);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-12);
   outline: none;
 }
 
@@ -1183,7 +1183,7 @@ function startDrag(e: PointerEvent): void {
   background: var(--hue-accent);
   color: var(--hue-on-accent);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 500;
   cursor: pointer;
 }
@@ -1206,7 +1206,7 @@ function startDrag(e: PointerEvent): void {
 .repl__confirm-text {
   flex: 1;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.4;
   color: var(--hue-text-2);
 }
@@ -1220,7 +1220,7 @@ function startDrag(e: PointerEvent): void {
   border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-11);
   cursor: pointer;
 }
 
@@ -1237,14 +1237,14 @@ function startDrag(e: PointerEvent): void {
 
 .searching {
   padding: 12px 8px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
 }
 
 /* 无结果 / 状态提示 */
 .empty {
   padding: 10px 8px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
 }
 
@@ -1261,7 +1261,7 @@ function startDrag(e: PointerEvent): void {
   margin: 0 0 8px;
   padding: 3px;
   border-radius: var(--radius-md);
-  background: var(--hue-highlight, var(--bg-input));
+  background: var(--hue-highlight);
   border: 1px solid var(--hue-border-subtle);
 }
 
@@ -1320,7 +1320,7 @@ function startDrag(e: PointerEvent): void {
   background: transparent;
   color: var(--hue-text-2);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-11);
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease),
@@ -1345,13 +1345,13 @@ function startDrag(e: PointerEvent): void {
 }
 
 .chip__ww {
-  font-size: 13px;
+  font-size: var(--fs-13);
   line-height: 1;
 }
 
 .chip__rx {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-weight: 600;
 }
 
@@ -1397,7 +1397,7 @@ function startDrag(e: PointerEvent): void {
 .nav__count {
   flex: 1;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-12);
   font-variant-numeric: tabular-nums;
   color: var(--hue-text-2);
   user-select: none;
@@ -1409,10 +1409,10 @@ function startDrag(e: PointerEvent): void {
   left: 10px;
   right: 10px;
   bottom: 10px;
-  z-index: 70;
+  z-index: var(--z-popover);
   padding: 9px 11px;
   border-radius: var(--radius-md);
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.5;
   color: var(--hue-text-1);
   box-shadow:

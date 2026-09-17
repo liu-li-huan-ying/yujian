@@ -309,7 +309,7 @@ function fwdRenameConfirm(path: string, value: string): void {
   border-radius: var(--radius-sm);
   background: transparent;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-13);
   color: var(--hue-text-2);
   text-align: left;
   cursor: pointer;
@@ -345,7 +345,7 @@ function fwdRenameConfirm(path: string, value: string): void {
   transform: translateY(-50%);
   width: 2px;
   height: calc(var(--h-row) - 10px);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--hue-accent);
 }
 

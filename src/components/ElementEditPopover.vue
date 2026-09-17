@@ -132,7 +132,7 @@ onBeforeUnmount(() => {
 .yj-elem-pop-root {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: var(--z-popover);
 }
 .yj-elem-pop-backdrop {
   position: absolute;
@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 .yj-ep-title {
-  font-size: 14px;
+  font-size: var(--fs-14);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -159,13 +159,13 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   /* 与编辑区各处药丸托盘同款：图标 t2 / 0.9，hover 走 --hue-active + accent，
      不再用更暗的 t3 与硬编码灰兜底（那正是「同屏像两个软件」的来源）。 */
   color: var(--hue-text-2);
   opacity: 0.9;
-  font-size: 16px;
+  font-size: var(--fs-16);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -187,12 +187,12 @@ onBeforeUnmount(() => {
 .yj-ep-btn {
   height: 30px;
   padding: 0 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--hue-border-subtle);
   /* 次级按钮底走 --bg-hover（与全局 hover 同一来源），不再硬编码白 8% */
   background: var(--bg-hover);
   color: var(--hue-text-1);
-  font-size: 13px;
+  font-size: var(--fs-13);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease);
 }

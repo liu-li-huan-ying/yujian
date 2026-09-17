@@ -97,7 +97,7 @@ function dirOf(p: string): string {
 <style scoped>
 .ws {
   position: fixed;
-  z-index: 60;
+  z-index: var(--z-popover);
   width: 300px;
   max-width: calc(100vw - 24px);
   padding: 5px;
@@ -172,7 +172,7 @@ function dirOf(p: string): string {
 .ws__dir {
   flex: 0 0 auto;
   max-width: 40%;
-  font-size: 10px;
+  font-size: var(--fs-10);
   opacity: 0.62;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -182,7 +182,7 @@ function dirOf(p: string): string {
 .ws__empty {
   margin: 0;
   padding: 14px 8px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
 }

@@ -220,12 +220,12 @@ onBeforeUnmount(() => {
   height: 28px;
   padding: 0 6px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--hue-text-2);
   opacity: 0.9;
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 13px;
+  font-size: var(--fs-13);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -251,7 +251,7 @@ onBeforeUnmount(() => {
 }
 .yj-me-label {
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
 }
 .yj-me-input {
@@ -260,12 +260,12 @@ onBeforeUnmount(() => {
   resize: vertical;
   padding: 10px 12px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--hue-surface-2);
   color: var(--hue-text-1);
   /* 等宽 14px（规格 §4.4） */
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 14px;
+  font-size: var(--fs-14);
   line-height: 1.6;
   outline: none;
 }
@@ -281,7 +281,7 @@ onBeforeUnmount(() => {
   overflow: auto;
   padding: 12px;
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--hue-surface-2);
 }
 .yj-me-preview :deep(svg) {
@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 12px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-2);
 }
 .yj-me-labels {
@@ -304,11 +304,11 @@ onBeforeUnmount(() => {
 }
 .yj-me-tag {
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--hue-accent) 18%, transparent);
   color: var(--hue-accent);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: var(--fs-11);
 }
 .yj-me-tag.dim {
   background: var(--hue-surface-2);

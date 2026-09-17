@@ -191,14 +191,14 @@ onBeforeUnmount(() => {
   padding: 0 2px;
 }
 .diff__mode {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 500;
   color: var(--hue-text-2);
 }
 .diff__stat {
   display: inline-flex;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
 }
 .stat--add {
@@ -226,11 +226,11 @@ onBeforeUnmount(() => {
   gap: 1px;
   background: var(--hue-highlight);
   border: 1px solid var(--hue-border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 .vbtn--mini {
   padding: 2px 8px;
-  font-size: 10px;
+  font-size: var(--fs-10);
 }
 .diff__clear {
   display: inline-flex;
@@ -262,7 +262,7 @@ onBeforeUnmount(() => {
 .diff {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.65;
   color: var(--hue-text-2);
 }
@@ -270,7 +270,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: baseline;
   padding: 0 10px 0 0;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   transition: background var(--dur-fast) var(--ease);
 }
 .ln:hover {
@@ -328,7 +328,7 @@ onBeforeUnmount(() => {
     box-shadow var(--dur-fast) var(--ease);
 }
 .hunk:hover {
-  border-color: var(--hue-border-default);
+  border-color: var(--hue-border-subtle);
   box-shadow: var(--hue-shadow-1);
 }
 .hunk--add {
@@ -349,7 +349,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--hue-border-subtle);
 }
 .hunk__tag {
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--hue-text-3);
@@ -372,10 +372,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 4px;
   padding: 2px 9px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 500;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--hue-accent);
   color: var(--hue-on-accent);
   cursor: pointer;
@@ -424,7 +424,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--fs-10);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--hue-text-3);
@@ -440,7 +440,7 @@ onBeforeUnmount(() => {
 }
 .hunk__range {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-10);
   color: var(--hue-text-3);
   opacity: 0.8;
   min-width: 0;
@@ -453,9 +453,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 4px;
   padding: 2px 9px;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-weight: 500;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--hue-success) 16%, transparent);
   color: var(--hue-success);
 }

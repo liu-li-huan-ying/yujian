@@ -199,7 +199,7 @@ function fileBase(p: string | null): string {
 .mask {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -235,13 +235,13 @@ function fileBase(p: string | null): string {
 }
 .dlg__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-15);
   font-weight: 600;
   color: var(--hue-text-1);
 }
 .dlg__file {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -261,10 +261,10 @@ function fileBase(p: string | null): string {
   flex-wrap: wrap;
 }
 .chip {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--hue-border-subtle);
   color: var(--hue-text-2);
 }
@@ -310,7 +310,7 @@ function fileBase(p: string | null): string {
   max-height: 320px;
   overflow: auto;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-11);
   line-height: 1.5;
 }
 .line {
@@ -324,12 +324,12 @@ function fileBase(p: string | null): string {
 .line--del {
   background: rgba(224, 79, 69, 0.14);
   border-left-color: var(--hue-danger, #f34f45);
-  color: #f3b4af;
+  color: var(--hue-danger);
 }
 .line--add {
   background: rgba(60, 178, 127, 0.14);
   border-left-color: var(--hue-success, #3cb27f);
-  color: #9fe3c4;
+  color: var(--hue-success);
 }
 .line--empty {
   background: var(--hue-surface);

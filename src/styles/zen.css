@@ -83,7 +83,7 @@
   left: 0;
   right: 0;
   height: 48px;
-  z-index: 5;
+  z-index: var(--z-sticky);
   pointer-events: none;
   opacity: 0;
   transition: opacity 120ms var(--ease-zen) 280ms;

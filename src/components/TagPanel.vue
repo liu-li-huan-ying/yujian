@@ -219,7 +219,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="tags glass" role="dialog" :aria-label="L.tagsTitle">
+  <div class="tags" role="region" :aria-label="L.tagsTitle">
     <div class="tags__head">
       <Icon name="tag" :size="15" class="tags__icon" />
       <span class="tags__title">{{ L.tagsTitle }}</span>
@@ -342,7 +342,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 10px;
   left: 16px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 320px;
   max-width: calc(100% - 32px);
   max-height: calc(100% - 20px);
@@ -373,16 +373,16 @@ onBeforeUnmount(() => {
   color: var(--hue-accent);
 }
 .tags__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
 .tags__count {
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   color: var(--hue-on-accent);
   background: var(--hue-accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   min-width: 18px;
   text-align: center;
@@ -422,7 +422,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 28px;
   padding: 0 8px 0 28px;
-  font-size: 13px;
+  font-size: var(--fs-13);
   color: var(--hue-text-1);
   background: var(--hue-surface);
   border: 1px solid var(--hue-border-subtle);
@@ -488,11 +488,11 @@ onBeforeUnmount(() => {
 .tags__badge {
   flex-shrink: 0;
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
   color: var(--hue-text-3);
   background: var(--hue-active);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   min-width: 20px;
   text-align: center;
@@ -536,7 +536,7 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 2px;
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
 }
 .tags__crumb-item {
@@ -546,7 +546,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   padding: 2px 4px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--fs-12);
   transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .tags__crumb-item:hover {
@@ -619,7 +619,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .row__dir {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   overflow: hidden;
   text-overflow: ellipsis;

@@ -199,7 +199,7 @@ function insertSnippet(s: Snippet): void {
   position: absolute;
   top: calc(var(--h-titlebar) + 8px);
   right: 12px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 300px;
   max-height: calc(100% - var(--h-titlebar) - 40px);
   display: flex;
@@ -254,7 +254,7 @@ function insertSnippet(s: Snippet): void {
   background: transparent;
   color: var(--hue-text-3);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-12);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
@@ -284,7 +284,7 @@ function insertSnippet(s: Snippet): void {
 }
 
 .wa__label {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 
@@ -333,12 +333,12 @@ function insertSnippet(s: Snippet): void {
 }
 
 .wa__check-label {
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-1);
 }
 
 .wa__nodoc {
-  font-size: 12px;
+  font-size: var(--fs-12);
   color: var(--hue-text-3);
   text-align: center;
   padding: 18px 8px;
@@ -357,7 +357,7 @@ function insertSnippet(s: Snippet): void {
   background: var(--hue-highlight);
   color: var(--hue-text-1);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-12);
   cursor: pointer;
   text-align: left;
   transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),

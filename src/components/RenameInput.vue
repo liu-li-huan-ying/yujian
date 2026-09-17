@@ -72,7 +72,7 @@ function onBlur(): void {
   background: var(--hue-editor);
   color: var(--hue-text-1);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-13);
   outline: none;
 }
 </style>

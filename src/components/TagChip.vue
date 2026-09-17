@@ -33,7 +33,7 @@ defineProps<{
   min-width: 0;
   max-width: 190px;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--fs-12);
   line-height: 1.45;
   color: var(--hue-text-1);
   background-image: linear-gradient(
@@ -42,7 +42,7 @@ defineProps<{
     rgba(var(--hue-tint-1), 0.06) 100%
   );
   border: 1px solid rgba(var(--hue-tint-1), 0.3);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   padding: 1px 7px;
   cursor: inherit;
   transition:

@@ -121,7 +121,7 @@ function onKey(e: KeyboardEvent): void {
   position: absolute;
   right: 14px;
   bottom: 8px;
-  z-index: 30;
+  z-index: var(--z-panel);
   width: 280px;
   max-width: calc(100% - 28px);
   padding: 12px;
@@ -137,7 +137,7 @@ function onKey(e: KeyboardEvent): void {
   justify-content: space-between;
 }
 .stats__title {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   color: var(--hue-text-1);
 }
@@ -179,18 +179,18 @@ function onKey(e: KeyboardEvent): void {
   justify-content: space-between;
 }
 .cell__val {
-  font-size: 18px;
+  font-size: var(--fs-18);
   font-weight: 600;
   color: var(--hue-text-1);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 .cell__label {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
 }
 .cell--wide .cell__val {
-  font-size: 15px;
+  font-size: var(--fs-15);
 }
 
 .stats__sel {
@@ -220,11 +220,11 @@ function onKey(e: KeyboardEvent): void {
   stroke: var(--hue-accent);
   stroke-width: 6;
   stroke-linecap: round;
-  transition: stroke-dashoffset var(--dur-med) var(--ease);
+  transition: stroke-dashoffset var(--dur-base) var(--ease);
 }
 .ring__txt {
   fill: var(--hue-text-1);
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: 600;
   text-anchor: middle;
   dominant-baseline: central;
@@ -256,7 +256,7 @@ function onKey(e: KeyboardEvent): void {
   border-color: var(--hue-accent);
 }
 .goal__hint {
-  font-size: 11px;
+  font-size: var(--fs-11);
   color: var(--hue-text-3);
   font-variant-numeric: tabular-nums;
 }
