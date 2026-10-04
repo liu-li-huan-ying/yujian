@@ -14,7 +14,7 @@
  * 用法：npm run verify:md
  */
 import { rmSync } from 'node:fs'
-import { join, dirname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bundleTs } from './lib/bundle.mjs'
 

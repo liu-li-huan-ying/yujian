@@ -1228,6 +1228,10 @@ section('[J5] 灌入门闩 —— 程序化灌入事务不带回显、用户编�
     let st = mk()
     const end = beginIngest()
     check('门闩：置位期间 isIngestPending 为 true', isIngestPending() === true)
+    // 赋回 st 是必要的：ProseMirror 的 apply 返回**新** state，下一个 st.tr 必须基于它
+    // （本段后面的 st.apply 依赖此赋值）。但该新 state 此处不再被读 → ESLint 报未使用，
+    // 属对链式写法的已知误报，故局部豁免而非改写（改写会静默改变被测行为）。
+    // eslint-disable-next-line no-unused-vars
     st = st.apply(st.tr.insertText('灌入的正文'))
     end()
     check('门闩：灌入事务不回显（listener 不触发）', observed.join(',') === 'SILENT', observed.join(','))
@@ -1241,6 +1245,8 @@ section('[J5] 灌入门闩 —— 程序化灌入事务不带回显、用户编�
     const end = beginIngest()
     st = st.apply(st.tr.insertText('灌入'))
     end()
+    // 同上：必须赋回新 state，否则下一行 st.tr 基于旧 state、被测路径就变了
+    // eslint-disable-next-line no-unused-vars
     st = st.apply(st.tr.insertText('用户真的敲了字'))
     check('对照：解除门闩后用户编辑正常回显', observed.join(',') === 'SILENT,ECHO', observed.join(','))
   }
@@ -1249,6 +1255,8 @@ section('[J5] 灌入门闩 —— 程序化灌入事务不带回显、用户编�
   {
     observed.length = 0
     let st = mk()
+    // 保留 ProseMirror 惯用链式赋值；该新 state 此处不再被读 → 已知误报，局部豁免
+    // eslint-disable-next-line no-unused-vars
     st = st.apply(st.tr.insertText('用户输入'))
     check('默认：未开门闩时用户编辑回显', observed.join(',') === 'ECHO', observed.join(','))
   }

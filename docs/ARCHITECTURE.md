@@ -1793,6 +1793,21 @@ export interface SessionState {
 
 想放宽阈值，须**显式改文件并在此说明原因**，而不是让它悄悄涨上去。
 
+### 门禁脚本自身进 lint（`scripts/**/*.mjs`，2026-10-04）
+
+上述九道门禁的实现是 `scripts/` 下 17 个 `.mjs`（约 5500 行，`test-core.mjs` 占 2645）。它们有独特的风险——**「假绿」**：
+
+> 一个变量名打错、一个 `if (m[2])` 索引错位、一次条件写反，都**不会让任何测试变红**，
+> 因为被测的就是门禁自己。`check:design` 若在收集违规的 `badZ.push` 那行拼错变量名，
+> 它会**默默放过所有违规**而 CI 全绿——比没有门禁更危险（它还提供了虚假的安全感）。
+
+故把 `**/*.mjs` 纳入 ESLint（此前被全局 `ignore: ['*.mjs']` 排除）。落地要点：
+
+- **globals 手写、不引 `globals` 包**：只列实测 grep 到的 8 个（`console` / `process` / `setTimeout` / `clearTimeout` / `__dirname` / `performance` / `globalThis` / `URL`），保持零新依赖。
+- **已知误报用局部豁免，不全局关规则**：`test-core.mjs` 门闩断言段的 `st = st.apply(...)` 是 ProseMirror 链式写法，返回的新 state 此处不再被读 → `no-unused-vars` 误报。**但赋值本身必须保留**（`apply` 返回新 state，下一句 `st.tr` 依赖它，删掉会静默改变被测行为），故逐行 `eslint-disable-next-line` + 注明原因。反例是直接关掉整条规则——`verify-markdown.mjs` 的 `join` 死导入就是「关规则就再没人抓」的后果，本次已删。
+- **覆盖实测**：落地前全量探查仅 4 处违规、**零 `no-undef`**，说明底子干净、改造低风险。
+- **注入故障验证**（本项目铁律）：往 `check-design.mjs` 注入 `someUndefinedFunctionXyz()` → `npm run lint` 报红 exit 1 → 还原复绿 exit 0。**特别确认了 `npm run lint` 的 `--ext .ts,.vue` 不会漏掉 `.mjs`**——ESLint 9 flat config 下 `--ext` 只是叠加，实际覆盖由各段 `files` 决定，故新段对 CI 真实生效。
+
 ### 设计门禁 `scripts/check-design.mjs`（`npm run check:design`，已入 CI）
 
 结构门禁管「文件别长胖」，本门禁管「界面别长歪」——专治**不会让测试变红、但会慢慢腐蚀观感**的慢劣化（22 种字号 / 24 种圆角 / 13 种 z-index 那类）。七条规则见 `docs/UI-DESIGN.md` §9，要点：
