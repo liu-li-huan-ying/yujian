@@ -56,6 +56,8 @@ import { usePkmPanels } from './composables/usePkmPanels'
 import { useVaultLinks } from './composables/useVaultLinks'
 import { useExport, type ExportHostLike } from './composables/useExport'
 import { useToast } from './composables/useToast'
+import { useSaveGuard } from './composables/useSaveGuard'
+import { useSaveGuardForSwitch } from './composables/useSwitchGuard'
 import { useFileConflict, type ConflictEditorLike } from './composables/useFileConflict'
 import { useZenMode, type ZenEditorLike } from './composables/useZenMode'
 import { useWindowLayout } from './composables/useWindowLayout'
@@ -68,6 +70,13 @@ const U = L.ui
 /** 顶部轻提示：定时器随组件卸载自动清理（原先是 App 自己记一个 toastTimer） */
 const { toast, showToast, clearToast } = useToast()
 
+/** 保存失败的用户可见处理（手动必弹 / 自动红点+首次提示；详见 useSaveGuard 注释） */
+const { saveFailed, onSaveError, onSaveOk, onDocSwitched } = useSaveGuard({
+  showToast, activePath: () => filePath.value,
+  // 只取文件名用于提示；不 import node:path 是为了省 App.vue 的行数余量（上限 1500）
+  displayName: (p) => p.split(/[\\/]/).pop() || p,
+  messages: { manual: U.toastSaveFailManual, auto: U.toastSaveFailAuto },
+})
 const tabs = useTabsStore()
 /** 当前编辑文档 = 激活标签路径；多标签下由 tabs store 驱动（单实例换内容，守 Milkdown 红线） */
 const filePath = computed(() => tabs.activePath)
@@ -75,6 +84,9 @@ const requestedMode = ref<EditorMode>('wysiwyg')
 const host = ref<InstanceType<typeof EditorHost> | null>(null)
 const sidebarRef = ref<InstanceType<typeof Sidebar> | null>(null)
 const lastSavedAt = ref<number | null>(null)
+
+/** 切换类操作（切库/切文档/关标签）前的保存守卫：失败即中止，防编辑只存内存 */
+const { saveOrAbort } = useSaveGuardForSwitch(() => host.value)
 
 /* ── 笔记库 ── */
 
@@ -104,8 +116,8 @@ async function useVault(root: string): Promise<void> {
 async function openVault(): Promise<void> {
   const picked = await window.api.openDirDialog()
   if (!picked) return
-  // 切换前保存当前文档的未保存改动，绝不丢失
-  if (host.value?.dirty) await host.value.save()
+  // 切换前保存当前文档的未保存改动；失败则中止切换（守卫见 useSwitchGuard 注释）
+  if (!(await saveOrAbort())) return
   // 清空全部标签与编辑器状态：切到新库即回到空白，避免残留上一个库的文档
   tabs.restore([], null)
   pendingPath.value = null
@@ -120,20 +132,22 @@ async function syncEditorToActive(): Promise<void> {
     host.value?.clear()
     return
   }
-  if (host.value?.ready) await host.value.load(path)
-  else pendingPath.value = path
+  if (host.value?.ready) {
+    // load 返回 false = 载入被中止（保存失败）。保真层仍属旧文档：清失败态但不清空编辑器
+    if ((await host.value.load(path)) === false) onDocSwitched()
+  } else pendingPath.value = path
 }
 
 /** 打开指定文档为标签：先落盘脏数据，再激活标签并载入编辑器（永远单实例换内容） */
 async function openPath(path: string): Promise<void> {
   if (path === tabs.activePath) return
-  if (host.value?.dirty) await host.value.save()
+  if (!(await saveOrAbort())) return
+  onDocSwitched()
   tabs.open(path)
   lastSavedAt.value = Date.now()
   void window.api.patchSession({ activePath: path, openTabs: tabs.paths })
   await syncEditorToActive()
 }
-
 // 编辑器就绪后补灌：会话恢复时往往 Crepe 还没初始化完
 watch(
   () => host.value?.ready,
@@ -314,7 +328,9 @@ function activateTab(path: string): void {
 
 async function closeTab(path: string): Promise<void> {
   const wasActive = path === tabs.activePath
-  if (wasActive && host.value?.dirty) await host.value.save()
+  // 关掉激活标签前必须落盘；失败则中止关闭（否则编辑只剩内存）
+  if (wasActive && !(await saveOrAbort())) return
+  onDocSwitched()
   tabs.close(path)
   void window.api.patchSession({ activePath: tabs.activePath, openTabs: tabs.paths })
   if (wasActive) await syncEditorToActive()
@@ -413,8 +429,9 @@ async function openFile(): Promise<void> {
 
 async function saveFile(): Promise<void> {
   if (!filePath.value) return void (await saveFileAs())
-  await host.value?.save()
-  lastSavedAt.value = Date.now()
+  const ok = await host.value?.save()
+  // 保存失败 → 不更新「已保存」时间戳，useSaveGuard 已弹出 sticky 错误
+  if (ok !== false) lastSavedAt.value = Date.now()
 }
 
 async function saveFileAs(): Promise<void> {
@@ -422,8 +439,9 @@ async function saveFileAs(): Promise<void> {
   if (!picked) return
   // 以新路径作为激活标签，随后 save() 把当前内容写入新路径
   tabs.open(picked)
-  await host.value?.save()
-  lastSavedAt.value = Date.now()
+  // 另存为同样要判失败：否则「保存到新文件失败」却显示已保存，
+  // 而用户以为新文件已生成、旧文件也安全了
+  if ((await host.value?.save()) !== false) lastSavedAt.value = Date.now()
   void window.api.patchSession({ activePath: picked, openTabs: tabs.paths })
 }
 
@@ -1007,7 +1025,8 @@ onBeforeUnmount(() => {
           :vault-path="vaultPath"
           :requested-mode="requestedMode"
           :lang-key="langVer"
-          @saved="lastSavedAt = Date.now()"
+          @saved="lastSavedAt = Date.now(); onSaveOk()"
+          @save-error="onSaveError"
           @error="onEditorError"
           @wikilink="onWikilink"
         />
@@ -1118,8 +1137,8 @@ onBeforeUnmount(() => {
         <div class="statusbar__grp">
           <span v-if="host?.willNormalize" class="warn">{{ U.willNormalize }}</span>
           <span>
-            <i class="dot" :class="host?.dirty ? 'dot--dirty' : 'dot--saved'" />
-            {{ host?.dirty ? U.statusUnsaved : U.statusSaved }}
+            <i class="dot" :class="saveFailed ? 'dot--fail' : host?.dirty ? 'dot--dirty' : 'dot--saved'" />
+            {{ saveFailed ? U.statusSaveFailed : host?.dirty ? U.statusUnsaved : U.statusSaved }}
           </span>
           <span>{{ modeLabel }}</span>
           <span v-if="host?.selectionCount" class="sel"
@@ -1408,6 +1427,12 @@ onBeforeUnmount(() => {
 
 .dot--dirty {
   background: var(--hue-accent);
+}
+
+/** 保存失败：与「未保存」区分 —— 未保存是"还没写"，失败是"写了但没成功"，
+ *  后者更严重且需要用户介入（改用 danger 令牌，不写死色） */
+.dot--fail {
+  background: var(--hue-danger);
 }
 
 .lang-btn {

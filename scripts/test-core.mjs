@@ -2737,6 +2737,195 @@ const X1 = await import((await bundle('electron/main/safeWriteCore.ts', 'safeWri
   check('合并失败去重且顺序稳定', merged.map((f) => f.path).join(',') === 'm1.md,m2.md,w.md')
 }
 
+/* ── Z1. 保存合并状态机（src/utils/saveCoalescer.ts）─────────────────────
+ *
+ * 为什么测这一层：旧逻辑 `if (saving) return` 会让在途保存期间的新内容
+ * **既没写、也没人再触发保存**（P0-3，用户最后几次编辑永久留在内存）。
+ * 这里断言三件不可退让的事：
+ *   ① 在途请求必被追加一轮，且补写的是**最新**内容（不是第一个）
+ *   ② 不引入保存风暴：轮数收敛到 maxRounds，超出交回防抖兜底
+ *   ③ cancel() 能放弃补写（冲突检测场景：绝不能再把自动保存补写上去）
+ */
+section('[Z1] 保存合并状态机 —— 追加一轮 / 收敛不风暴 / 可放弃 (src/utils/saveCoalescer.ts)')
+const Z1 = await import((await bundle('src/utils/saveCoalescer.ts', 'saveCoalescer.mjs')).url)
+
+// ① 在途请求被追加，且补写的是最新 payload
+{
+  const seen = []
+  let release = null
+  const c = Z1.createCoalescer({
+    run: (payload) => {
+      seen.push(payload)
+      return new Promise((r) => { release = r })
+    },
+  })
+  c.request('v1')            // 启动第 1 轮（在途）
+  c.request('v2')            // 在途 → 标记需补写
+  c.request('v3')            // 在途 → 覆盖 latest 为 v3
+  check('在途期间不启动第二个 run（合并而非排队）', seen.length === 1)
+  check('coalescer 处于忙状态', c.busy === true)
+  release()                  // 放行第 1 轮 → 应自动跑第 2 轮且带 v3
+  await new Promise((r) => setImmediate(r))
+  check('在途结束后自动补写一轮', seen.length === 2)
+  check('补写的是最新内容而非过期内容', seen[1] === 'v3')
+  release()
+  await c.settle()
+  check('收敛后回到空闲', c.busy === false)
+}
+
+// ② 不引入保存风暴：run 内部持续触发新请求 → 轮数必须收敛到 maxRounds
+{
+  let rounds = 0
+  let deferred = 0
+  const c = Z1.createCoalescer({
+    maxRounds: 3,
+    run: async (payload) => {
+      rounds++
+      // 每次保存完都又来一次（模拟「保存耗时 > 防抖窗口且用户持续编辑」）
+      if (payload < 100) void c.request(payload + 1)
+    },
+    onDefer: () => { deferred++ },
+  })
+  c.request(0)
+  await c.settle()
+  check('持续输入时轮数收敛到 maxRounds（不无限自旋）', rounds === 3)
+  check('超出 maxRounds 交回防抖兜底', deferred === 1)
+}
+
+// ③ cancel 放弃待补写（冲突检测场景：外部改动后绝不能再补写自动保存）
+{
+  const seen = []
+  let release = null
+  const c = Z1.createCoalescer({
+    run: (payload) => {
+      seen.push(payload)
+      return new Promise((r) => { release = r })
+    },
+  })
+  c.request('v1')
+  c.request('v2')      // 标记需补写
+  c.cancel()           // 冲突检测：放弃补写
+  release()
+  await c.settle()
+  check('cancel 后不发生补写（不会覆盖外部改动）', seen.length === 1)
+}
+
+/* ── Z3. 数据安全静态门禁（读源码文本断言，防「回潮」）──────────────────
+ *
+ * 为什么需要这一段：数据安全是本项目最贵的一次性投入，若没有「牙齿」钉住，
+ * 半年后重构时极易把某条安全网悄悄改回去（裸 writeFile、失败不 catch、
+ * 第二个 ensureIndex 索引源…）。这些断言读源码文本，成本近零、覆盖面广。
+ *
+ * 每条都对应一个**曾经真实存在**的缺陷，不是假想规则。
+ */
+section('[Z3] 数据安全静态门禁 —— 安全网不可回潮（读源码断言）')
+{
+  const readSrc = (rel) => readFileSync(join(root, rel), 'utf-8')
+  /**
+   * 扫描前必须**剥离注释** —— 否则本文件里解释「旧实现如何写」的注释会被判成违规，
+   * 而门禁一旦有假阳性就会被当噪音而遭无视（与 check-design 同一纪律）。
+   */
+  const code = (rel) => {
+    const s = readSrc(rel)
+    return s
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      .replace(/(?<!:)\/\/[^\n]*/g, '')
+  }
+  const searchSrc = code('electron/main/vault/search.ts')
+  const filesIpcSrc = code('electron/main/ipc/files.ts')
+  const autoBackupSrc = code('electron/main/autoBackup.ts')
+  const hostSrc = code('src/editor/EditorHost.vue')
+  const integritySrc = code('electron/main/vaultIntegrity.ts')
+  const atomicSrc = code('electron/main/atomicWrite.ts')
+  const appSrc = code('src/App.vue')
+
+  /**
+   * 按大括号配平提取某个函数的函数体。
+   * 静态门禁必须**限定在函数体内**做断言：用 `[\s\S]*?` 跨文件搜关键字会匹配到
+   * 后面的别的函数，使规则永远绿 —— 这正是「规则看着有、实则空转」的典型。
+   */
+  const extractFnBody = (src, signature) => {
+    const at = src.indexOf(signature)
+    if (at < 0) return ''
+    // ⚠️ 不能直接找签名后的第一个 `{`：签名里可能含默认值对象（如
+    // `save(opts: SaveOptions = {})`），那个 `{}` 不是函数体起点。
+    // 先跳到参数列表的右括号 / 泛型闭合，再找函数体开括号。
+    let i = at
+    let paren = 0
+    let sawParam = false
+    for (; i < src.length; i++) {
+      const ch = src[i]
+      if (ch === '(') { paren++; sawParam = true }
+      else if (ch === ')') {
+        paren--
+        if (sawParam && paren === 0) { i++; break }
+      }
+    }
+    // 跳过返回值类型标注（`: Promise<boolean>`）
+    while (i < src.length && src[i] !== '{' && src[i] !== '\n') i++
+    const open = src.indexOf('{', i)
+    if (open < 0) return ''
+    let depth = 0
+    for (let j = open; j < src.length; j++) {
+      if (src[j] === '{') depth++
+      else if (src[j] === '}') {
+        depth--
+        if (depth === 0) return src.slice(open + 1, j)
+      }
+    }
+    return src.slice(open + 1)
+  }
+
+  // ① 批量替换不得回退成裸 writeFile（P0-1 根因）
+  check(
+    '批量替换不再裸 writeFile 写正文',
+    !/await writeFile\(\s*p\s*,/.test(searchSrc)
+  )
+  // ② 保存路径必须走唯一安全写原语
+  check('FILE_WRITE handler 走 safeWriteFile', /safeWriteFile/.test(filesIpcSrc))
+  check(
+    '保存路径不再内联 readPrevContent+backupBeforeSave（应已收口到 safeWrite）',
+    !/readPrevContent[\s\S]{0,200}backupBeforeSave/.test(filesIpcSrc)
+  )
+  // ③ 安全网降级不得回退成「静默」（P1-3 根因）
+  check(
+    'autoBackup 不再把读取失败降为空串',
+    !/catch\s*\{\s*return\s*''\s*\}/.test(autoBackupSrc)
+  )
+  check('autoBackup 失败路径会上报安全事件', /notifySafety\(/.test(autoBackupSrc))
+  // ④ 保存必须有 catch 且不靠 rejection 上抛（P0-2 根因）
+  // ⚠️ 必须**限定在 save 函数体内**：用 `[\s\S]*?` 跨文件找 catch 会匹配到
+  // 后面的别的函数，等于这条规则永远绿（实测注入故障时它确实没报红）。
+  const saveBody = extractFnBody(hostSrc, 'async function save')
+  check('EditorHost.save() 有 catch（不只 try/finally）', /catch\s*\(/.test(saveBody))
+  check('保存失败走事件通道 emit save-error', /'save-error'/.test(saveBody))
+  // 自动保存可以 void（save 内部已 catch、不会 reject），但必须**带 kind 以便分级提示**：
+  // 不带 kind 会被默认当成 manual → 磁盘满时每 800ms 弹一次，弹窗本身成故障源。
+  check(
+    '自动保存必须带 kind 以便与手动分级（void save() 不带 kind 视为回潮）',
+    !/void save\(\)/.test(hostSrc)
+  )
+  // ⑤ 在途保存不得早退丢写（P0-3 根因）
+  check(
+    'EditorHost 不再用 saving 标志早退丢写',
+    !/saving\.value\)\s*return/.test(hostSrc)
+  )
+  check('EditorHost 已接入 saveCoalescer', /createCoalescer/.test(hostSrc))
+  // ⑥ 切换类操作必须过保存守卫（失败即中止，防编辑只存内存）
+  check('切库/切文档/关标签走 saveOrAbort 守卫', /saveOrAbort/.test(appSrc))
+  check('至少 3 处调用守卫', (appSrc.match(/saveOrAbort\(\)/g) ?? []).length >= 3)
+  // ⑦ 完整性自检必须继续用 loadIndex（改了它自检就永远绿灯）
+  const iPos = integritySrc.indexOf('runIntegrityCheck')
+  const integrityCheckBody = iPos >= 0 ? integritySrc.slice(iPos, iPos + 2500) : ''
+  check(
+    '完整性自检继续用 loadIndex（不得改用 ensureIndex/getLiveIndex）',
+    /loadIndex/.test(integrityCheckBody) &&
+      !/ensureIndex|getLiveIndex/.test(integrityCheckBody)
+  )
+  // ⑧ atomicWrite 必须保持零索引依赖（否则 rewrites→atomicWrite→vaultIndex 成环）
+  check('atomicWrite 零索引依赖（不成环）', !/vaultIndex|indexStore|safeWrite/.test(atomicSrc))
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 
 if (failed > 0) {

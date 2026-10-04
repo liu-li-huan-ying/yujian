@@ -21,11 +21,19 @@ export function useToast() {
   const toast = ref<Toast | null>(null)
   let timer: ReturnType<typeof setTimeout> | null = null
 
-  /** 显示一条提示；同一条消息重复触发会重新计时（不是叠加两条） */
+  /**
+   * 显示一条提示；同一条消息重复触发会重新计时（不是叠加两条）。
+   *
+   * `duration = 0` 表示**常驻**（sticky）：不排定时器，由调用方 `clearToast()` 收起。
+   * 用于「保存失败」这类必须让用户看见、且不该自己消失的消息 ——
+   * 若沿用默认 2.6s 自动消失，用户盯着编辑器很可能错过，
+   * 而「以为已保存、实际没落盘」正是最需要避免的结果。
+   */
   function showToast(msg: string, type: ToastType = 'info', duration = DEFAULT_DURATION): void {
     toast.value = { msg, type }
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => (toast.value = null), duration)
+    timer = null
+    if (duration > 0) timer = setTimeout(() => (toast.value = null), duration)
   }
 
   /**

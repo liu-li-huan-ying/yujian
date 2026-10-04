@@ -9,6 +9,7 @@ import { useFidelity } from './useFidelity'
 import { parseOutline, type OutlineItem } from './outline'
 import { setZenActive, centerZenLine, zenKey } from './zen'
 import { computeStats } from '../utils/text-stats'
+import { createCoalescer } from '../utils/saveCoalescer'
 import type { TextStats } from '../utils/text-stats'
 
 export type EditorMode = 'wysiwyg' | 'source'
@@ -28,6 +29,12 @@ const emit = defineEmits<{
   (e: 'mode-change', mode: EditorMode): void
   /** 图片落盘失败（源码/所见即所得任一端）：透传给 App 弹 toast */
   (e: 'error'): void
+  /**
+   * 保存失败（2026-10-04 数据安全 P0-2）：由 App 侧转成用户可见提示。
+   * kind 区分自动/手动 —— 手动保存失败**必须弹窗**（用户主动操作却什么都没发生
+   * 是最坏的体验）；自动保存失败只亮常驻状态，避免磁盘满时每 800ms 弹一次刷屏。
+   */
+  (e: 'save-error', payload: { path: string; message: string; kind: 'auto' | 'manual' }): void
   /** 点击编辑器内 [[wikilink]] 芯片：透传目标与锚点，由 App 解析并跳转/创建 */
   (e: 'wikilink', payload: { target: string; anchor?: string | null }): void
 }>()
@@ -36,7 +43,6 @@ const fidelity = useFidelity()
 const mode = ref<EditorMode>('wysiwyg')
 const milkdown = ref<InstanceType<typeof MilkdownEditor> | null>(null)
 const source = ref<InstanceType<typeof SourceEditor> | null>(null)
-const saving = ref(false)
 const ready = ref(false)
 
 /** 两个面板的 DOM 根，交给 ReadingProgress 自动定位真正的滚动容器 */
@@ -360,7 +366,7 @@ function scheduleSave(): void {
   // 仅当保真层已绑定到某文档时才允许自动保存；目标路径由 docPath 决定，而非实时 props.filePath
   if (!fidelity.docPath.value) return
   if (timer) clearTimeout(timer)
-  timer = setTimeout(() => void save(), AUTOSAVE_DELAY)
+  timer = setTimeout(() => void save({ kind: 'auto' }), AUTOSAVE_DELAY)
 }
 
 /** 取消待执行的自动保存（冲突检测发现外部改动时调用，避免自动保存覆盖外部编辑） */
@@ -369,46 +375,89 @@ function cancelPendingSave(): void {
     clearTimeout(timer)
     timer = null
   }
+  // 同时放弃合并器的「待补写」意图：检测到外部改动后若还补写，
+  // 会把用户的编辑盖在别人刚做的修改上（这是冲突处理最不能出的错）
+  coalescer.cancel()
 }
+
+/**
+ * 保存：读当前保真层 → 原子写 → 固化保真层。
+ *
+ * 2026-10-04 改造（数据安全审计 P0-2 / P0-3）：
+ *  ① **失败不再向上抛**，改为 `emit('save-error')` 事件通道。
+ *     为什么：两条自动/命令面板调用路径都是 `void save()` —— rejection 必被丢弃。
+ *     旧实现（只有 try/finally 无 catch）导致磁盘满/只读时
+ *     **用户看着编辑器内容完好、以为已保存，磁盘上还是旧版**。
+ *  ② **在途保存不再早退丢写**：`if (saving) return` 会让新内容既没写、也没人再触发。
+ *     改由 saveCoalescer 合并处理（补写最新内容，不排队、不风暴）。
+ *  ③ 返回 boolean，让切文档/切库/关标签能判断「保存成功才允许切换」——
+ *     否则磁盘满 + 切库 = 编辑器清空，内容只剩内存。
+ */
+/**
+ * 单次写盘。target 与 content **成对**传入合并器 —— 不能在写入时现读 docPath：
+ * 合并器可能在补写，而彼时保真层已切到别的文档（docPath 变了），
+ * 现读就会把旧内容写到新文档路径 —— 正是当初引入 docPath 锁定要防的事故。
+ */
+async function performSave(payload: { target: string; content: string }): Promise<void> {
+  const { target, content } = payload
+  await window.api.writeFile(target, content)
+  // 仅当目标仍指向同一文档时才固化保真层，避免陈旧保存污染已切换的新文档
+  if (fidelity.docPath.value === target) fidelity.afterSave()
+  emit('saved', target)
+}
+
+const coalescer = createCoalescer<{ target: string; content: string }>({
+  run: performSave,
+  // 收敛不了（保存极慢且用户持续输入）→ 重排防抖，让最终态一定被写下去
+  onDefer: () => scheduleSave(),
+})
 
 /** 等待可能正在执行的保存完成，避免在途保存与切换/重指竞争保真层 */
 async function waitSavingIdle(): Promise<void> {
-  while (saving.value) {
-    await new Promise((r) => setTimeout(r, 10))
-  }
+  await coalescer.settle()
 }
 
-async function save(): Promise<void> {
+interface SaveOptions {
+  kind?: 'auto' | 'manual'
+}
+
+async function save(opts: SaveOptions = {}): Promise<boolean> {
   // 目标路径锁定为「当前保真层所属的文档」，content 与 target 在同一时刻捕获，
   // 杜绝切换文档时把上一文档内容写到新文档路径（B 内容变 A 的事故根因）
   const target = fidelity.docPath.value
   const content = fidelity.currentText.value
-  if (!target || saving.value) return
+  if (!target) return true
   if (timer) {
     clearTimeout(timer)
     timer = null
   }
-  saving.value = true
   try {
-    await window.api.writeFile(target, content)
-    // 仅当目标仍指向同一文档时才固化保真层，避免陈旧保存污染已切换的新文档
-    if (fidelity.docPath.value === target) fidelity.afterSave()
-    emit('saved', target)
-  } finally {
-    saving.value = false
+    await coalescer.request({ target, content })
+    return true
+  } catch (e) {
+    // 保真层保持 isDirty（不调 afterSave）：内容不丢，用户可重试
+    emit('save-error', {
+      path: target,
+      message: errMsg(e),
+      kind: opts.kind ?? 'manual',
+    })
+    return false
   }
 }
 
-/** 从磁盘载入文档 */
+/** 从磁盘载入文档。返回 false 表示**中止切换**（保存失败），调用方须保持当前文档不变。 */
 let loadToken = 0
-async function load(path: string): Promise<void> {
+async function load(path: string): Promise<boolean> {
   const myToken = ++loadToken
   // 1) 若有在途保存，先等它落盘到「旧文档」路径（save 只写 docPath，不会串写到新文档）
   await waitSavingIdle()
   // 2) 切换文档前，先把当前文档(A)未落盘的编辑写回 A 自己的路径。
   //    否则 props.filePath 已指向 B、保真层仍持 A 时，挂起/在途的自动保存会把 A 覆盖写到 B。
+  //    ⚠️ 保存失败必须**中止切换**（返回 false）：若继续，B 会覆盖保真层、
+  //    编辑器随后被清空，而 A 的编辑只存在于内存里 —— 那是真丢内容。
   if (fidelity.docPath.value && fidelity.isDirty.value) {
-    await save()
+    const ok = await save()
+    if (!ok) return false
   }
   cancelPendingSave()
   // 3) 此刻保真层仍属于 A，没有任何待写/在途写；开始加载 B
@@ -417,15 +466,17 @@ async function load(path: string): Promise<void> {
   try {
     const text = await window.api.readFile(path)
     // 加载期间若又切换了文档，本次结果作废，避免把旧文件内容灌进新文档视图
-    if (myToken !== loadToken) return
+    if (myToken !== loadToken) return true
     fidelity.loadFromDisk(text)
     fidelity.setDocPath(path)
     // 用 applyToEditor：抑制 Crepe 灌入回显被误判为用户编辑（否则「打开即保存」写坏原文）
     void applyToEditor(text)
     stopLoading()
+    return true
   } catch (e) {
-    if (myToken !== loadToken) return
+    if (myToken !== loadToken) return true
     failLoading(`无法载入文件：${errMsg(e)}`)
+    return true
   }
 }
 

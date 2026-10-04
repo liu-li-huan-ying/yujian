@@ -87,11 +87,14 @@ export function useFileConflict(hooks: FileConflictHooks) {
   }
 
   /** 保留我的：覆盖外部改动，把内存版本写回磁盘（保真、不丢字） */
-  function onConflictKeepMine(): void {
+  async function onConflictKeepMine(): Promise<void> {
     const c = conflict.value
     if (!c) return
     suppress()
-    void hooks.host()?.save()
+    // 2026-10-04：save 现返回 boolean。不 await 的话，保存失败会被静默吞掉，
+    // 而用户以为「已用我的版本覆盖」—— 实际外部改动仍在、我的版本也没落盘。
+    // 失败提示由 EditorHost 的 save-error 事件通道统一弹出（见 useSaveGuard）。
+    await hooks.host()?.save()
     finishConflict()
   }
 
