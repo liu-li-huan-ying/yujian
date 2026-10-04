@@ -1325,16 +1325,17 @@ IPC: image:save  ──► main 进程写入 vault/.assets/YYYY/MM/<ts>-<hash>.p
 
 **门禁**
 
-* `npm run check` = `typecheck` + `lint` + `check:encoding` + `test` + `verify:md` + `verify:corpus` —— 与 CI 逐步对齐，提交前一条命令跑完。
+* `npm run check` = `typecheck` + `lint` + `check:encoding` + `check:design` + `test` + `verify:md` + `verify:corpus` + `check:structure` —— 与 CI 逐步对齐，提交前一条命令跑完。
+* `npm run check:full` = `check` + `perf:index` + `e2e:open`（2026-10-04 新增）。**本地跑绿 `check` ≠ 数据安全已被验证**：`check` 里的往返 / 损坏检测全跑在桩上，而「打开文档不写盘」这条红线只存在于真实 Crepe + ProseMirror 组合里（自动保存一旦把规范化文本写回磁盘，坏内容即刻成为新的磁盘原文、无法自愈）。CI 单独跑这条 E2E，但**本地默认 `check` 不含它**——故另给一个显式的全量档，避免「本机跑绿了」的错觉。
 * `npm run lint` 覆盖全仓（`src` + `electron`），不再只扫 `src`：主进程是删除 / 移动 / 落盘等最高风险代码所在。
 * `npm run check:encoding` → `scripts/check-encoding.mjs`：扫描受版本管理的文本文件，出现 U+FFFD 即失败。合法 UTF-8 解码**永不**产出 U+FFFD，故它是「字符已被静默损坏」的高置信信号——这类损坏不报错、不拦构建，只有人读到才发现（2026-09-10 实测中过一次，单文件 80 字符被抹）。
   * 判读铁律：本仓库 CJK 在部分终端 / 日志管道里会被**二次编码**，肉眼看到的乱码未必是文件问题。判断一律以**码点或字节**为准（`scripts/check-encoding.mjs` 的报告刻意只输出 ASCII）。
 * `npm run verify:md` = Markdown 解析 / 数学渲染 / 内联 HTML 回归（30 条，含 2026-09-11 新增的「token 失效必结算」）。
-* `npm run verify:corpus` = **Markdown 往返语料矩阵**：`tests/corpus/*.md` 逐个跑「parse → serialize，断言逐字节相等」（当前 18 个用例，覆盖 gfm 脚注 / 硬换行 / 块级 HTML / 引用定义 / 转义字面量 / **行内与块级数学** / wikilink·tag 边界）。流水线为 remark-parse + remark-gfm + **remark-math** + 三个自定义插件；`remark-math` 与编辑器 `Crepe.Feature.Latex` 同包，故数学走真实解析 + 序列化路径而非当普通文本的假绿。新增用例只需往目录丢一个 `.md`，**不需要写 JS**——把补用例的门槛从「会写 JS」降到「会写 Markdown」，避免自定义语法扩建时漏测。
+* `npm run verify:corpus` = **Markdown 往返语料矩阵**：`tests/corpus/*.md` 逐个跑「parse → serialize，断言逐字节相等」（当前 **20** 个用例，2026-09-17 由 18 补至 20，新增内联标记 `~sub~`/`^sup^`/`==mark==` 与 frontmatter；覆盖 gfm 脚注 / 硬换行 / 块级 HTML / 引用定义 / 转义字面量 / **行内与块级数学** / wikilink·tag 边界）。流水线为 remark-parse + remark-gfm + **remark-math** + 三个自定义插件；`remark-math` 与编辑器 `Crepe.Feature.Latex` 同包，故数学走真实解析 + 序列化路径而非当普通文本的假绿。新增用例只需往目录丢一个 `.md`，**不需要写 JS**——把补用例的门槛从「会写 JS」降到「会写 Markdown」，避免自定义语法扩建时漏测。
   * 语料必须写成 remark 的**规范形式**：`*` 项目符号（`--` 会被正常化）、`***` 分隔线（`---` 会被改）、表格 `--` 分隔行并按最宽单元格补空格对齐、行尾两空格硬换行→反斜杠 `\`、裸 URL→尖括号形式、字符实体→字面字符、块级公式须写 `$$\n…\n$$`。这些是 remark 上游行为，**不是本项目缺陷**；完整对照表与编写约定见 `tests/corpus/README.md`。
   * 与「未编辑文档一字不改」不冲突：未编辑文档走保真层（原始文本直通），只有真正被编辑、需要序列化时才走这条链路。
   * 已证伪：把 wikiLink handler 的锚点去掉（历史 P0 缺陷）→ `06-wikilink.md` 正确失败并指出差异位置。
-* `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `perf:index` / `build`（此前 CI 只在打 tag 时打包，日常提交无门禁）。
+* `.github/workflows/ci.yml`：PR 与 main 推送自动跑 `typecheck` / `lint` / `check:encoding` / `test` / `verify:md` / `verify:corpus` / `check:structure` / `check:design` / `perf:index` / `build` / E2E「打开不写盘」（此前 CI 只在打 tag 时打包，日常提交无门禁）。
 * 工作流统一 **Node 22** + `actions/checkout@v5` / `actions/setup-node@v5`：Node 20 已于 2026-04 EOL，其 action runtime（node20）也随 GitHub 强制切 Node 24 而失效——继续钉 v4 会被 annotation 点名并在切换后硬失败。
 
 ***
@@ -1791,6 +1792,23 @@ export interface SessionState {
   验证过规则不是空转）。
 
 想放宽阈值，须**显式改文件并在此说明原因**，而不是让它悄悄涨上去。
+
+### 设计门禁 `scripts/check-design.mjs`（`npm run check:design`，已入 CI）
+
+结构门禁管「文件别长胖」，本门禁管「界面别长歪」——专治**不会让测试变红、但会慢慢腐蚀观感**的慢劣化（22 种字号 / 24 种圆角 / 13 种 z-index 那类）。七条规则见 `docs/UI-DESIGN.md` §9，要点：
+
+* **①令牌必须已定义**（抓「伪令牌」）：`var(--x)` 里 `x` 从未定义 → CSS **静默丢弃整条声明**，不报错不警告测试全绿，而边框不画、背景不变。
+* **⑦零引用令牌**（①的反面：抓「存在了没人用」）：更阴的一类——它**能算出值**，所以看起来正常，实则不参与主题切换（实测抓到 `--hue-bar`：5 皮肤 × 明暗共 10 处声明、全项目 0 引用）。判活口径用「总出现数 − 定义处数」而非 `var()` 计数（令牌也可能被 JS 消费）；经论证的例外有两类：动态注入族（`--fog-*`）与对外契约令牌（`--crepe-*`，消费者是库在 `node_modules` 里的 CSS）。
+* **⑤⑥冻结遗留值、只减不增**（半像素字号 5 档 98 处、离群大间距 2 档）：机械清扫**不顺手改版式**，那属于需要单独评审的排版改动。
+
+⚠️ **两条纪律**：
+
+1. **扫描前剥离注释**（保留换行以免行号错位）。本仓 CSS 注释里大量出现 `var(--x)` / `z-index:999` 的讨论性文本，不剥会把说明文字判成违规——**门禁一旦有假阳性就会被当噪音而遭无视**。
+2. **扫描面按目录组织**（`SCAN_DIRS`），不写死文件路径，组件拆分不会让它静默失效。
+
+⚠️ **只扫 `src/`，不扫 `electron/`**（与结构门禁扫 src+electron 不同）：本门禁守的是**样式层**，而样式只存在于渲染层；主进程顶多出现 `new BrowserWindow({ backgroundColor: '#16171B' })` 这类**构造参数**，不是样式声明、也不参与主题切换，套「颜色不得写死」只会是假阳性。**若日后主进程真引入样式层（如注入用户 CSS 片段），必须同步把 `electron/` 加入 `SCAN_DIRS`** —— 理由已写在脚本头部，避免后人误以为「已覆盖主进程」。
+
+✅ **本门禁 2026-10-04 接入 CI**。此前它只在 `npm run check` 里，而 `ci.yml` 是手工列步骤的、**漏了它** —— 于是 `UI-DESIGN.md` 宣称的「状态：生效（由 check:design 强制）」对 CI 而言是空的：任何人提 PR 写 `z-index: 999` / `color: #ff0000` 都能合进 main。**门禁必须比被它守护的承诺活得久**，否则那只是文档。
 
 ## 5.34 `electron/main/vault/` 包：主进程文件系统能力的细颗粒拆分（2026-09-15）
 

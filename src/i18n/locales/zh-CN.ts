@@ -287,7 +287,7 @@ const zhCN = {
     compileConfirm: '合订并导出',
     compileEmpty: '笔记库中没有 Markdown 文件',
     compileNoSelection: '请至少选择一篇文档',
-    helpTitle: '帮助与快捷键',
+    helpTitle: '使用指南与关于',
     /* ── 多标签 / 查找（批次一）── */
     close: '关闭',
     closeOthers: '关闭其他',

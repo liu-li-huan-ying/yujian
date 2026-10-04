@@ -288,7 +288,7 @@ const enUS = {
     compileConfirm: 'Compile & export',
     compileEmpty: 'No Markdown files in the vault',
     compileNoSelection: 'Select at least one document',
-    helpTitle: 'Help & Shortcuts',
+    helpTitle: 'Guide & About',
     /* ── Multi-tab / Find (Phase 2 Batch 1) ── */
     close: 'Close',
     closeOthers: 'Close Others',

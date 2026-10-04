@@ -17,6 +17,7 @@
     "e2e:open": "electron-vite build && node scripts/e2e-open-no-write.mjs",
     "stress:table": "node scripts/stress-table.mjs",
     "check": "npm run typecheck && npm run lint && npm run check:encoding && npm run check:design && npm test && npm run verify:md && npm run verify:corpus && npm run check:structure",
+    "check:full": "npm run check && npm run perf:index && npm run e2e:open",
     "clean": "node scripts/clean.mjs",
     "lint": "eslint . --ext .ts,.vue",
     "lint:fix": "eslint . --ext .ts,.vue --fix",

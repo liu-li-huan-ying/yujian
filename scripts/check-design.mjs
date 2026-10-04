@@ -35,7 +35,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
 
 /** 只扫生产代码；`scripts/` 下的测试脚本不受设计门禁约束 */
+// ⚠️ 为什么只扫 `src/`、不扫 `electron/`（与 `check-structure.mjs` 扫 src+electron 不同）：
+// 本门禁守的是**样式层**（CSS 令牌 / 材质 / 字号 / 圆角 / 层级），而样式只存在于渲染层。
+// 主进程没有 CSS —— 它顶多出现 `new BrowserWindow({ backgroundColor: '#16171B' })`
+// 这类**构造参数**，不是样式声明、也不参与主题切换，套用「颜色不得写死」只会是假阳性。
+// 若日后主进程真引入样式层（如注入用户 CSS 片段），**必须同步把 `electron/` 加入 SCAN_DIRS**，
+// 否则本门禁会静默失去对它的覆盖 —— 此点显式登记，避免后人误以为「已覆盖主进程」。
 const SCAN_DIRS = ['src']
+
 /** 独立样式上下文：导出 HTML 模板自带完整字体栈与调色，不参与应用主题，故豁免 */
 const EXEMPT = ['src/export/']
 

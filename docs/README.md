@@ -64,7 +64,9 @@
 1. **代码与测试是事实**。文档与之冲突 → 改文档，不改事实。
 2. `ARCHITECTURE.md` 管架构、`CHANGELOG.md` 管变更，两者不重复表述同一件事。
 3. `UI-DESIGN.md` 管**视觉与交互的判据**（"为什么长这样"），且**有牙齿**：
-   `npm run check:design` 会拦下违反它的代码。它与 `ARCHITECTURE.md` 的分工是
+   `npm run check:design` 会拦下违反它的代码（**已入 CI**，2026-10-04 补齐——此前只在本地 `check` 里，
+   对 PR 不生效）。它与 `ARCHITECTURE.md` 的分工是
    「好不好看 / 该不该这样」 vs 「怎么实现的」——不要互相抄。
+   ⚠️ 该门禁只扫 `src/`（样式层只存在于渲染层），不扫 `electron/`——理由见 `scripts/check-design.mjs` 头部。
 4. 审计 / 评审报告只对「当时」负责，不追改；进度看最新一份的落实结果节。
 5. 设计 / 计划文档在实现后即冻结，仅作决策留痕（`UI-DESIGN.md` 除外，它是活文档）。

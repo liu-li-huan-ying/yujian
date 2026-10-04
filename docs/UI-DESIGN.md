@@ -1,6 +1,7 @@
 # 玉笺设计体系
 
-> **版本 v2.0** ｜ 2026-09-17 ｜ 状态：**生效**（由 `npm run check:design` 强制）
+> **版本 v2.0** ｜ 2026-09-17 ｜ 状态：**生效**（由 `npm run check:design` 强制，**已入 CI** ——
+> 2026-10-04 补齐：此前该门禁只在本地 `check` 串行里，`ci.yml` 漏跑，对 PR 实际不生效）
 > 前身：`UI-DESIGN.md` v1.1（2026-08-28，文档级规范）
 > 配套：`docs/ARCHITECTURE.md`（架构唯一事实源）· `src/styles/tokens.css`（令牌唯一事实源）
 

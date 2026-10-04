@@ -50,9 +50,15 @@ jobs:
       - name: Verify markdown corpus (byte-exact round-trip)
         run: npm run verify:corpus
 
-      # 防劣化：巨石文件复发 / any 逃逸越界与回涨 / 遗留标记
+      # 防劣化：巨石文件复发 / any 逃逸越界与回涨 / 遗留标记 / 循环依赖与分层越界
       - name: Structure health
         run: npm run check:structure
+
+      # 设计门禁：《玉笺设计体系》从「文档」升级为「有牙齿的系统」——
+      # docs/UI-DESIGN.md 声明「由 check:design 强制」，若这里不跑，那句承诺对 CI 就是空的：
+      # 任何人都能提 PR 写 z-index:999 / color:#ff0000 而不被拦。本步是那句话的兑现处。
+      - name: Design system (tokens / material / scale)
+        run: npm run check:design
 
       - name: Index performance baseline
         run: npm run perf:index
