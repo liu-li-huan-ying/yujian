@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 架构与实现现状；§5.x 按特性分批记录「为什么这么做」 | **架构唯一事实源**。与代码冲突时以代码为准，并立即改本文档 |
 | [`UI-DESIGN.md`](UI-DESIGN.md) | 设计体系 **v2.0**：内核（材质/高度）、刻度（字号/圆角/层级）、色相与可访问性下限、组件面归属、**治理与设计门禁** | **设计唯一事实源**（"为什么长这样"）。令牌值以 `src/styles/tokens.css` 为准、图标以 `Icon.vue` 为准；违反它会被 `check:design` 拦下 |
+| [`DATA-SAFETY-HARDENING-PLAN.md`](DATA-SAFETY-HARDENING-PLAN.md) | **数据安全加固**（2026-10-04）：3 条 P0 + 7 条 P1 的审计与修复，含**两条长期架构约束** | 保存路径唯一实现是 `safeWrite.ts`；索引唯一真源是内存实时索引。两条均被 `[Z3]` 静态门禁钉死 |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | 面向用户的变更记录（仓库根） | **变更唯一事实源** |
 | [`../README.md`](../README.md) / [`../README_EN.md`](../README_EN.md) | 面向使用者的介绍与上手 | 不描述内部实现 |
 
