@@ -2957,6 +2957,125 @@ section('[Z3] 数据安全静态门禁 —— 安全网不可回潮（读源码�
   )
 }
 
+/* ── Y1/Y2. 崩溃残留 + 启动自检（electron/main/tmpResidue.ts / startupCheck.ts）──
+ *
+ * 为什么测：这两者是「崩溃 / 异常环境」的兜底，平时不触发，
+ * 一旦逻辑写错就是**静默失效**（残留堆在磁盘、探针永远报绿）。
+ * 且启动自检的探针**必须注入**才能测 —— Windows 上 `chmod 0o500` 不会真让写入失败，
+ * 靠真实文件操作无法在 CI（Linux/macOS/Windows）复现「报红」。
+ */
+section('[Y1] 崩溃残留 —— 命名可解析 / 状态分类 / 恢复不覆盖 (tmpResidue.ts)')
+{
+  const Y1 = await import((await bundle('electron/main/tmpResidue.ts', 'tmpResidue.mjs')).url)
+  const UUID = '11111111-2222-3333-4444-555555555555'
+
+  // 命名可解析：新格式带目标基名，残留时才知道「这是哪个文档的新版」
+  const parsed = Y1.parseTmpName(`.yujian-${UUID}--note.md.tmp`)
+  check('新格式 tmp 名可解析出目标基名', parsed && parsed.base === 'note.md')
+  check('非 tmp 文件不被误认', Y1.parseTmpName('note.md') === null)
+  check('旧格式（无基名）不误认也不崩', Y1.parseTmpName(`.yujian-${UUID}.tmp`) === null)
+
+  // 有界扫描：深度 > 2 不返回
+  {
+    const deep = `${'d/'.repeat(3)}`
+    const found = await Y1.listTmpResidue('/vault', {
+      depthLimit: 2,
+      scanOne: async (dir) =>
+        dir === `/vault/${deep}` ? [] : [],
+    })
+    check('超出深度上限的 tmp 不被返回（有界扫描生效）', found.length === 0)
+  }
+  // 上限截断
+  {
+    const many = Array.from({ length: 300 }, (_, i) => ({
+      tmpPath: `/vault/.yujian-${UUID}--n${i}.md.tmp`,
+      targetBase: `n${i}.md`,
+      mtime: 1,
+      size: 1,
+      state: 'orphan',
+    }))
+    const found = await Y1.listTmpResidue('/vault', {
+      maxItems: 200,
+      scanOne: async () => many,
+    })
+    check('扫描结果受 maxItems 截断（防大库卡住）', found.length === 200)
+  }
+  // 🔴 恢复绝不覆盖原文件（核心不变量）
+  {
+    const fs = await import('node:fs')
+    const os = await import('node:os')
+    const path = await import('node:path')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yj-tmp-'))
+    const docPath = path.join(dir, 'note.md')
+    const tmpPath = path.join(dir, `.yujian-${UUID}--note.md.tmp`)
+    fs.writeFileSync(docPath, 'ORIGINAL', 'utf-8')
+    fs.writeFileSync(tmpPath, 'NEWVERSION', 'utf-8')
+
+    const res = {
+      tmpPath,
+      targetBase: 'note.md',
+      mtime: Date.now(),
+      size: 10,
+      state: 'orphan',
+    }
+    const recovered = await Y1.restoreAsCopy(res, 1700000000000)
+    check('恢复写到了新文件（不覆盖原文档）', recovered !== docPath)
+    check('原文档逐字节未变', fs.readFileSync(docPath, 'utf-8') === 'ORIGINAL')
+    check('恢复副本内容 = tmp 内容', fs.readFileSync(recovered, 'utf-8') === 'NEWVERSION')
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+section('[Y2] 启动自检 —— 探针失败必报红 / 全绿零 finding / 不跑全库扫描 (startupCheck.ts)')
+{
+  const Y2 = await import((await bundle('electron/main/startupCheck.ts', 'startupCheck.mjs')).url)
+  const fail = (code) => async () => {
+    throw Object.assign(new Error(code), { code })
+  }
+  const ok = async () => {}
+
+  // 库不可写 → 必报 error 级 finding
+  {
+    const f = await Y2.runStartupSelfCheck('/v', { probeWritable: fail('EPERM'), probeTrash: ok })
+    check(
+      '库不可写必报 vault-not-writable（error 级）',
+      f.some((x) => x.kind === 'vault-not-writable' && x.level === 'error')
+    )
+  }
+  // 回收站不可用 → 必报 error 级（不可撤销删除）
+  {
+    const f = await Y2.runStartupSelfCheck('/v', { probeWritable: ok, probeTrash: fail('ENOTSUP') })
+    check(
+      '回收站不可用必报 trash-unavailable（error 级）',
+      f.some((x) => x.kind === 'trash-unavailable' && x.level === 'error')
+    )
+  }
+  // 全绿 → 零 finding（不打扰）
+  {
+    const f = await Y2.runStartupSelfCheck('/v', { probeWritable: ok, probeTrash: ok })
+    check('探针全通过时零 finding（不打扰用户）', f.length === 0)
+  }
+  // ⚠️ 不得把全库扫描塞进启动路径（违反「自检只在显式触发时运行」铁律）
+  {
+    const src = readFileSync(join(root, 'electron/main/startupCheck.ts'), 'utf-8')
+    check(
+      '启动自检不调用全库扫描（checkLinks / collectMarkdown / buildIndex）',
+      !/checkLinks|collectMarkdown|buildIndex|reconcileIndex/.test(src)
+    )
+  }
+  // 探针抛错不得中断自检整体（一个探针挂了其余仍要跑）
+  {
+    const f = await Y2.runStartupSelfCheck('/v', {
+      probeWritable: fail('EPERM'),
+      probeTrash: ok,
+      listTmp: async () => [
+        { tmpPath: '/v/.yujian-1--a.md.tmp', targetBase: 'a.md', mtime: 1, size: 1, state: 'pending' },
+      ],
+    })
+    check('单个探针失败不中断其余检查', f.length === 2 && f.some((x) => x.kind === 'tmp-residue'))
+  }
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 
 if (failed > 0) {

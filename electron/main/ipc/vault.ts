@@ -20,6 +20,11 @@ import {
 } from '../vault'
 import * as VaultBackup from '../vaultBackup'
 import * as VaultIndex from '../vaultIndex'
+import {
+  runStartupSelfCheck,
+  makeDefaultProbes,
+  defaultWarnSoftErrors,
+} from '../startupCheck'
 import * as VaultIntegrity from '../vaultIntegrity'
 import { reportSoftError } from '../softError'
 import { getMainWindow } from '../window'
@@ -58,6 +63,13 @@ export function registerVaultIpc(): void {
       getMainWindow()?.webContents.send(IPC.VAULT_CHANGE, change)
     })
     void seedWelcomeDoc(root)
+    // 启动自检（2026-10-04）：**开库后**触发而非 app ready ——
+    // 库根是运行时才确定的（用户选库 / 会话恢复），ready 时还拿不到路径。
+    // void 启动、结果只进安全事件流，**绝不阻塞开库**；全绿时 UI 零变化。
+    void runStartupSelfCheck(root, {
+      ...makeDefaultProbes(),
+      readWarnSoftErrors: defaultWarnSoftErrors,
+    }).catch(() => {})
   })
 
   ipcMain.handle(IPC.VAULT_UNWATCH, () => stopWatching())

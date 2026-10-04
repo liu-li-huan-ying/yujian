@@ -1,5 +1,5 @@
 import { access, chmod, copyFile, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { reportSoftError } from './softError'
 
@@ -27,7 +27,15 @@ async function exists(p: string): Promise<boolean> {
 export async function atomicWrite(filePath: string, content: string): Promise<void> {
   const dir = dirname(filePath)
   await mkdir(dir, { recursive: true })
-  const tmp = join(dir, `.yujian-${randomUUID()}.tmp`)
+  // 临时文件名带上**目标基名**（2026-10-04）：崩溃残留的 .tmp 里装的是**完整的新版本**，
+  // 是宝贵的恢复材料。原命名只有 uuid，残留后无法判断它属于哪个文档，
+  // 启动时只能「发现未提交文件」却说不出「这是哪个文档的新版」→ 恢复无从下手。
+  // 约束：整名 ≤ 240 字节（留足 Windows 路径余量），且保留 .tmp 结尾以维持
+  // 「点开头不被文件树显示」的既有行为。
+  const base = basename(filePath)
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .slice(0, 80)
+  const tmp = join(dir, `.yujian-${randomUUID()}--${base || 'untitled'}.tmp`)
   await writeFile(tmp, content, 'utf-8')
 
   const removeTmp = () => unlink(tmp).catch(() => {})
