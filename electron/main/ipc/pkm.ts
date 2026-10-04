@@ -8,19 +8,24 @@ import * as VaultIndex from '../vaultIndex'
 
 export function registerPkmIpc(): void {
   // 双链：把 [[wikilink]] 目标解析为 vault 内绝对路径（找不到返回 null，由前端决定创建或提示）
-  ipcMain.handle(IPC.VAULT_RESOLVE_WIKILINK, (_event, root: string, target: string) =>
-    VaultIndex.resolveWikiTarget(root, target),
+  ipcMain.handle(IPC.VAULT_RESOLVE_WIKILINK, async (_event, root: string, target: string) =>
+    VaultIndex.resolveWikiTarget(root, target, await getLiveIndex(root)),
   )
 
   // 双链：反链查询——哪些笔记链接到指定文档，附引用行上下文片段
-  ipcMain.handle(IPC.VAULT_GET_BACKLINKS, (_event, root: string, absPath: string) =>
-    VaultIndex.getBacklinksWithContext(root, absPath),
+  // ⚠️ 走内存实时索引（2026-10-04 数据安全 P1-4）：此前走读盘版，滞后 800ms，
+  // 表现为「刚在 A 里写了 [[B]]，B 的反链面板仍显示没有笔记链接到这里」，
+  // 且 `backLinks[absPath] ?? []` 会把「索引里还没这条」静默显示成「真的没有反链」。
+  ipcMain.handle(IPC.VAULT_GET_BACKLINKS, async (_event, root: string, absPath: string) =>
+    VaultIndex.getBacklinksWithContext(root, absPath, await getLiveIndex(root)),
   )
   // 双链：[[ 自动补全候选——全部笔记标题（纯索引元数据，不读正文）
-  ipcMain.handle(IPC.VAULT_LIST_NOTES, (_event, root: string) => VaultIndex.listNoteTitles(root))
+  ipcMain.handle(IPC.VAULT_LIST_NOTES, async (_event, root: string) =>
+    VaultIndex.listNoteTitles(root, await getLiveIndex(root)),
+  )
   // 双链：未链接提及查询——纯文本提到当前笔记名但未加 [[ ]] 的片段
-  ipcMain.handle(IPC.VAULT_UNLINKED_MENTIONS, (_event, root: string, absPath: string) =>
-    VaultIndex.getUnlinkedMentions(root, absPath),
+  ipcMain.handle(IPC.VAULT_UNLINKED_MENTIONS, async (_event, root: string, absPath: string) =>
+    VaultIndex.getUnlinkedMentions(root, absPath, await getLiveIndex(root)),
   )
   // 双链：把未链接提及包裹成 [[链接]] 写回磁盘（落笔前回验原文，绝不静默覆盖）
   ipcMain.handle(IPC.VAULT_WRAP_MENTION, async (_event, root: string, item: UnlinkedMention) =>

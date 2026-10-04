@@ -17,8 +17,8 @@ import type { IndexEntry, VaultIndex } from './types'
  * `[[` 自动补全候选：只取索引里的轻量元数据（路径 / 标题 / 基名），**不读正文**。
  * 由渲染进程在浮层首次弹出时按需拉取并缓存，故大库也不会拖慢编辑器启动。
  */
-export async function listNoteTitles(root: string): Promise<NoteTitleItem[]> {
-  const index = await ensureIndex(root)
+export async function listNoteTitles(root: string, liveIndex?: VaultIndex): Promise<NoteTitleItem[]> {
+  const index = liveIndex ?? (await ensureIndex(root))
   const out: NoteTitleItem[] = []
   for (const full of Object.keys(index.files)) {
     out.push(toNoteItem(full, index.files[full]))
@@ -226,9 +226,10 @@ function findPlainMentions(src: string, content: string, name: string): Unlinked
  */
 export async function getUnlinkedMentions(
   root: string,
-  absPath: string
+  absPath: string,
+  liveIndex?: VaultIndex,
 ): Promise<UnlinkedMention[]> {
-  const index = await ensureIndex(root)
+  const index = liveIndex ?? (await ensureIndex(root))
   const name = basename(absPath, extname(absPath))
   if (!name) return []
   const out: UnlinkedMention[] = []

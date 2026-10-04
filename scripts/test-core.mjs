@@ -2935,6 +2935,26 @@ section('[Z3] 数据安全静态门禁 —— 安全网不可回潮（读源码�
     '完整性自愈的孤儿快照清理也接入安全事件（「修复」不得静默销毁数据）',
     /notifySafety\(\s*'trash-fallback'/.test(integritySrc)
   )
+  // ⑩ 派生面板（反链 / 补全 / 未链接提及）必须走内存实时索引，不得回潮到读盘快照
+  // （P1-4：读盘版滞后 800ms，且 `backLinks[abs] ?? []` 静默显示「无反链」）
+  const pkmIpcSrc = code('electron/main/ipc/pkm.ts')
+  const realtimeConsumers = [
+    'getBacklinksWithContext',
+    'listNoteTitles',
+    'getUnlinkedMentions',
+    'resolveWikiTarget',
+  ]
+  for (const fn of realtimeConsumers) {
+    const i = pkmIpcSrc.indexOf(fn)
+    const call = i >= 0 ? pkmIpcSrc.slice(i, i + 160) : ''
+    check(`${fn} 走 getLiveIndex（不回读 800ms 滞后的磁盘快照）`, /getLiveIndex/.test(call))
+  }
+  // 反链：文档不在索引里时必须先补录，不得直接当「无反链」返回
+  const linksSrc = code('electron/main/vaultIndex/links.ts')
+  check(
+    '反链对「未收录文档」先补录索引（否则新文档反链面板永远空白）',
+    /absPath in index\.files/.test(linksSrc) && /indexFile\(/.test(linksSrc)
+  )
 }
 
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
