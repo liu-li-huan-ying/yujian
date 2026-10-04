@@ -2924,6 +2924,17 @@ section('[Z3] 数据安全静态门禁 —— 安全网不可回潮（读源码�
   )
   // ⑧ atomicWrite 必须保持零索引依赖（否则 rewrites→atomicWrite→vaultIndex 成环）
   check('atomicWrite 零索引依赖（不成环）', !/vaultIndex|indexStore|safeWrite/.test(atomicSrc))
+  // ⑨ 回收站降级（永久删除）不得回潮到 debug 级静默
+  const fsUtilsSrc = code('electron/main/vault/fsUtils.ts')
+  check(
+    'trashOrRemove 降级时提为 warn 并上报安全事件',
+    /reportSoftError\('trash\.fallback',\s*e,\s*'warn'\)/.test(fsUtilsSrc) &&
+      /notifySafety\('trash-fallback'/.test(fsUtilsSrc)
+  )
+  check(
+    '完整性自愈的孤儿快照清理也接入安全事件（「修复」不得静默销毁数据）',
+    /notifySafety\(\s*'trash-fallback'/.test(integritySrc)
+  )
 }
 
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)

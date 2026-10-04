@@ -3,6 +3,7 @@
 import { app, ipcMain, nativeTheme, shell } from 'electron'
 import { IPC } from '../../shared/ipc-channels'
 import { clearSoftErrors, countSoftErrors, getSoftErrors, summarizeSoftErrors } from '../softError'
+import { listSafetyNotices } from '../safetyEvents'
 
 export function registerAppIpc(): void {
   ipcMain.handle(IPC.APP_VERSION, () => app.getVersion())
@@ -33,4 +34,8 @@ export function registerAppIpc(): void {
 
   // 软错误清空：用户确认已知晓后调用。返回清掉的条数。
   ipcMain.handle(IPC.SOFT_ERRORS_CLEAR, async () => ({ cleared: clearSoftErrors() }))
+
+  // 安全网降级事件补拉：覆盖「降级发生在窗口 ready 之前」的情况
+  // （主进程启动阶段的自检探针早于渲染层挂载）。纯读内存环，无写操作。
+  ipcMain.handle(IPC.SAFETY_NOTICES_GET, async () => listSafetyNotices())
 }

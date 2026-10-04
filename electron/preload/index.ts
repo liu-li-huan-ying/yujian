@@ -36,6 +36,7 @@ import {
   type MoveResult,
   type SoftErrorReport,
 } from '../shared/ipc-channels'
+import type { SafetyNoticePayload } from '../shared/safety'
 
 /**
  * 只暴露受控 API。绝不暴露 ipcRenderer 本身或任何 Node 能力。
@@ -138,6 +139,13 @@ const api = {
   /** 清空软错误记录（用户确认已知晓后调用） */
   clearSoftErrors: (): Promise<{ cleared: number }> =>
     ipcRenderer.invoke(IPC.SOFT_ERRORS_CLEAR),
+
+  /**
+   * 安全网降级事件补拉：取「窗口 ready 之前」发生的事件（如启动自检探针）。
+   * 与 `getSoftErrors` 的分工：软错误是「可查阅的诊断」，本项是「必须让用户知道」。
+   */
+  getSafetyNotices: (): Promise<SafetyNoticePayload[]> =>
+    ipcRenderer.invoke(IPC.SAFETY_NOTICES_GET),
 
   /** 整库备份：打包为 zip 到 destZip（用户经保存对话框选定） */
   backupVault: (root: string, destZip: string): Promise<BackupResult> =>

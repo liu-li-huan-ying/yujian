@@ -14,6 +14,7 @@ import type {
   RepairResult
 } from '../shared/ipc-channels'
 import { reportSoftError } from './softError'
+import { notifySafety } from './safetyEvents'
 import { errMsg } from '../shared/error'
 
 /**
@@ -231,6 +232,8 @@ export async function repairIntegrity(
 
   if (actions.includes('removeOrphanSnapshots')) {
     let n = 0
+    let fellBack = 0
+    const fellBackPaths: string[] = []
     for (const d of await findOrphanSnapshots(root)) {
       try {
         await trashItem(d)
@@ -240,11 +243,23 @@ export async function repairIntegrity(
         try {
           await rm(d, { recursive: true, force: true })
           n++
+          // ⚠️ 「一键修复」本身做不可撤销的永久删除，必须告知 ——
+          // 否则用户点了修复就以为一切可控，实际快照历史已被清空且无法找回。
+          // 这是 2026-10-04 审计发现的「最讽刺的漏洞」：修复动作在静默销毁数据。
+          fellBack++
+          fellBackPaths.push(d)
         } catch (e) {
           reportSoftError('orphanSnapshot.delete', e, 'debug')
           /* 忽略单个失败，继续其余 */
         }
       }
+    }
+    if (fellBack > 0) {
+      notifySafety(
+        'trash-fallback',
+        fellBackPaths,
+        `回收站不可用，${fellBack} 个孤儿快照目录被永久删除（无法撤销）`,
+      )
     }
     result.actions.push({ action: 'removeOrphanSnapshots', fixed: n })
   }

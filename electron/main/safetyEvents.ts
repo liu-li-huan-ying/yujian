@@ -1,5 +1,5 @@
 import { reportSoftError } from './softError'
-
+import type { SafetyKind, SafetyNoticePayload } from '../shared/safety'
 /**
  * 「安全网降级」事件流 —— 与 softError 同构，但**语义完全不同**。
  *
@@ -15,47 +15,22 @@ import { reportSoftError } from './softError'
  * 这类属正常降级，全局提级会让真正的信号被噪音淹没 —— 那等于没做告警。
  */
 
-/** 降级类型。新增时同步 UI 文案（i18n 键 `safety.<kind>`）。 */
-export type SafetyKind =
-  /** 读不到磁盘原文 → 本次覆盖没有回滚点 */
-  | 'prev-unreadable'
-  /** 自动备份失败 → 本次覆盖没有回滚点 */
-  | 'backup-failed'
-  /** 批量操作过大未留档 */
-  | 'bulk-too-large'
-  /** 批量替换部分文件失败 */
-  | 'replace-partial'
-  /** 回收站不可用，删除已改为永久执行（不可撤销） */
-  | 'trash-fallback'
-  /** 原子写降级（第三层 copyFile，原子性已失效） */
-  | 'atomic-write-degraded'
-  /** 启动自检发现的问题 */
-  | 'startup-check'
-  /** 崩溃残留临时文件待处理 */
-  | 'tmp-residue'
-
-export interface SafetyNotice {
-  id: number
-  kind: SafetyKind
-  /** 涉及的文件路径（可能有多个，如批量失败清单） */
-  paths: string[]
-  /** 已转义为纯文本的补充说明（渲染层直接显示，故绝不放原始 Error 对象） */
-  detail: string
-  at: number
-}
+// 降级类型定义在 electron/shared/safety.ts（共享契约的唯一真源），
+// 此处只 re-export 便于主进程内部引用。
+export type { SafetyKind, SafetyNoticePayload }
 
 /** 内存环容量：够看完一轮，又不会在长会话里无限增长 */
 const CAPACITY = 100
 
-const ring: SafetyNotice[] = []
+const ring: SafetyNoticePayload[] = []
 let seq = 0
-let sink: ((n: SafetyNotice) => void) | null = null
+let sink: ((n: SafetyNoticePayload) => void) | null = null
 
 /**
  * 注册渲染层转发器。主进程在 app ready 前产生的事件不会被丢——
  * 渲染层挂载时会用 `listSafetyNotices()` 补拉一次（见 preload）。
  */
-export function setSafetySink(fn: ((n: SafetyNotice) => void) | null): void {
+export function setSafetySink(fn: ((n: SafetyNoticePayload) => void) | null): void {
   sink = fn
 }
 
@@ -65,8 +40,12 @@ export function setSafetySink(fn: ((n: SafetyNotice) => void) | null): void {
  * 同时打一条软错误：这样「完整性面板」仍能查到全部历史（它是诊断入口），
  * 而新事件流负责「当下就让用户知道」。两者不重复负担。
  */
-export function notifySafety(kind: SafetyKind, paths: string[], detail: string): SafetyNotice {
-  const n: SafetyNotice = { id: ++seq, kind, paths, detail, at: Date.now() }
+export function notifySafety(
+  kind: SafetyKind,
+  paths: string[],
+  detail: string,
+): SafetyNoticePayload {
+  const n: SafetyNoticePayload = { id: ++seq, kind, paths, detail, at: Date.now() }
   ring.push(n)
   if (ring.length > CAPACITY) ring.splice(0, ring.length - CAPACITY)
   // 软错误只记 scope 与首条路径，detail 过长会挤爆面板
@@ -75,7 +54,7 @@ export function notifySafety(kind: SafetyKind, paths: string[], detail: string):
   return n
 }
 
-export function listSafetyNotices(): SafetyNotice[] {
+export function listSafetyNotices(): SafetyNoticePayload[] {
   return ring.slice()
 }
 
