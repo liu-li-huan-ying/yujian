@@ -163,6 +163,22 @@ export async function reindexFile(root: string, absPath: string): Promise<void> 
   scheduleSave(root)
 }
 
+/**
+ * 写盘方主动通知「这个文件刚被写过」，立即重新索引（不等待 watcher 事件）。
+ *
+ * 为什么需要（2026-10-04 审计）：chokidar 的 `awaitWriteFinish` 有 120ms 稳定阈值，
+ * 加上事件派发延迟，「刚保存完立刻打开反链面板 / 查 `[[` 补全」仍会拿到**旧关系**——
+ * 而反链面板在旧数据上会用 `?? []` 静默显示「没有笔记链接到这里」。
+ * 由写方主动更新可消除这个窗口。
+ *
+ * 复用 `reindexFile` 而非另写一份：避免两条更新路径的参数/容错漂移。
+ * 与 watcher 重复触发是**幂等**的（`indexFile` 覆盖同一 key，不产生重复条目）。
+ */
+export async function noteFileWritten(absPath: string): Promise<void> {
+  if (!idx || idxRoot === null) return
+  await reindexFile(idxRoot, absPath)
+}
+
 /** 单文件删除（unlink）：增量移除并清理反向链接 */
 export function deindexFile(root: string, absPath: string): void {
   if (!idx || idxRoot !== root || !isMarkdown(basename(absPath))) return

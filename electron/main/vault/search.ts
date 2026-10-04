@@ -3,7 +3,7 @@
  * 正则构造收敛到渲染层单一来源 electron/shared/regex，避免库级搜索与编辑器内搜索行为分叉。
  */
 
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type {
   SearchFileResult,
@@ -14,6 +14,10 @@ import type {
 } from '../../shared/ipc-channels'
 import { buildRegex } from '../../shared/regex'
 import { reportSoftError } from '../softError'
+import { backupBeforeBulkWrite } from '../autoBackup'
+import { notifySafety } from '../safetyEvents'
+import { planBulkReplace, safeWriteMany } from '../safeWrite'
+import { mergeFailed, summarizeReplace } from '../safeWriteCore'
 import { ensureIndex } from './indexStore'
 
 /* ── 全文搜索（消费统一索引层，解除 80 文件硬上限） ──────────────── */
@@ -133,28 +137,52 @@ export async function replaceInVault(
   // 复用主搜索正则构造（含 regex 模式支持）；buildRegex 始终带 'g'，正好供整文替换
   const re = buildRegex(q, opts?.caseSensitive ?? false, opts?.wholeWord ?? false, opts?.regex ?? false)
 
-  let replaced = 0
-  let files = 0
-  const paths: string[] = []
-  for (const p of targets) {
-    let content: string
-    try {
-      content = await readFile(p, 'utf-8')
-    } catch (e) {
-      reportSoftError('replace.read', e, 'debug')
-      continue
-    }
-    const next = content.replace(re, replacement)
-    if (next === content) continue
-    try {
-      await writeFile(p, next, 'utf-8')
-      replaced += content.match(re)?.length ?? 0
-      files++
-      paths.push(p)
-    } catch (e) {
-      reportSoftError('replace.write', e)
-      // 单文件写失败不影响其余文件（如只读文件）
+  // ── 阶段 1 · 全量预检（不动任何文件）─────────────────────────────
+  // 替换是本项目唯一「不可撤销 + 可批量改写全库」的操作，故必须先把
+  // 「能不能改、哪些要改」算清楚再动手。否则中途才发现某些文件读不到时，
+  // 用户已处在一个「一半改了、一半没改」的中间态且难以回退。
+  const { plan, unreadable } = await planBulkReplace(targets, (content) => content.replace(re, replacement))
+
+  if (plan.length === 0) {
+    // 没有任何文件内容会变 → 不留档、不写盘；但读不到的文件仍要如实报告
+    const failed = mergeFailed(unreadable, [])
+    return {
+      replaced: 0,
+      files: 0,
+      paths: [],
+      failed: failed.length ? failed : undefined,
     }
   }
-  return { replaced, files, paths }
+
+  // ── 阶段 2 · 批量留档（一次性，独立配额池，不触发 prune）──────────
+  // 绝不逐文件调 backupBeforeSave：那会 3 读 2 写 × N、可能弹 N 次系统回收站，
+  // 还会偷跑掉每个文档 50 份自动备份的份额。详见 autoBackup.backupBeforeBulkWrite 注释。
+  const bulk = await backupBeforeBulkWrite(plan.map((p) => ({ path: p.path, content: p.before })))
+
+  // ── 阶段 3 · 顺序写 + 精确回报（失败不中断）────────────────────────
+  // 写必须走 atomicWrite 而非 writeFile：裸写崩溃会留下截断文件。
+  // 不中断的目的是让用户拿到**完整**的失败清单，而不是"改到一半卡住、状态不明"。
+  const res = await safeWriteMany(plan.map((p) => ({ path: p.path, content: p.after })))
+
+  // 计数与路径**只统计成功写入的文件** —— 否则会出现「A 文件没改成，
+  // 但提示说全库已替换 3 处」这种比静默更糟的假成功。逻辑在纯逻辑层，可直测。
+  const stats = summarizeReplace(
+    plan,
+    res.failed.map((f) => f.path),
+    (before) => before.match(re)?.length ?? 0,
+  )
+  const failed = mergeFailed(unreadable, res.failed)
+
+  // 部分失败必须让用户知道：静默的部分替换是「用户以为全改完了」的最坏情形
+  if (failed.length > 0) {
+    notifySafety('replace-partial', failed.map((f) => f.path), `${failed.length} 个文件未替换成功`)
+  }
+
+  return {
+    replaced: stats.replaced,
+    files: stats.files,
+    paths: stats.paths,
+    failed: failed.length ? failed : undefined,
+    degraded: bulk.degraded,
+  }
 }

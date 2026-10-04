@@ -319,6 +319,10 @@ export interface ReplaceResult {
   files: number
   /** 被改写的文件路径列表（供前端判断是否需要重载当前文档） */
   paths: string[]
+  /** 逐条失败清单（2026-10-04：替换是唯一「不可撤销 + 绕过安全网」的写操作，必须给精确反馈） */
+  failed?: { path: string; reason: string }[]
+  /** 安全网降级标记（如 'bulk-too-large' 表示未留档），非空即须告知用户 */
+  degraded?: string
 }
 
 /** 重命名 / 移动的结果：新路径 + 自动同步 `[[引用]]` 的统计 */

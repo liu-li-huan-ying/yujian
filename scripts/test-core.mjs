@@ -1083,7 +1083,9 @@ section('[J3] 保存前自动备份（保命防线）—— 覆盖前留档 / �
     // 先建一次库标记（.yujian-history 由首个快照创建），使 resolveVaultRoot 能自解析
     await Snap.createSnapshot(dir, join(dir, 'A.md'), V1, '初稿')
     const ok = await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
-    check('库内：首次备份返回 true', ok === true)
+    // 2026-10-04：改为结构化返回（BackupResult）。断言要同时看 ok 与 degraded，
+    // 否则「没留档但看起来正常」正是本次要消灭的那类静默失效。
+    check('库内：首次备份 ok=true 且无降级', ok.ok === true && ok.degraded === undefined)
     const list = await Snap.listSnapshots(dir, join(dir, 'A.md'))
     check('库内：历史里出现自动备份条目', list.some((s) => s.note === '自动备份'), list.map((s) => s.note).join(','))
     check('库内：自动备份内容 = 覆盖前的原文', await Snap.restoreSnapshot(dir, join(dir, 'A.md'), list.find((s) => s.note === '自动备份').id) === V1)
@@ -1098,7 +1100,7 @@ section('[J3] 保存前自动备份（保命防线）—— 覆盖前留档 / �
     await Snap.createSnapshot(dir, join(dir, 'A.md'), V1, '初稿')
     await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
     const second = await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
-    check('去重：同内容第二次不新增备份', second === false)
+    check('去重：同内容第二次不新增备份', second.ok === false && second.degraded === 'duplicate')
     const autos = (await Snap.listSnapshots(dir, join(dir, 'A.md'))).filter((s) => s.note === '自动备份')
     check('去重：自动备份仍只有 1 份', autos.length === 1, String(autos.length))
     rmSync(dir, { recursive: true, force: true })
@@ -1110,7 +1112,7 @@ section('[J3] 保存前自动备份（保命防线）—— 覆盖前留档 / �
     await Snap.createSnapshot(dir, join(dir, 'A.md'), V1, '初稿')
     await Auto.backupBeforeSave(join(dir, 'A.md'), V1)
     const added = await Auto.backupBeforeSave(join(dir, 'A.md'), V2)
-    check('变化：内容不同则新增备份', added === true)
+    check('变化：内容不同则新增备份', added.ok === true && added.degraded === undefined)
     const autos = (await Snap.listSnapshots(dir, join(dir, 'A.md'))).filter((s) => s.note === '自动备份')
     check('变化：自动备份累计 2 份', autos.length === 2, String(autos.length))
     rmSync(dir, { recursive: true, force: true })
@@ -1135,9 +1137,28 @@ section('[J3] 保存前自动备份（保命防线）—— 覆盖前留档 / �
     const outside = mkdtempSync(join(tmpdir(), 'yj-outside-'))
     writeFileSync(join(outside, 'loose.md'), V1, 'utf-8')
     const did = await Auto.backupBeforeSave(join(outside, 'loose.md'), V1)
-    check('库外：不做备份', did === false)
+    // 库外不备份属**预期行为**（不该在用户任意目录凭空造历史目录），
+    // 故 degraded 必须是 'outside-vault' —— 不是 'backup-failed'（那才是异常）。
+    check('库外：不做备份且降级原因可区分', did.ok === false && did.degraded === 'outside-vault')
     check('库外：不凭空创建 .yujian-history', !existsSync(join(outside, '.yujian-history')))
     rmSync(outside, { recursive: true, force: true })
+  }
+
+  // J3-7 读盘失败必须**如实上报**，不能伪装成「文件不存在」
+  // （2026-10-04 审计 P1-3 根因：旧实现 `catch { return '' }` 把 EACCES/EBUSY/EISDIR
+  //  一律当空串，而 shouldBackup('') 为 false → 跳过备份直接覆盖 → 安全网静默失效）
+  {
+    const dir = mkdtempSync(join(tmpdir(), 'yj-readfail-'))
+    // 用同名**目录**占位：readFile 对目录抛 EISDIR，是稳定的跨平台失败源
+    mkdirSync(join(dir, 'locked.md'))
+    const r = await Auto.readPrevContent(join(dir, 'locked.md'))
+    check('读失败：如实返回 ok=false 而非伪装空串', r.ok === false)
+    check('读失败：带出错误码供上层上报', r.ok === false && typeof r.reason === 'string' && r.reason.length > 0)
+
+    // 负向对照：真正不存在的文件属 ENOENT，是**正常的新建**，不是降级
+    const r2 = await Auto.readPrevContent(join(dir, 'nope.md'))
+    check('负向对照：ENOENT 属正常新建，返回 ok=true + 空串', r2.ok === true && r2.content === '')
+    rmSync(dir, { recursive: true, force: true })
   }
 }
 
@@ -2642,6 +2663,79 @@ check('兄弟路径：多点文件名只切最后一个点', siblingMinePath('a/
 check('内容比较：CRLF 与 LF 视为相同', isSameText('a\r\nb\r\n', 'a\nb\n'))
 check('内容比较：真实差异必须判不同', !isSameText('a\nb\n', 'a\nc\n'))
 check('内容比较：空串相等，空串与单个换行不等', isSameText('', '') && !isSameText('', '\n'))
+
+/* ── X1. 批量安全写编排（electron/main/safeWriteCore.ts）────────────────
+ *
+ * 为什么测这一层：批量替换是本项目**唯一**「不可撤销 + 可批量改写全库」的写操作
+ * （2026-10-04 审计发现它此前是裸 writeFile：非原子 + 无备份 + 失败静默）。
+ * 这里断言的是它的三条不可退让的性质：
+ *   ① 失败**不中断**、失败清单精确到路径（用户要的是"知道哪些没改成"）
+ *   ② 统计**只算成功**的文件（否则"没改成却提示已替换"比静默更糟）
+ *   ③ 预检不写任何文件，且读不到的文件如实进清单
+ */
+section('[X1] 批量安全写编排 —— 失败不中断 / 计数只算成功 / 预检不写盘 (safeWriteCore.ts)')
+const X1 = await import((await bundle('electron/main/safeWriteCore.ts', 'safeWriteCore.mjs')).url)
+
+// ① 失败不中断：第 2 个文件写失败（磁盘满），其余必须照写成功
+{
+  const written = []
+  const res = await X1.writeAllSequentially(
+    [
+      { path: 'a.md', content: 'A' },
+      { path: 'b.md', content: 'B' },
+      { path: 'c.md', content: 'C' },
+      { path: 'd.md', content: 'D' },
+    ],
+    async (p) => {
+      if (p === 'b.md') throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
+      written.push(p)
+    },
+  )
+  check('写入失败不中断：失败点之后的文件照常写入', written.join(',') === 'a.md,c.md,d.md')
+  check('写入成功计数只含成功文件', res.written === 3)
+  check('失败清单精确到路径', res.failed.length === 1 && res.failed[0].path === 'b.md')
+  check('失败原因透传给用户（含错误码）', res.failed[0].reason.includes('ENOSPC'))
+}
+
+// ② 计数只算成功文件：b.md 失败时，不能把它算进「已替换 N 处」
+{
+  const plan = [
+    { path: 'a.md', before: 'x x', after: 'y y' },
+    { path: 'b.md', before: 'x', after: 'y' },
+    { path: 'c.md', before: 'x x x', after: 'y y y' },
+  ]
+  const stats = X1.summarizeReplace(plan, ['b.md'], (before) => before.split('x').length - 1)
+  check('统计排除失败文件（a=2 + c=3，不含 b 的 1）', stats.replaced === 5)
+  check('统计文件数排除失败文件', stats.files === 2)
+  check('统计路径不含失败文件', !stats.paths.includes('b.md') && stats.paths.join(',') === 'a.md,c.md')
+}
+
+// ③ 预检不写盘 + 读不到的如实报告
+{
+  const store = { 'a.md': 'hello x world', 'b.md': 'no match here' }
+  let wrote = false
+  const { plan, unreadable } = await X1.planBulkReplaceCore(
+    ['a.md', 'b.md', 'missing.md'],
+    async (p) => {
+      if (!(p in store)) throw new Error('ENOENT')
+      return store[p]
+    },
+    (c) => c.replace(/x/g, 'y'),
+  )
+  check('预检不产生任何写动作', wrote === false)
+  check('预检只收「内容真会变」的文件（b.md 无命中被跳过）', plan.length === 1 && plan[0].path === 'a.md')
+  check('预检保留原文用于留档（before）', plan[0].before === 'hello x world')
+  check('读不到的文件进 unreadable 而非静默丢弃', unreadable.join(',') === 'missing.md')
+}
+
+// 合并两类失败：预检读不到 + 写失败，去重且顺序稳定
+{
+  const merged = X1.mergeFailed(
+    ['m1.md', 'm2.md'],
+    [{ path: 'm2.md', reason: '写失败' }, { path: 'w.md', reason: 'ENOSPC' }],
+  )
+  check('合并失败去重且顺序稳定', merged.map((f) => f.path).join(',') === 'm1.md,m2.md,w.md')
+}
 
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { createSnapshot, deleteSnapshot, listSnapshots, HISTORY_DIR_NAME } from './snapshots'
 import { resolveVaultRoot } from './vault/context'
-import { reportSoftError } from './softError'
+import { notifySafety } from './safetyEvents'
 
 /**
  * 「保存前自动备份」保命防线 —— 自动保存覆盖磁盘前，把**上一版内容**留进版本历史。
@@ -50,6 +50,13 @@ export async function resolveBackupVault(filePath: string): Promise<string | nul
   return resolveVaultRoot(filePath)
 }
 
+/** 备份结果。`degraded` 非空即表示「安全网本次没起作用」，上层必须告知用户。 */
+export interface BackupResult {
+  ok: boolean
+  /** 未留档的**具体原因**（无降级时为 undefined） */
+  degraded?: 'empty' | 'outside-vault' | 'duplicate' | 'backup-failed' | 'history-dir'
+}
+
 /**
  * 保存前备份：把 `prevContent` 留进该文档的版本历史。
  *
@@ -60,26 +67,88 @@ export async function resolveBackupVault(filePath: string): Promise<string | nul
 export async function backupBeforeSave(
   filePath: string,
   prevContent: string,
-): Promise<boolean> {
+): Promise<BackupResult> {
   try {
-    if (!shouldBackup(prevContent)) return false
+    if (!shouldBackup(prevContent)) return { ok: false, degraded: 'empty' }
     // 不备份历史目录自身（理论上不会发生：`.yujian-history` 内不含 .md 之外的写目标）
-    if (filePath.includes(`${HISTORY_DIR_NAME}`)) return false
+    if (filePath.includes(`${HISTORY_DIR_NAME}`)) return { ok: false, degraded: 'history-dir' }
     const vault = await resolveVaultRoot(filePath)
-    if (!vault) return false
+    if (!vault) return { ok: false, degraded: 'outside-vault' }
 
     const prev = await listSnapshots(vault, filePath)
     const autos = prev.filter((s) => s.note === AUTO_NOTE)
     // 与最近一份自动备份内容相同 → 无新信息，跳过（避免连续自动保存堆同一份内容）
-    if (autos.length > 0 && autos[0].contentHash === sha1(prevContent)) return false
+    if (autos.length > 0 && autos[0].contentHash === sha1(prevContent)) {
+      return { ok: false, degraded: 'duplicate' }
+    }
 
     await createSnapshot(vault, filePath, prevContent, AUTO_NOTE)
     await pruneAutoBackups(vault, filePath)
-    return true
+    return { ok: true }
   } catch (e) {
-    // 备份失败绝不能阻断保存本身——本次保存照常进行，但必须留痕（否则用户以为有安全网）
-    reportSoftError('autoBackup', e, 'warn')
-    return false
+    // 备份失败绝不能阻断保存本身——本次保存照常进行，但必须让用户知道（原先只记软错误，
+    // 而软错误要用户主动开面板才看得到，等于「有网实则无网」）。
+    const err = e as NodeJS.ErrnoException
+    notifySafety('backup-failed', [filePath], `自动备份失败（${err?.code ?? 'unknown'}），本次覆盖没有回滚点`)
+    return { ok: false, degraded: 'backup-failed' }
+  }
+}
+
+/**
+ * 批量替换前的**一次性留档**。
+ *
+ * 为什么不能逐文件调 `backupBeforeSave`：
+ *  1. 配额 —— `pruneAutoBackups` 只修剪**该文档**的自动备份，故 50 份上限不会被一次性打满；
+ *     但每次 `backupBeforeSave` 都要 3 读 2 写（listSnapshots×2 + createSnapshot + prune），
+ *     500 个文件 = 1500 读 + 1000 写，且 `deleteSnapshot` 走回收站 → 可能弹 500 次系统回收站。
+ *  2. 配额偷跑 —— 批量留的那份会占掉该文档 1/50 的自动备份份额。
+ *  3. 体积 —— N 个文件 × 1 份全文。
+ *
+ * 故走**独立 note**：与自动备份池物理分离（`pruneAutoBackups` 按 `note === AUTO_NOTE` 过滤，
+ * 天然互不干扰），且**绝不调 prune**（没有东西需要修剪）。
+ *
+ * 上限 `BULK_BACKUP_LIMIT`：超出则**整批不备份并明确告知**（degraded='bulk-too-large'）——
+ * 宁可少留档，也不静默不留，更不能把主进程卡住几十秒。
+ */
+export const BULK_BACKUP_LIMIT = 200
+
+/** 批量替换留档的备注（第三类，区别于自动备份与手工快照） */
+const BULK_NOTE = '批量替换前'
+
+export interface BulkBackupResult {
+  ok: boolean
+  backedUp: number
+  degraded?: 'bulk-too-large' | 'backup-failed' | 'outside-vault'
+}
+
+export async function backupBeforeBulkWrite(
+  entries: ReadonlyArray<{ path: string; content: string }>,
+): Promise<BulkBackupResult> {
+  if (entries.length === 0) return { ok: true, backedUp: 0 }
+  if (entries.length > BULK_BACKUP_LIMIT) {
+    notifySafety(
+      'bulk-too-large',
+      [],
+      `批量替换涉及 ${entries.length} 个文件，超过留档上限 ${BULK_BACKUP_LIMIT}，本次未留档`,
+    )
+    return { ok: false, backedUp: 0, degraded: 'bulk-too-large' }
+  }
+  let backedUp = 0
+  try {
+    for (const { path, content } of entries) {
+      if (!shouldBackup(content)) continue
+      if (path.includes(`${HISTORY_DIR_NAME}`)) continue
+      const vault = await resolveVaultRoot(path)
+      if (!vault) continue
+      // 独立 note，不进自动备份池、不触发 prune
+      await createSnapshot(vault, path, content, BULK_NOTE)
+      backedUp++
+    }
+    return { ok: true, backedUp }
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException
+    notifySafety('backup-failed', [], `批量留档部分失败（${err?.code ?? 'unknown'}）`)
+    return { ok: false, backedUp, degraded: 'backup-failed' }
   }
 }
 
@@ -101,15 +170,40 @@ export function isAutoBackupNote(note?: string): boolean {
   return note === AUTO_NOTE
 }
 
+/** 判断某条快照是否为批量替换留档（UI 需明确区分：它不受 50 份自动备份上限约束） */
+export function isBulkBackupNote(note?: string): boolean {
+  return note === BULK_NOTE
+}
+
 /** 导出常量供测试与 UI 复用 */
 export const AUTO_BACKUP_NOTE = AUTO_NOTE
 export const AUTO_BACKUP_LIMIT = MAX_AUTO_BACKUPS
 
-/** 读取磁盘原文（不存在 → 空串，表示「新文件、无需备份」） */
-export async function readPrevContent(filePath: string): Promise<string> {
+/**
+ * 读取磁盘原文。
+ *
+ * ⚠️ 为什么返回结构化结果而不是裸字符串（2026-10-04 改造）：
+ * 旧实现是 `catch { return '' }` —— **任何**读取失败（EACCES 文件被锁 / EBUSY 云盘同步中 /
+ * EISDIR 路径恰是目录）都被当成「文件不存在」返回空串。而 `shouldBackup('')` 为 false，
+ * 于是调用方 `if (prev !== content) await backupBeforeSave(...)` 会**跳过备份直接覆盖**：
+ * 用户以为有安全网，实际这一版覆盖**没有任何回滚点**。这是典型的静默失效。
+ *
+ * 现在把「真的没有这个文件」与「有文件但读不到」区分开 —— 前者是正常的新建，
+ * 后者必须让上层知道安全网失效了。
+ *
+ * 注意：读失败**不阻断保存**（否则内容会丢，那是更糟的结果），只上报 `ok:false`。
+ */
+export type ReadPrevResult =
+  | { ok: true; content: string }
+  | { ok: false; reason: string }
+
+export async function readPrevContent(filePath: string): Promise<ReadPrevResult> {
   try {
-    return await readFile(filePath, 'utf-8')
-  } catch {
-    return ''
+    return { ok: true, content: await readFile(filePath, 'utf-8') }
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException
+    // ENOENT = 真的没有这个文件（新文档首次保存），属正常，不是降级
+    if (err?.code === 'ENOENT') return { ok: true, content: '' }
+    return { ok: false, reason: err?.code ?? 'read-failed' }
   }
 }
