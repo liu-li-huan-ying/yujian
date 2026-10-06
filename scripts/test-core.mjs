@@ -3201,6 +3201,34 @@ section('[W3] 中文输入法守卫 —— 候选期间放行安全键 / 拦快�
   }
 }
 
+section('[W4] 批量替换确认 —— 清单折叠/路径缩写/省略策略 (src/utils/replaceConfirm.ts)')
+{
+  const RC = await import((await bundle('src/utils/replaceConfirm.ts', 'replaceConfirm.mjs')).url)
+
+  // ① 路径缩写：保留父目录 + 文件名（两个同名 README 必须能区分）
+  check('深路径缩写为 父目录/文件名', RC.shortPath('/vault/notes/daily/2026-01-02.md') === 'daily/2026-01-02.md')
+  check('Windows 分隔符同样支持', RC.shortPath('C:\\vault\\a\\b\\note.md') === 'b/note.md')
+  check('两级路径原样返回', RC.shortPath('/vault/note.md') === '/vault/note.md')
+
+  // ② 中间省略：**扩展名必须完整保留**（用户靠它认文件类型）
+  {
+    const long = 'a-very-long-note-name-that-exceeds-limit.md'
+    const out = RC.elideName(long, 20)
+    check('超长名被省略', out.includes('…'))
+    check('扩展名完整保留（.md）', out.endsWith('.md'))
+  }
+  check('未超长的名原样返回', RC.elideName('note.md', 20) === 'note.md')
+
+  // ③ 折叠：只取前 N 条（其余由调用方显示「还有 K 个」）
+  {
+    const many = Array.from({ length: 30 }, (_, i) => `/vault/dir${i}/note${i}.md`)
+    const out = RC.foldFilePaths(many, 8)
+    check('超过 foldAt 时截断到 foldAt', out.length === 8)
+    check('截断后仍全部是有效路径（非 undefined）', out.every((p) => typeof p === 'string' && p.length > 0))
+  }
+  check('不足 foldAt 时全展示', RC.foldFilePaths(['/v/a/n.md'], 8).length === 1)
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 
 if (failed > 0) {

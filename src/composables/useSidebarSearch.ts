@@ -45,6 +45,21 @@ export interface SidebarSearchEmit {
   replaced: (paths: string[]) => void
 }
 
+/**
+ * 待确认的批量替换（2026-10-04）。
+ *
+ * 原先只存「命中总数」，导致用户在确认前**无法知道自己在改哪些文件**。
+ * 这是本项目唯一「不可撤销 + 可批量改写全库」的操作，确认界面必须配得上这个风险。
+ */
+export interface ReplaceConfirm {
+  /** 命中总数（替换处的数量） */
+  hits: number
+  /** 将被改写的文件绝对路径（**只含真正有命中的**，已滤除 0 命中项） */
+  files: string[]
+  /** true = 仅本文档范围；false = 全库范围。必须明示，否则用户会误判影响面 */
+  scoped: boolean
+}
+
 /** 输入防抖时长：连续输入不每次重扫整个库 */
 const DEBOUNCE_MS = 300
 
@@ -74,9 +89,67 @@ export function useSidebarSearch(hooks: SidebarSearchHooks, emit: SidebarSearchE
 
   const showReplace = ref(false)
   const replaceQuery = ref('')
-  const confirming = ref<number | null>(null)
+  /**
+   * 待确认的批量替换（2026-10-04 从 `number` 升级为结构体）。
+   *
+   * 为什么要结构化：原先只存「命中总数 N」，用户点确认时**不知道自己在改哪些文件** ——
+   * 改 1 处还是 200 处、是全库还是当前文档，界面上都没有第二句话。
+   * 而这是本项目**唯一「不可撤销 + 可批量改写全库」**的操作，界面配不上风险。
+   *
+   * `files` 来自已有搜索结果（`SearchFileResult.path`），**不额外发 IPC**。
+   */
+  const confirming = ref<ReplaceConfirm | null>(null)
   const replacing = ref(false)
   const totalHits = computed(() => searchResults.value.reduce((n, f) => n + f.hits.length, 0))
+
+  /**
+   * 点击「替换全部」：先确认。**必须在确认前就把文件清单算好**，
+   * 不能在用户点确认后才去查 —— 那时他已经决定了，看到清单也来不及。
+   */
+  function askReplace(): void {
+    if (!replaceQuery.value || replacing.value) return
+    // 只列**真的有命中**的文件：搜索结果里可能有 0 命中项（截断/过期），
+    // 混进清单会让用户以为「要改 5 个文件」而实际只改 2 个。
+    const files = searchResults.value.filter((f) => f.hits.length > 0)
+    if (files.length === 0) return
+    confirming.value = {
+      hits: totalHits.value,
+      files: files.map((f) => f.path),
+      scoped: searchScope.value === 'doc',
+    }
+  }
+
+  /** 确认执行：在搜索命中文件范围内做替换，写回磁盘；范围随 `scopeFile()` 走 */
+  async function doReplace(): Promise<void> {
+    const c = confirming.value
+    confirming.value = null
+    if (!c || !hooks.vaultPath() || !replaceQuery.value) return
+    replacing.value = true
+    try {
+      const res = await window.api.replaceInVault(
+        hooks.vaultPath() as string,
+        searchQuery.value,
+        replaceQuery.value,
+        { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
+        scopeFile(),
+      )
+      hooks.showToast(
+        L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)),
+      )
+      emit.replaced(res.paths)
+      // 立即刷新结果（不走输入防抖），反映替换后状态
+      await executeSearch()
+      // 替换可能引发行号偏移 → 重新推导仍有效的命中行，避免残留过期位置
+      currentFindLine.value = pickCurrentLine(searchResults.value, hooks.activePath())
+      syncFindHighlight()
+      replaceQuery.value = ''
+      showReplace.value = false
+    } catch {
+      hooks.showToast(L.replaceFail)
+    } finally {
+      replacing.value = false
+    }
+  }
 
   let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -174,43 +247,6 @@ export function useSidebarSearch(hooks: SidebarSearchHooks, emit: SidebarSearchE
     emit.openResult({ path, line })
   }
 
-  /** 点击「替换全部」：先确认（展示将影响的匹配数），避免误伤 */
-  function askReplace(): void {
-    if (!replaceQuery.value || replacing.value) return
-    confirming.value = totalHits.value
-  }
-
-  /** 确认执行：在搜索命中文件范围内做替换，写回磁盘；范围随 `scopeFile()` 走 */
-  async function doReplace(): Promise<void> {
-    const n = confirming.value
-    confirming.value = null
-    if (n == null || !hooks.vaultPath() || !replaceQuery.value) return
-    replacing.value = true
-    try {
-      const res = await window.api.replaceInVault(
-        hooks.vaultPath() as string,
-        searchQuery.value,
-        replaceQuery.value,
-        { caseSensitive: caseSensitive.value, wholeWord: wholeWord.value, regex: useRegex.value },
-        scopeFile(),
-      )
-      hooks.showToast(
-        L.replaceDone.replace('{n}', String(res.replaced)).replace('{files}', String(res.files)),
-      )
-      emit.replaced(res.paths)
-      // 立即刷新结果（不走输入防抖），反映替换后状态
-      await executeSearch()
-      // 替换可能引发行号偏移 → 重新推导仍有效的命中行，避免残留过期位置
-      currentFindLine.value = pickCurrentLine(searchResults.value, hooks.activePath())
-      syncFindHighlight()
-      replaceQuery.value = ''
-      showReplace.value = false
-    } catch {
-      hooks.showToast(L.replaceFail)
-    } finally {
-      replacing.value = false
-    }
-  }
 
   function clearSearch(): void {
     searchQuery.value = ''

@@ -11,6 +11,7 @@ import MoveDialog from './MoveDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import SearchResults from './SearchResults.vue'
+import ReplaceConfirm from './ReplaceConfirm.vue'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
@@ -128,6 +129,15 @@ const {
     replaced: (p) => emit('replaced', p),
   },
 )
+
+/** 确认框是否展开完整文件清单（长清单默认折叠，见 ReplaceConfirm） */
+const confirmExpanded = ref(false)
+
+/** 取消替换：同时复位展开态，避免下次打开时残留上次的展开状态 */
+function cancelReplace(): void {
+  confirming.value = null
+  confirmExpanded.value = false
+}
 
 defineExpose({ focusSearch, nextHit, prevHit })
 
@@ -635,22 +645,14 @@ function startDrag(e: PointerEvent): void {
               {{ replacing ? '…' : L.replaceAll }}
             </button>
           </div>
-          <div v-if="confirming !== null" class="repl__confirm">
-            <span class="repl__confirm-text">{{
-              L.replaceConfirm.replace('{n}', String(confirming))
-            }}</span>
-            <button type="button" class="repl__ok" :disabled="replacing" @click="doReplace">
-              确认
-            </button>
-            <button
-              type="button"
-              class="repl__cancel"
-              :disabled="replacing"
-              @click="confirming = null"
-            >
-              取消
-            </button>
-          </div>
+          <ReplaceConfirm
+            v-if="confirming !== null"
+            :confirm="confirming"
+            :expanded="confirmExpanded"
+            @confirm="doReplace"
+            @cancel="cancelReplace"
+            @toggle="confirmExpanded = !confirmExpanded"
+          />
         </div>
       </template>
 
@@ -1193,47 +1195,6 @@ function startDrag(e: PointerEvent): void {
   cursor: default;
 }
 
-.repl__confirm {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  border-radius: var(--radius-sm);
-  background: var(--hue-active);
-  border: 1px solid var(--hue-border-subtle);
-}
-
-.repl__confirm-text {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-11);
-  line-height: 1.4;
-  color: var(--hue-text-2);
-}
-
-.repl__ok,
-.repl__cancel {
-  flex-shrink: 0;
-  height: 22px;
-  padding: 0 10px;
-  border: 1px solid var(--hue-border-subtle);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font: inherit;
-  font-size: var(--fs-11);
-  cursor: pointer;
-}
-
-.repl__ok {
-  color: var(--hue-on-accent);
-  background: var(--hue-accent);
-  border-color: var(--hue-accent);
-}
-
-.repl__cancel:hover {
-  color: var(--hue-text-1);
-  background: var(--bg-hover);
-}
 
 .searching {
   padding: 12px 8px;
