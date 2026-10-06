@@ -59,6 +59,7 @@ import { useToast } from './composables/useToast'
 import { useSaveGuard } from './composables/useSaveGuard'
 import { useSaveGuardForSwitch } from './composables/useSwitchGuard'
 import { useLocaleToggle } from './composables/useLocaleToggle'
+import { useImeGuard } from './composables/useImeGuard'
 import { useFileConflict, type ConflictEditorLike } from './composables/useFileConflict'
 import { useZenMode, type ZenEditorLike } from './composables/useZenMode'
 import { useWindowLayout } from './composables/useWindowLayout'
@@ -102,7 +103,6 @@ const fileName = computed(() =>
 )
 
 const modeLabel = computed(() => (requestedMode.value === 'wysiwyg' ? U.modeWysiwyg : U.modeSource))
-
 async function refreshTree(): Promise<void> {
   tree.value = vaultPath.value ? await window.api.listVault(vaultPath.value) : []
 }
@@ -463,6 +463,8 @@ function onKeydown(e: KeyboardEvent): void {
   if (paletteMode.value !== null) return
   // 快捷键设置正在录入键位：一切交给面板（它在捕获阶段接管，这里是兜底）
   if (showShortcuts.value) return
+  // IME 组字期间一律让开（理由与捕获阶段的 onPaletteHotkey 同款）
+  if (imeShouldYield(e)) return
 
   // Esc 状态机（凝神 2.0）：设置面板开着先关面板；否则凝神中 Esc = 掀帘/收帘（轻退栏可在设置中关闭）。
   // Esc 是上下文相关的「退出」动作（关面板 / 掀帘 / 退出凝神），不是一条命令，故不进键位表、不可自定义。
@@ -625,6 +627,9 @@ const paletteMode = ref<'commands' | 'files' | null>(null)
 function onPaletteHotkey(e: KeyboardEvent): void {
   // 快捷键设置正在录入键位：Ctrl+K / Ctrl+Shift+P 也照常被录进去，不抢
   if (showShortcuts.value) return
+  // ⚠️ IME 组字期间一律让开：候选词里就含 b/i/k/p 等字母，用户按 Ctrl+K 是在**选词**
+  //   而非「快速打开」。捕获阶段抢键代价尤其高 —— preventDefault 后输入法收不到有效输入。
+  if (imeShouldYield(e)) return
   const next = resolvePaletteHotkey(e, paletteMode.value)
   if (next === undefined) return // 不归命令面板管，放行给编辑器
   paletteMode.value = next
@@ -835,6 +840,11 @@ const {
 
 const { langVer, localeLabel, toggleLocale } = useLocaleToggle(host)
 
+/**
+ * 中文输入法守卫（2026-10-04）：项目主打中文排版却从未处理 IME 组字，
+ * 候选词上屏期间抢键会导致「拼音打一半被保存 / 被加粗」。见 useImeGuard 注释。
+ */
+const { shouldYield: imeShouldYield } = useImeGuard()
 /* ── 会话持久化（崩溃恢复）── */
 
 watch(requestedMode, (mode) => void window.api.patchSession({ mode }))

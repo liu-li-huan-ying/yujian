@@ -3132,6 +3132,75 @@ section('[W2] 安全降级文案映射 —— 类型/文案/错误级判定/路�
   }
 }
 
+section('[W3] 中文输入法守卫 —— 候选期间放行安全键 / 拦快捷键 / 状态复位 (src/utils/imeGuard.ts)')
+{
+  const IM = await import((await bundle('src/utils/imeGuard.ts', 'imeGuard.mjs')).url)
+  const K = (key, o = {}) => ({
+    key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...o,
+  })
+  // ⚠️ 返回值语义：**true = 放行（别抢）**，false = 照常当快捷键处理。
+  //    （实现初版命名与语义相反导致误读，已改名 shouldYield 并在此注明，避免再踩）
+  const YIELD = (e, c) => IM.shouldIgnoreDuringIme(e, c) === true
+
+  // ① 非 IME 状态：一切照常处理（零回归底线）
+  check(
+    '非组字状态不放弃任何快捷键（行为不变）',
+    !YIELD(K('k', { ctrlKey: true }), false) && !YIELD(K('b', { ctrlKey: true }), false)
+  )
+
+  // ② 组字期间：带修饰键的快捷键**必须被让开**（否则打一半的字被加粗）
+  check(
+    '组字期间 Ctrl+B/I/K 让开（它们是输入法选词，不是用户命令）',
+    YIELD(K('b', { ctrlKey: true }), true) &&
+      YIELD(K('i', { ctrlKey: true }), true) &&
+      YIELD(K('k', { ctrlKey: true }), true)
+  )
+  check('组字期间 Ctrl+Shift+P（命令面板）同样让开', YIELD(K('p', { ctrlKey: true, shiftKey: true }), true))
+
+  // ③ 组字期间：输入法自己的操作键**必须让开**（否则候选词点不动）
+  for (const k of ['Escape', 'Enter', 'Tab', 'Backspace', 'Delete', 'ArrowDown', 'ArrowUp']) {
+    check(`组字期间 ${k} 让开（输入法自己要用）`, YIELD(K(k), true))
+  }
+  check(
+    '组字期间无修饰单字符让开（选词）',
+    YIELD(K('n'), true) && YIELD(K('i'), true)
+  )
+
+  // ④ 状态机：start → 让开；end → 照常
+  {
+    const g = IM.createImeGuard()
+    check('初始态不放弃快捷键', g.shouldYield(K('b', { ctrlKey: true })) === false)
+    g.onCompositionStart()
+    check('组字态放弃快捷键', g.shouldYield(K('b', { ctrlKey: true })) === true)
+    g.onCompositionEnd()
+    check('结束组字后恢复照常处理', g.shouldYield(K('b', { ctrlKey: true })) === false)
+  }
+
+  // ⑤ ⚠️ 失焦兜底复位：某些输入法失焦时不触发 compositionend，
+  //    否则 composing 永远 true → 用户切回来后所有快捷键失效（像"编辑器坏了"）
+  {
+    const g = IM.createImeGuard()
+    g.onCompositionStart()
+    g.reset()
+    check('失焦复位后快捷键恢复可用', g.shouldYield(K('b', { ctrlKey: true })) === false)
+  }
+
+  // ⑥ keyCode 229 兜底：部分平台 keydown 早于 compositionstart，isComposing 仍为 false
+  check(
+    'keyCode 229 被识别为组字中（isComposing 尚为 false 时也能识别）',
+    IM.isComposingEvent({ isComposing: false, keyCode: 229 }) === true &&
+      IM.isComposingEvent({ isComposing: true, keyCode: 13 }) === true &&
+      IM.isComposingEvent({ isComposing: false, keyCode: 66 }) === false
+  )
+  {
+    const g = IM.createImeGuard()
+    check(
+      '状态量未置位但事件带 229 时也让开（双保险生效）',
+      g.shouldYield({ ...K('b', { ctrlKey: true }), keyCode: 229 }) === true
+    )
+  }
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 
 if (failed > 0) {
