@@ -46,6 +46,8 @@ export const IPC = {
   // 安全网降级事件：补拉（覆盖「窗口 ready 之前就发生了降级」的情况）。
   // 与软错误的区别：软错误是「可查阅的诊断」，本通道是「必须让用户知道」。
   SAFETY_NOTICES_GET: 'safetyNotices:get',
+  // 安全网降级事件：主动推送（主进程 setSafetySink 实时转发，渲染层无需轮询）
+  SAFETY_NOTICE: 'safetyNotice',
   // 笔记库：整库备份（打包为 zip）
   VAULT_BACKUP: 'vault:backup',
   // 笔记库：整库恢复（从 zip 解包）

@@ -21,6 +21,7 @@ import MocPanel from './components/MocPanel.vue'
 import GraphView from './components/GraphView.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import IntegrityPanel from './components/IntegrityPanel.vue'
+import SafetyFeedChip from './components/SafetyFeedChip.vue'
 import BackupPanel from './components/BackupPanel.vue'
 import ConflictDialog from './components/ConflictDialog.vue'
 import WritingAidsPanel from './components/WritingAidsPanel.vue'
@@ -48,8 +49,7 @@ import type {
   IntegrityReport,
 } from '../electron/shared/ipc-channels'
 import { parseFrontmatter, serializeFrontmatter } from './markdown/frontmatter'
-import { useI18n, setLocale } from './i18n'
-import type { LocaleKey } from './i18n'
+import { useI18n } from './i18n'
 import { useTabsStore } from './store/tabs'
 import { useSnapshotsStore } from './store/snapshots'
 import { usePkmPanels } from './composables/usePkmPanels'
@@ -58,13 +58,14 @@ import { useExport, type ExportHostLike } from './composables/useExport'
 import { useToast } from './composables/useToast'
 import { useSaveGuard } from './composables/useSaveGuard'
 import { useSaveGuardForSwitch } from './composables/useSwitchGuard'
+import { useLocaleToggle } from './composables/useLocaleToggle'
 import { useFileConflict, type ConflictEditorLike } from './composables/useFileConflict'
 import { useZenMode, type ZenEditorLike } from './composables/useZenMode'
 import { useWindowLayout } from './composables/useWindowLayout'
 import type { TextStats } from './utils/text-stats'
 import type { CommandId } from './utils/commands'
 
-const { t: L, getLocale } = useI18n()
+const { t: L } = useI18n()
 const U = L.ui
 
 /** 顶部轻提示：定时器随组件卸载自动清理（原先是 App 自己记一个 toastTimer） */
@@ -832,19 +833,7 @@ const {
 
 /* ── 语言切换（key 驱动 Vue 重挂 Crepe）── */
 
-const langVer = ref(0)
-
-const localeLabel = computed(() => (getLocale() === 'zh-CN' ? '中' : 'EN'))
-
-function toggleLocale(): void {
-  const next: LocaleKey = getLocale() === 'zh-CN' ? 'en-US' : 'zh-CN'
-  // 语言切换会重挂编辑器实例（:key），先保存当前滚动位置，重挂后由 onReady 恢复
-  host.value?.captureScroll()
-  setLocale(next)
-  // 自增 key → Vue 销毁旧 MilkdownEditor / 挂载新实例，
-  // 构造期固化的标签（BlockEdit 等）自动按新语言生成
-  langVer.value++
-}
+const { langVer, localeLabel, toggleLocale } = useLocaleToggle(host)
 
 /* ── 会话持久化（崩溃恢复）── */
 
@@ -1145,9 +1134,9 @@ onBeforeUnmount(() => {
             >{{ U.selection }} {{ host.selectionCount }}</span
           >
           <button class="stat-chip" type="button" @click="onToggleStats" :title="U.stats">
-            {{ stats.han }}<i class="u">{{ U.unitHan }}</i> · {{ stats.words
-            }}<i class="u">{{ U.unitWord }}</i> · {{ stats.readingMinutes
-            }}<i class="u">{{ U.unitMin }}</i>
+            {{ stats.han }}<i class="u">{{ U.unitHan }}</i
+            >· {{ stats.words }}<i class="u">{{ U.unitWord }}</i
+            >· {{ stats.readingMinutes }}<i class="u">{{ U.unitMin }}</i>
           </button>
           <button
             v-if="lastIntegrityReport && lastIntegrityReport.total > 0"
@@ -1159,7 +1148,8 @@ onBeforeUnmount(() => {
             <Icon name="alert" :size="12" />
             {{ lastIntegrityReport.total }}
           </button>
-          <button class="lang-btn" @click="toggleLocale" title="切换语言 / Switch language">
+          <SafetyFeedChip />
+          <button class="lang-btn" @click="toggleLocale" :title="U.langToggle">
             {{ localeLabel }}
           </button>
         </div>

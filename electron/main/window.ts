@@ -8,6 +8,8 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { stopWatching } from './vault'
 import { registerWindowIpc } from './ipc/win'
+import { setSafetySink } from './safetyEvents'
+import { IPC } from '../shared/ipc-channels'
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -66,10 +68,24 @@ export function createWindow(): void {
   mainWindow = win
   win.on('closed', () => {
     mainWindow = null
+    // 窗口销毁时必须解绑 sink：否则 sink 里捕获的 win 已失效，
+    // 之后再发生降级会往一个已销毁的 webContents 发消息而抛错。
+    // 且此时 getMainWindow() 已返回 null，sink 本身也该退休了。
+    setSafetySink(null)
     stopWatching()
   })
 
   win.once('ready-to-show', () => win.show())
+
+  // 安全网降级事件 → 渲染层实时推送（2026-10-04 补链路）：
+  // 此前 setSafetySink 从未被调用，降级事件只进主进程内存环、**渲染层收不到**，
+  // 表现为「上一轮做完的事只到 IPC 边界就断了」。这里接上最后一跳。
+  setSafetySink((notice) => {
+    // 窗口可能已销毁（sink 解绑有竞态窗口），故双重判空而非只靠 closed 事件
+    const w = getMainWindow()
+    if (!w || w.isDestroyed()) return
+    w.webContents.send(IPC.SAFETY_NOTICE, notice)
+  })
 
   if (VITE_DEV_SERVER_URL) {
     void win.loadURL(VITE_DEV_SERVER_URL)

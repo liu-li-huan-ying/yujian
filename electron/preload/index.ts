@@ -147,6 +147,17 @@ const api = {
   getSafetyNotices: (): Promise<SafetyNoticePayload[]> =>
     ipcRenderer.invoke(IPC.SAFETY_NOTICES_GET),
 
+  /**
+   * 订阅安全网降级事件的实时推送。
+   * 与 `getSafetyNotices` 配套：后者补拉「窗口 ready 之前」的，本者接住「之后」的。
+   * 返回退订函数（与 `onVaultChange` 同款，避免组件卸载时泄漏监听）。
+   */
+  onSafetyNotice: (callback: (n: SafetyNoticePayload) => void): (() => void) => {
+    const listener = (_event: unknown, n: SafetyNoticePayload) => callback(n)
+    ipcRenderer.on(IPC.SAFETY_NOTICE, listener)
+    return () => ipcRenderer.removeListener(IPC.SAFETY_NOTICE, listener)
+  },
+
   /** 整库备份：打包为 zip 到 destZip（用户经保存对话框选定） */
   backupVault: (root: string, destZip: string): Promise<BackupResult> =>
     ipcRenderer.invoke(IPC.VAULT_BACKUP, root, destZip),

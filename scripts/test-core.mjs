@@ -3076,6 +3076,62 @@ section('[Y2] 启动自检 —— 探针失败必报红 / 全绿零 finding / �
   }
 }
 
+section('[W2] 安全降级文案映射 —— 类型/文案/错误级判定/路径折叠 (src/utils/safetyNotice.ts)')
+{
+  const SN = await import((await bundle('src/utils/safetyNotice.ts', 'safetyNotice.mjs')).url)
+
+  // ① 覆盖完整性：SafetyKind 的**每个**成员都必须有文案（加 kind 忘加文案 → 这里报红）
+  {
+    // 独立列一遍已知 kind（故意不 import 常量推导，避免「同一份错」自证）
+    const known = [
+      'prev-unreadable', 'backup-failed', 'bulk-too-large', 'replace-partial',
+      'trash-fallback', 'atomic-write-degraded', 'startup-check', 'tmp-residue',
+    ]
+    const missing = known.filter((k) => !SN.SAFETY_I18N_KEYS[k])
+    check('每个 SafetyKind 都有对应文案键（漏一个即报红）', missing.length === 0)
+    check('映射表条目数与已知 kind 数一致', Object.keys(SN.SAFETY_I18N_KEYS).length === known.length)
+  }
+
+  // ② 键真在 locales 里存在（漏翻译 → 这里报红，而不是运行时 undefined）
+  //    注意层级：文案在 `default.ui.*` 之下（E 段同款读法），不是顶层。
+  {
+    const zh = (await import((await bundle('src/i18n/locales/zh-CN.ts', 'zh-CN.mjs')).url)).default
+    const en = (await import((await bundle('src/i18n/locales/en-US.ts', 'en-US.mjs')).url)).default
+    const keys = [...new Set(Object.values(SN.SAFETY_I18N_KEYS))]
+    const zhMiss = keys.filter((k) => typeof zh.ui?.[k] !== 'string')
+    const enMiss = keys.filter((k) => typeof en.ui?.[k] !== 'string')
+    check('全部安全文案键在 zh-CN 中存在', zhMiss.length === 0)
+    check('全部安全文案键在 en-US 中存在', enMiss.length === 0)
+  }
+
+  // ③ error 级判定：三种「安全网真的坏了」必须是 error，其余是 warn
+  {
+    const errs = ['prev-unreadable', 'backup-failed', 'trash-fallback']
+    check('三类「安全网失效」判定为 error 级', errs.every((k) => SN.isErrorLevel(k)))
+    const warns = ['bulk-too-large', 'replace-partial', 'startup-check', 'tmp-residue']
+    check('其余为 warn 级（不夸大严重性）', warns.every((k) => !SN.isErrorLevel(k)))
+  }
+
+  // ④ 路径折叠：长路径中间省略、短路径不动、计数正确
+  {
+    const long = '/very/long/vault/path/to/some/deep/folder/note-name-that-is-long.md'
+    check('长路径被中间省略', SN.middleTruncatePath(long).includes('…'))
+    check('短路径原样返回', SN.middleTruncatePath('/a/b.md') === '/a/b.md')
+    const many = Array.from({ length: 200 }, (_, i) => `/v/folder${i}/note${i}.md`)
+    const folded = SN.foldPaths(many)
+    check('超量路径被折叠（不全列出来刷屏）', folded.visible.length === SN.MAX_VISIBLE_PATHS)
+    check('折叠后保留正确余量', folded.rest === 200 - SN.MAX_VISIBLE_PATHS)
+    const few = SN.foldPaths(['/a.md', '/b.md'])
+    check('不足上限时全部展示且 rest=0', few.visible.length === 2 && few.rest === 0)
+  }
+
+  // ⑤ 未知 kind 不返回 undefined（宁可通用标题，不给用户看 undefined）
+  {
+    const k = SN.safetyTitleKey('__nope__')
+    check('未知 kind 回退到通用标题而非 undefined', typeof k === 'string' && k.length > 0)
+  }
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 
 if (failed > 0) {
