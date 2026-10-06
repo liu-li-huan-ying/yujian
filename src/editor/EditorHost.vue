@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errMsg } from '../../electron/shared/error'
+import { browserTarget, createFlushGuard } from '../utils/flushGuard'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import MilkdownEditor from './MilkdownEditor.vue'
 import SourceEditor from './SourceEditor.vue'
@@ -369,6 +370,28 @@ function scheduleSave(): void {
   timer = setTimeout(() => void save({ kind: 'auto' }), AUTOSAVE_DELAY)
 }
 
+/* ── 失焦即保存（2026-10-04）──
+ * 动机：自动保存靠 setTimeout，而 Electron 默认 backgroundThrottling 会把
+ * 失焦/隐藏时的定时器限流到约 1 次/秒 —— 用户切到浏览器查资料（写作场景极常见）
+ * 时保存被推迟，极端情况下关窗口丢内容。
+ * 方案取舍：曾想直接关掉 backgroundThrottling，但那会让**后台一直满负荷渲染**，
+ * 代价大于收益；改为在此精准补一次保存。 */
+const flushGuard = createFlushGuard()
+let detachFlushGuard: (() => void) | null = null
+
+function attachFlushGuard(): void {
+  if (detachFlushGuard || typeof window === 'undefined') return
+  detachFlushGuard = flushGuard.attach(
+    () => {
+      // 无绑定文档 / 无改动时不必打扰（flushGuard 已保证幂等，不会连续写盘）
+      if (!fidelity.docPath.value || !fidelity.isDirty.value) return
+      // 走 save() 的完整链路（含 coalescer 与失败上报），不直接调 IPC
+      void save({ kind: 'auto' })
+    },
+    browserTarget(),
+  )
+}
+
 /** 取消待执行的自动保存（冲突检测发现外部改动时调用，避免自动保存覆盖外部编辑） */
 function cancelPendingSave(): void {
   if (timer) {
@@ -460,6 +483,9 @@ async function load(path: string): Promise<boolean> {
     if (!ok) return false
   }
   cancelPendingSave()
+  // 新文档不该被上一个文档刚触发的失焦保存节流窗口挡掉，否则
+  // 「切到新文档 → 立刻失焦」时会跳过保存（内容还在内存，但没落盘）。
+  flushGuard.reset()
   // 3) 此刻保真层仍属于 A，没有任何待写/在途写；开始加载 B
   loadPath.value = path
   startLoading()
@@ -662,12 +688,15 @@ onMounted(() => {
   if (typeof window !== 'undefined') {
     window.addEventListener('selectionchange', updateSelectionCount)
   }
+  // 失焦即保存：补偿 Electron 背景节流对自动保存定时器的限流
+  attachFlushGuard()
 })
 
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('selectionchange', updateSelectionCount)
   }
+  detachFlushGuard?.()
 })
 
 defineExpose({

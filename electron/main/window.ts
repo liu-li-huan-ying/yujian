@@ -60,6 +60,11 @@ export function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // 拼写检查（2026-10-04）：写作工具的核心期待，中文用户无感、英文用户明显缺失。
+      // ⚠️ 刻意**不开** backgroundThrottling:false —— 那会让后台一直满负荷渲染。
+      // 自动保存被节流的问题改由渲染层「失焦即保存」精准解决
+      // （见 src/utils/flushGuard.ts：写作场景「边写边查资料」很常见）。
+      spellcheck: true,
     },
   })
 

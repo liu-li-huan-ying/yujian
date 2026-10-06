@@ -3265,6 +3265,102 @@ section('[W5] i18n 硬编码防回潮 —— 属性里不得出现中文字面�
   )
 }
 
+section('[W6] 失焦保存守卫 —— 幂等 / 可见性判定 / 节流闸门可复位 (src/utils/flushGuard.ts)')
+{
+  const FG = await import((await bundle('src/utils/flushGuard.ts', 'flushGuard.mjs')).url)
+
+  /**
+   * 假事件目标：Node 环境无 window，必须注入（这也是本模块把事件目标做成接口的原因 ——
+   * 直接摸 window 就只能靠起浏览器测，纯逻辑的幂等/闸门断言将无从下手）。
+   */
+  const fakeTarget = (hidden = false) => {
+    const map = new Map()
+    return {
+      addEventListener: (t, fn) => map.set(t, [...(map.get(t) ?? []), fn]),
+      removeEventListener: (t, fn) => map.set(t, (map.get(t) ?? []).filter((f) => f !== fn)),
+      isHidden: () => hidden,
+      fire: (t) => (map.get(t) ?? []).forEach((f) => f()),
+      count: (t) => (map.get(t) ?? []).length,
+    }
+  }
+
+  // 注入时钟，**不依赖真实等待**（否则测试既慢又可能抖动）
+  let now = 1_000_000
+  const realNow = Date.now
+  Date.now = () => now
+  try {
+    // ① 首次触发即保存
+    {
+      const g = FG.createFlushGuard(1200)
+      let n = 0
+      const t = fakeTarget()
+      const off = g.attach(() => n++, t)
+      t.fire('blur')
+      check('失焦即触发保存', n === 1)
+      off()
+      check('解绑后监听已移除', t.count('blur') === 0 && t.count('visibilitychange') === 0)
+    }
+
+    // ② 幂等：短时间重复触发只保存一次（blur 与 visibilitychange 部分重叠）
+    {
+      const g = FG.createFlushGuard(1200)
+      let n = 0
+      const t = fakeTarget()
+      const off = g.attach(() => n++, t)
+      t.fire('blur')
+      now += 200
+      t.fire('blur')
+      check('短时间重复触发不重复保存（幂等）', n === 1)
+      off()
+    }
+
+    // ③ 超过间隔后可再次保存（闸门放行）
+    {
+      const g = FG.createFlushGuard(1200)
+      let n = 0
+      const t = fakeTarget()
+      const off = g.attach(() => n++, t)
+      t.fire('blur')
+      now += 1500
+      t.fire('blur')
+      check('超过最小间隔后可再次保存', n === 2)
+      off()
+    }
+
+    // ④ reset 后立即可再存（切文档场景：新文档不该被上一文档的节流挡掉）
+    {
+      const g = FG.createFlushGuard(1200)
+      let n = 0
+      const t = fakeTarget()
+      const off = g.attach(() => n++, t)
+      t.fire('blur')
+      g.reset()
+      t.fire('blur')
+      check('reset 后不受上次节流影响（新文档能立即保存）', n === 2)
+      off()
+    }
+
+    // ⑤ visibilitychange 只在**隐藏时**触发（可见性切换不应误触发保存）
+    {
+      const g = FG.createFlushGuard(0)
+      let n = 0
+      const visible = fakeTarget(false)
+      const offV = g.attach(() => n++, visible)
+      visible.fire('visibilitychange')
+      check('页面仍可见时不因 visibilitychange 保存', n === 0)
+      offV()
+
+      const hiddenT = fakeTarget(true)
+      const offH = g.attach(() => n++, hiddenT)
+      hiddenT.fire('visibilitychange')
+      check('页面隐藏时 visibilitychange 触发保存', n === 1)
+      offH()
+    }
+  } finally {
+    Date.now = realNow
+  }
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 
 if (failed > 0) {
