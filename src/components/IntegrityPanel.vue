@@ -176,7 +176,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="ic glass" role="dialog" aria-label="完整性自检">
+  <div class="ic glass" role="dialog" :aria-label="L.integrity">
     <div class="ic__head">
       <Icon name="shield" :size="15" class="ic__icon" />
       <span class="ic__title">{{ L.integrity }}</span>

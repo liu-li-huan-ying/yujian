@@ -102,7 +102,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="bk glass" role="dialog" aria-label="整库备份">
+  <div class="bk glass" role="dialog" :aria-label="L.backupPanel">
     <div class="bk__head">
       <Icon name="archive" :size="15" class="bk__icon" />
       <span class="bk__title">{{ L.backup }}</span>

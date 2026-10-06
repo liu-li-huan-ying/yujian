@@ -48,7 +48,7 @@ function onKey(e: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="stats glass" role="dialog" aria-label="写作统计" @keydown="onKey">
+  <div class="stats glass" role="dialog" :aria-label="L.statsPopover" @keydown="onKey">
     <div class="stats__head">
       <span class="stats__title">{{ L.stats }}</span>
       <button class="stats__x" type="button" :title="L.close" @click="emit('close')">

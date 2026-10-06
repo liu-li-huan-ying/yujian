@@ -3229,6 +3229,42 @@ section('[W4] 批量替换确认 —— 清单折叠/路径缩写/省略策略 (
   check('不足 foldAt 时全展示', RC.foldFilePaths(['/v/a/n.md'], 8).length === 1)
 }
 
+section('[W5] i18n 硬编码防回潮 —— 属性里不得出现中文字面量')
+{
+  const { readdirSync: rd } = await import('node:fs')
+  /** 收集 src 下全部 .vue / .ts（跳过测试与声明） */
+  const walk = (dir) =>
+    rd(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(join(dir, e.name)) : /\.(vue|ts)$/.test(e.name) ? [join(dir, e.name)] : [],
+    )
+  /** 剥掉 <style> 与注释：样式里中文注释是允许且大量存在的，不该被判违规 */
+  const stripStyleAndComments = (s) =>
+    s
+      .replace(/<style[\s\S]*?<\/style>/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      .replace(/(?<!:)\/\/[^\n]*/g, '')
+
+  // ⚠️ 必须扫**全树**而非写死文件路径：写死路径会在组件拆分时静默漏扫，
+  // 门禁形同虚设（[F] 段 IPC 门禁踩过此坑，此处沿用其解法）。
+  const offenders = []
+  for (const f of walk(join(root, 'src'))) {
+    const src = stripStyleAndComments(readFileSync(f, 'utf-8'))
+    // 只匹配 aria-label / title / placeholder / alt 的**属性值**
+    const re = /\b(?:aria-label|title|placeholder|alt|altLabel)="([^"]*)"/g
+    let m
+    while ((m = re.exec(src)) !== null) {
+      if (/[\u4e00-\u9fa5]/.test(m[1])) {
+        offenders.push(`${f.slice(root.length + 1)} → "${m[1]}"`)
+      }
+    }
+  }
+  check(
+    '属性无中文字面量（aria-label/title/placeholder/alt 全走 i18n）',
+    offenders.length === 0,
+    offenders.slice(0, 6).join(' | '),
+  )
+}
+
 console.log(`\n${failed === 0 ? '\x1b[32m' : '\x1b[31m'}==== ${passed} passed, ${failed} failed ====\x1b[0m\n`)
 
 if (failed > 0) {

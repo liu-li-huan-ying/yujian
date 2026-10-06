@@ -3,6 +3,9 @@ import { computed, ref } from 'vue'
 import type { FileNode } from '../../electron/shared/ipc-channels'
 import RenameInput from './RenameInput.vue'
 import Icon from './Icon.vue'
+import { useI18n } from '../i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   nodes: FileNode[]
@@ -191,9 +194,14 @@ function fwdRenameConfirm(path: string, value: string): void {
         @drop="onDrop(node, $event)"
         @dragend="onDragEnd"
       >
-        <!-- 目录：仅在有子节点时显示可展开箭头；文件：占位对齐 -->
+        <!--
+          目录：只要是目录就给箭头，**包括空目录**（2026-10-04）。
+          原实现 `&& node.children.length` 让空文件夹连箭头都没有 →
+          用户**无法点进去新建文档**（功能不可达，不只是视觉问题）。
+          主进程 scan 已明确保留空目录（children: []），数据侧本就正确。
+        -->
         <svg
-          v-if="node.type === 'dir' && node.children && node.children.length"
+          v-if="node.type === 'dir'"
           class="chev"
           :class="{ 'chev--open': expanded.has(node.path) }"
           width="10"
@@ -230,10 +238,14 @@ function fwdRenameConfirm(path: string, value: string): void {
         <span v-else class="name">{{ displayName(node) }}</span>
       </button>
 
-      <!-- 递归自身：Vue SFC 支持按文件名自引用 -->
+      <!--
+        递归自身：Vue SFC 支持按文件名自引用。
+        条件去掉 `&& node.children?.length` —— 空目录展开后应显示空态提示，
+        而不是「点开了却什么也没有」的困惑（此前连箭头都没有，更无从点开）。
+      -->
       <FileTree
-        v-if="node.type === 'dir' && expanded.has(node.path) && node.children?.length"
-        :nodes="node.children"
+        v-if="node.type === 'dir' && expanded.has(node.path)"
+        :nodes="node.children ?? []"
         :active-path="activePath"
         :expanded="expanded"
         :editing-path="editingPath"
@@ -251,6 +263,11 @@ function fwdRenameConfirm(path: string, value: string): void {
         @drag-end="emit('drag-end')"
         @move="(s: string, d: string) => emit('move', s, d)"
       />
+
+      <!-- 空目录的空态：明确告诉用户「这里什么都没有，且可以在这里新建」 -->
+      <p v-if="node.type === 'dir' && expanded.has(node.path) && !node.children?.length" class="tree__empty">
+        {{ t.ui.emptyFolderInline }}
+      </p>
     </li>
   </ul>
 </template>
@@ -260,6 +277,15 @@ function fwdRenameConfirm(path: string, value: string): void {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* 空目录空态：与正文同左边距（对齐文件名列），弱化但可读 */
+.tree__empty {
+  margin: 2px 0 4px;
+  padding-left: calc(8px + 14px);
+  font-size: var(--fs-11);
+  color: var(--hue-text-3);
+  line-height: 1.6;
 }
 
 /* 嵌套层级不再用 margin+整条边框：归属关系交给 li 引导线（对齐父行箭头列），

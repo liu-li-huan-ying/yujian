@@ -64,7 +64,7 @@ const groups = computed<ViewItem[][]>(() => [
 </script>
 
 <template>
-  <nav class="act jade" aria-label="视图">
+  <nav class="act jade" :aria-label="L.navViews">
     <template v-for="(g, gi) in groups" :key="gi">
       <span v-if="gi > 0" class="act__sep" />
       <button

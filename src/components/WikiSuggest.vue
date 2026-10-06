@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 import type { NoteTitleItem } from '../../electron/shared/ipc-channels'
+import { useI18n } from '../i18n'
 
 /**
  * `[[` 自动补全浮层（Phase 3 批次二收尾项）。
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 
 const el = ref<HTMLElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
+const { t } = useI18n()
 const pos = ref({ left: '0px', top: '0px' })
 
 /** 视口内定位：优先落在 `[[` 正下方，右侧/下方放不下则翻转，最后夹回安全区 */
@@ -67,7 +69,7 @@ function dirOf(p: string): string {
 </script>
 
 <template>
-  <div ref="el" class="ws glass" :style="pos" role="listbox" aria-label="笔记链接建议">
+  <div ref="el" class="ws glass" :style="pos" role="listbox" :aria-label="t.ui.wikiSuggest">
     <div ref="listEl" class="ws__list">
       <button
         v-for="(it, i) in items"

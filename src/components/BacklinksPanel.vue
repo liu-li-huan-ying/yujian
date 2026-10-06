@@ -125,7 +125,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="bl" role="region" aria-label="反链面板">
+  <div class="bl" role="region" :aria-label="L.backlinksPanel">
     <div class="bl__head">
       <Icon name="backlink" :size="15" class="bl__icon" />
       <span class="bl__title">{{ L.backlinks }}</span>

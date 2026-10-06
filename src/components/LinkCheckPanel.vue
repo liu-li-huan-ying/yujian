@@ -110,7 +110,7 @@ defineExpose({ refresh: run })
 </script>
 
 <template>
-  <div class="lc glass" role="dialog" aria-label="链接健康检查">
+  <div class="lc glass" role="dialog" :aria-label="L.linkCheckPanel">
     <div class="lc__head">
       <Icon name="link" :size="15" class="lc__icon" />
       <span class="lc__title">{{ L.linkCheck }}</span>
